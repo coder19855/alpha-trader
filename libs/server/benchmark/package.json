@@ -1,0 +1,30 @@
+{
+  "name": "@alpha-trader/server-benchmark",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@alpha-trader/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@alpha-trader/server-analysis": "*",
+    "@alpha-trader/server-auth": "*",
+    "@alpha-trader/server-market-data": "*",
+    "@alpha-trader/server-position": "*",
+    "@alpha-trader/server-preferences": "*",
+    "@alpha-trader/server-shared": "*",
+    "fastify": "~5.2.1",
+    "fyers-api-v3": "^1.9.0",
+    "tslib": "^2.3.0",
+    "xlsx": "^0.18.5"
+  }
+}

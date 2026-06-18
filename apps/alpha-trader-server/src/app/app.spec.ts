@@ -1,20 +1,29 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { app } from './app';
 
-describe('GET /', () => {
+describe('GET /api', () => {
   let server: FastifyInstance;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     server = Fastify();
-    server.register(app);
+    await server.register(app);
+    await server.ready();
   });
 
-  it('should respond with a message', async () => {
+  afterEach(async () => {
+    await server.close();
+  });
+
+  it('returns API health payload', async () => {
     const response = await server.inject({
       method: 'GET',
-      url: '/'
+      url: '/api',
     });
 
-    expect(response.json()).toEqual({ message: 'Hello API' })
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      message: 'Alpha Trader API',
+      phase: 1,
+    });
   });
 });

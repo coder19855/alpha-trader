@@ -8,6 +8,36 @@
     },
     {
       "path": "./apps/alpha-trader-server"
+    },
+    {
+      "path": "./libs/server/shared"
+    },
+    {
+      "path": "./libs/server/market-data"
+    },
+    {
+      "path": "./libs/server/auth"
+    },
+    {
+      "path": "./libs/server/analysis"
+    },
+    {
+      "path": "./libs/server/position"
+    },
+    {
+      "path": "./libs/server/stream"
+    },
+    {
+      "path": "./libs/server/preferences"
+    },
+    {
+      "path": "./libs/server/deck"
+    },
+    {
+      "path": "./libs/server/benchmark"
+    },
+    {
+      "path": "./apps/alpha-trader-web"
     }
   ]
 }

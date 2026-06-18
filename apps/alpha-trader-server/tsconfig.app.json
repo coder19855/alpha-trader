@@ -2,14 +2,39 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "rootDir": "src",
     "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo"
   },
-  "include": [
-    "src/**/*.ts"
+  "include": ["src/**/*.ts", "src/**/*.d.ts"],
+  "references": [
+    {
+      "path": "../../libs/server/stream/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/server/shared/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/server/position/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/server/market-data/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/server/auth/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/server/analysis/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/server/preferences/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/server/deck/tsconfig.lib.json"
+    },
+    {
+      "path": "../../libs/server/benchmark/tsconfig.lib.json"
+    }
   ],
   "exclude": [
     "out-tsc",

@@ -1,0 +1,22 @@
+import { createActionGroup, props } from '@ngrx/store';
+import { TradingStyle } from '../../core/models/deck.models';
+import { AppView, DeckTab } from '../../core/services/deck-context.service';
+
+export const DeckUiActions = createActionGroup({
+  source: 'Deck UI',
+  events: {
+    'Route Synced': props<{ view: AppView; tab: DeckTab }>(),
+    'Tab Selected': props<{ tab: DeckTab }>(),
+    'Symbol Changed': props<{ symbol: string }>(),
+    'Style Changed': props<{ style: TradingStyle }>(),
+    'Tracker Updated': props<{
+      symbol?: string;
+      symbolLabel?: string;
+      price?: number | null;
+      style?: string;
+      connected?: boolean;
+      live?: boolean;
+      asOf?: string;
+    }>(),
+  },
+});

@@ -1,21 +1,18 @@
 import * as path from 'path';
 import { FastifyInstance } from 'fastify';
 import AutoLoad from '@fastify/autoload';
+import corePlugin from './plugins/core';
 
 /* eslint-disable-next-line */
 export interface AppOptions { }
 
 export async function app(fastify: FastifyInstance, opts: AppOptions) {
-  // Place here your custom code!
+  await fastify.register(corePlugin);
 
-  // Do not touch the following lines
-
-  // This loads all plugins defined in plugins
-  // those should be support plugins that are reused
-  // through your application
   fastify.register(AutoLoad, {
     dir: path.join(__dirname, 'plugins'),
     options: { ...opts },
+    ignoreFilter: (p) => p.includes('core'),
   });
 
   // This loads all plugins defined in routes

@@ -1,101 +1,386 @@
-# AlphaTrader
+# Alpha Trader
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+Alpha Trader is a real-time Indian index-options trading cockpit built on the [Fyers API v3](https://myapi.fyers.in/docsv3). It combines price-action analysis, option-flow gauges, live position monitoring, session replay, and a benchmark backtest engine — all in a single Nx monorepo with a Fastify backend and an Angular web app.
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.
+**Bull · Bear · Benchmark**
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/node?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
+---
 
-## Run tasks
+## Features
 
-To run the dev server for your app, use:
+### Live Deck (`/live`)
 
-```sh
-npx nx serve alpha-trader-server
+Real-time trading dashboard streamed over Server-Sent Events (SSE). Tabs:
+
+| Tab | Description |
+|-----|-------------|
+| **Signal** | Current action, bias, conviction score, entry threshold, and market regime |
+| **Components** | Option-flow and price-action gauge breakdown |
+| **Veto** | Chart-structure veto timeline and breakup detail |
+| **Strategy** | Trade guidance, recommended strategies, and risk notes |
+| **Charts** | Spot price series with signal/trade/flip markers |
+| **Events** | Session event log (signals, flips, vetoes) |
+| **Positions** | Open index-option legs with live LTP and management advice |
+| **Settings** | Trading style, chart veto mode, and auto-exit controls |
+
+Additional live-deck capabilities:
+
+- **Conviction alerts** — toast notifications and optional sounds on signal or conviction changes
+- **Auto-exit panel** — configure server-side exit rules for watched positions
+- **Market regime** — volatility and trend context for the active symbol
+- **Multi-timeframe alignment** — shows how many timeframes agree with the current bias
+
+### Replay Deck (`/replay`)
+
+Replays a past NSE/BSE session day using historical candles and the same analysis pipeline as the live deck. Useful for post-market review and studying signal behaviour without live ticks.
+
+### Benchmark (`/benchmark`)
+
+PA-only backtest engine that replays historical sessions and simulates trades under configurable exit and position policies.
+
+- Matrix runs across exit policies (RR ladder, chandelier trail, flip-exit, and more) and position policies (flat vs scale-ladder)
+- Async job queue with live status polling
+- Summary, detail, insight, and compare views in the UI
+- Excel export (`.xlsx`) of full report data
+- Run history persisted in browser local storage
+
+### Open Positions
+
+- REST snapshot at `GET /api/open-positions`
+- Live SSE stream at `GET /api/open-positions/stream`
+- Management advice computed from current price-action decision vs held direction
+- Fyers order and market WebSocket streams for low-latency LTP updates (configurable)
+
+### Auto-Exit
+
+When enabled, the server can place **MARKET sell orders** to square off watched index-option legs once benchmark exit rules confirm (with configurable retest count, signal-flip exit, exit policy, and position policy). Preferences persist in MongoDB when available.
+
+### Authentication
+
+- Fyers OAuth 2.0 flow — one server-side access token (~24 h TTL)
+- Tokens stored in MongoDB and reused across restarts
+- Web session cookie for browser login continuity
+- Token status check and logout endpoints
+
+### Supported Indices
+
+NSE: Nifty 50, Nifty Bank, Fin Nifty, Midcap Select, Nifty Next 50  
+BSE: Sensex, Bankex
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Monorepo | [Nx](https://nx.dev) 23 |
+| API server | [Fastify](https://fastify.dev) 5 (Node.js) |
+| Web app | [Angular](https://angular.dev) 20, Angular Material, NgRx |
+| Charts | [lightweight-charts](https://tradingview.github.io/lightweight-charts/) |
+| Broker | [fyers-api-v3](https://www.npmjs.com/package/fyers-api-v3) |
+| Database | MongoDB (access tokens, session preferences) |
+| Analysis | Custom price-action engine + [technicalindicators](https://www.npmjs.com/package/technicalindicators) |
+
+---
+
+## Project Structure
+
+```
+alpha-trader/
+├── apps/
+│   ├── alpha-trader-server/     # Fastify API — routes, plugins, OAuth callback
+│   └── alpha-trader-web/        # Angular SPA — live deck, replay, benchmark
+└── libs/server/
+    ├── analysis/                # Price-action, technical analysis, exit policies
+    ├── auth/                    # Fyers + MongoDB plugins
+    ├── benchmark/               # Backtest runner, jobs, Excel export
+    ├── deck/                    # Live/replay deck payloads, SSE stream hub
+    ├── market-data/             # Candles, option chain, Fyers WebSocket streams
+    ├── position/                # Open positions, management advice, auto-exit guard
+    ├── preferences/             # Settings, auto-exit, web session state
+    ├── shared/                  # Types, constants, symbol master, utilities
+    └── stream/                  # Open-positions SSE hub
 ```
 
-To create a production bundle:
+---
+
+## Prerequisites
+
+- **Node.js** 22+ (see `@types/node` in root `package.json`)
+- **npm** (workspaces enabled)
+- **MongoDB** 6+ running locally or remotely
+- **Fyers trading account** with API app credentials ([Fyers API dashboard](https://myapi.fyers.in/dashboard/))
+
+---
+
+## Setup
+
+### 1. Clone and install
 
 ```sh
-npx nx build alpha-trader-server
+git clone <repository-url>
+cd alpha-trader
+npm install
 ```
 
-To see all available targets to run for a project, run:
+### 2. Configure Fyers API app
+
+In the Fyers developer dashboard, create an app and set the redirect URL to:
+
+```
+http://localhost:3000/api/access-token
+```
+
+(Use your production server URL in deployment.)
+
+### 3. Environment variables
+
+Create a `.env` file in the workspace root (loaded automatically via `dotenv`):
+
+```env
+# Required
+FYERS_API_KEY=<your-fyers-app-id>
+FYERS_API_SECRET=<your-fyers-app-secret>
+FYERS_REDIRECT_URL=http://localhost:3000/api/access-token
+MONGODB_URL=mongodb://127.0.0.1:27017/alpha-trader
+
+# Local development (web app + CORS)
+WEB_APP_URL=http://localhost:4200
+CORS_ORIGIN=http://localhost:4200
+
+# Optional — server bind
+HOST=0.0.0.0
+PORT=3000
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FYERS_API_KEY` | Yes | Fyers app ID |
+| `FYERS_API_SECRET` | Yes | Fyers app secret |
+| `FYERS_REDIRECT_URL` | Yes | OAuth redirect — must match Fyers dashboard |
+| `MONGODB_URL` | Yes | MongoDB connection string for token and preference persistence |
+| `WEB_APP_URL` | Dev | Angular app origin (post-login redirects) |
+| `CORS_ORIGIN` | Dev | Comma-separated allowed origins for CORS |
+| `WEB_SESSION_SECRET` | No | Cookie signing secret (falls back to `FYERS_API_SECRET`) |
+| `HOST` | No | Server bind address (default `0.0.0.0`) |
+| `PORT` | No | Server port (default `3000`) |
+
+#### Optional tuning
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ALPHA_WATCH_SYMBOLS` | all indices | Comma-separated symbols to watch for auto-exit |
+| `FYERS_WS_ENABLED` | `true` (non-test) | Enable Fyers market data WebSocket |
+| `FYERS_ORDER_WS_ENABLED` | `true` (non-test) | Enable Fyers order update WebSocket |
+| `FYERS_WS_LITE_MODE` | `true` | Reduced WS subscription footprint |
+| `AUTO_EXIT_POLL_INTERVAL_MS` | — | Auto-exit polling interval |
+| `BENCHMARK_FLIP_POLL_MINUTES` | `15` | Benchmark flip-exit poll interval |
+| `BENCHMARK_SIGNAL_INTERVAL_MINUTES` | style-dependent | Signal sampling interval for benchmarks |
+| `OPEN_POSITIONS_CACHE_TTL_MS` | — | REST position cache TTL |
+| `CANDLE_CACHE_TTL_5M_MS` / `CANDLE_CACHE_TTL_15M_MS` | — | Candle cache TTLs |
+
+### 4. Start MongoDB
 
 ```sh
-npx nx show project alpha-trader-server
+# macOS (Homebrew)
+brew services start mongodb-community
+
+# Or Docker
+docker run -d -p 27017:27017 --name alpha-trader-mongo mongo:7
 ```
 
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
+---
 
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## Running
 
-## Add new projects
+### Development (recommended)
 
-While you could add new projects to your workspace manually, you might want to leverage [Nx plugins](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) and their [code generation](https://nx.dev/features/generate-code?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) feature.
+Run the API server and Angular dev server in **two terminals**. The web app proxies `/api` requests to the backend via `apps/alpha-trader-web/proxy.conf.json`.
 
-Use the plugin's generator to create new projects.
-
-To generate a new application, use:
+**Terminal 1 — API server (port 3000):**
 
 ```sh
-npx nx g @nx/node:app demo
+npm run serve
 ```
 
-To generate a new library, use:
+**Terminal 2 — Web app (port 4200):**
 
 ```sh
-npx nx g @nx/node:lib mylib
+npm run serve:web
 ```
 
-You can use `npx nx list` to get a list of installed plugins. Then, run `npx nx list <plugin-name>` to learn about more specific capabilities of a particular plugin. Alternatively, [install Nx Console](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) to browse plugins and generators in your IDE.
+Open [http://localhost:4200](http://localhost:4200), click **Connect Fyers**, complete OAuth, and you are redirected back to the app.
 
-[Learn more about Nx plugins &raquo;](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) | [Browse the plugin registry &raquo;](https://nx.dev/plugin-registry?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Set up CI!
-
-### Step 1
-
-To connect to Nx Cloud, run the following command:
+Equivalent Nx commands:
 
 ```sh
-npx nx connect
+npx nx serve @alpha-trader/alpha-trader-server
+npx nx serve alpha-trader-web
 ```
 
-Connecting to Nx Cloud ensures a [fast and scalable CI](https://nx.dev/ci/intro/why-nx-cloud?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) pipeline. It includes features such as:
-
-- [Remote caching](https://nx.dev/ci/features/remote-cache?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task distribution across multiple machines](https://nx.dev/ci/features/distribute-task-execution?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Automated e2e test splitting](https://nx.dev/ci/features/split-e2e-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task flakiness detection and rerunning](https://nx.dev/ci/features/flaky-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-### Step 2
-
-Use the following command to configure a CI workflow for your workspace:
+### Production build
 
 ```sh
-npx nx g ci-workflow
+# Build both apps
+npm run build
+
+# Or individually
+npm run build:server   # → apps/alpha-trader-server/dist
+npm run build:web      # → dist/apps/alpha-trader-web
 ```
 
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+Run the compiled server:
 
-## Install Nx Console
+```sh
+node apps/alpha-trader-server/dist/main.js
+```
 
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
+Serve the Angular build with any static file server (or configure the Fastify server to serve `dist/apps/alpha-trader-web/browser`). Set `WEB_APP_URL` and `CORS_ORIGIN` to your production domain.
 
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+### Tests
 
-## Useful links
+```sh
+npm test
+```
 
-Learn more:
+Runs Jest unit tests across server libraries and the API app.
 
-- [Learn more about this workspace setup](https://nx.dev/nx-api/node?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+### Dependency graph
 
-And join the Nx community:
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+```sh
+npx nx graph
+```
+
+---
+
+## API Reference
+
+Base URL: `http://localhost:3000` (development)
+
+### Auth & session
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api` | API health / version |
+| `GET` | `/api/login` | Check token status; returns `{ hasActiveToken }` or `{ redirectUrl }` |
+| `GET` | `/api/login/browser` | Browser OAuth redirect (sets session cookie on success) |
+| `GET` | `/api/access-token` | Fyers OAuth callback — exchanges `auth_code` for access token |
+| `GET` | `/api/token-status` | `{ isTokenValid }` |
+| `GET` | `/api/logout` | Revoke Fyers session and clear stored token |
+| `GET` | `/api/web/session` | Web app session snapshot (settings, token state) |
+
+### Deck
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/deck/stream` | SSE live deck ticks (`?symbol=&style=`) |
+| `GET` | `/api/deck/live` | One-shot live payload (`?symbol=&style=&scope=`) |
+| `GET` | `/api/deck/replay` | Replay session payload (`?symbol=&style=&date=`) |
+| `GET` | `/api/deck/replay-trades` | Replay trade list (`?symbol=&style=&date=YYYY-MM-DD`) |
+| `GET` | `/api/deck/settings` | Current deck settings |
+| `PATCH` | `/api/deck/settings` | Update trading style / veto mode |
+| `GET` | `/api/deck/auto-exit` | Auto-exit preference snapshot |
+| `PATCH` | `/api/deck/auto-exit` | Update auto-exit preferences |
+| `POST` | `/api/deck/veto` | Quick veto mode toggle |
+
+### Positions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/open-positions` | Open index-option positions + management advice |
+| `GET` | `/api/open-positions/stream` | SSE position updates (`?symbol=&tradingStyle=`) |
+
+### Benchmark
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/benchmark/options` | Available config options and limits |
+| `POST` | `/api/benchmark/start` | Start async benchmark job |
+| `GET` | `/api/benchmark/status` | Poll job status (`?jobId=`) |
+| `GET` | `/api/benchmark/report` | Fetch completed report (`?reportId=`) |
+| `GET` | `/api/benchmark/export` | Download Excel report (`?reportId=`) |
+
+### Settings & symbols
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/settings` | Global settings snapshot |
+| `PATCH` | `/api/settings` | Update global settings |
+| `GET` | `/api/auto-exit` | Auto-exit preferences (alias) |
+| `PATCH` | `/api/auto-exit` | Update auto-exit preferences (alias) |
+| `GET` | `/api/symbols/option-indices` | Supported index symbols (`?exchange=NSE\|BSE`) |
+
+### Trading styles
+
+| Style | Primary timeframe | Use case |
+|-------|-------------------|----------|
+| `INTRADAY` | 15m | Default session trading |
+| `SCALPER` | 5m | Shorter holding periods |
+| `POSITIONAL` | 1h | Swing-style bias |
+
+### Veto modes
+
+| Mode | Behaviour |
+|------|-----------|
+| `strict` | Chart structure strongly blocks entries |
+| `relaxed` | Softer veto thresholds |
+| `off` | Veto disabled |
+
+---
+
+## Architecture Overview
+
+```mermaid
+flowchart LR
+  subgraph browser [Angular Web App]
+    Live[Live Deck]
+    Replay[Replay Deck]
+    Bench[Benchmark]
+  end
+
+  subgraph server [Fastify API]
+    Routes[Routes]
+    DeckHub[Deck Stream Hub]
+    PosHub[Positions Stream Hub]
+  end
+
+  subgraph libs [Server Libraries]
+    Analysis[analysis]
+    MarketData[market-data]
+    Position[position]
+    BenchmarkLib[benchmark]
+  end
+
+  subgraph external [External]
+    Fyers[Fyers API v3]
+    Mongo[(MongoDB)]
+  end
+
+  browser -->|REST + SSE| Routes
+  Routes --> DeckHub
+  Routes --> PosHub
+  Routes --> libs
+  libs --> Fyers
+  libs --> Mongo
+```
+
+On startup, the server bootstraps open positions for all configured indices, connects Fyers WebSocket streams (when enabled), and begins streaming deck ticks to connected clients during market hours (NSE session).
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `Fyers session expired` on deck/benchmark | Re-login via `/login` or `Connect Fyers` |
+| Token saved but app still fails | Verify MongoDB is running and `MONGODB_URL` is correct |
+| CORS errors from web app | Set `CORS_ORIGIN=http://localhost:4200` and restart the server |
+| OAuth redirect mismatch | Ensure `FYERS_REDIRECT_URL` exactly matches the Fyers dashboard entry |
+| Live stream shows "Market closed" | NSE/BSE session is outside trading hours — use Replay or Benchmark |
+| Web app API calls fail | Confirm the server is on port 3000 and `npm run serve:web` proxy is active |
+
+---
+
+## License
+
+MIT
