@@ -48,4 +48,4 @@ test-output
 
 .angular
 
-*.env
+.env
