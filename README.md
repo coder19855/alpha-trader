@@ -235,7 +235,13 @@ Run the compiled server:
 node apps/alpha-trader-server/dist/main.js
 ```
 
-Serve the Angular build with any static file server (or configure the Fastify server to serve `dist/apps/alpha-trader-web/browser`). Set `WEB_APP_URL` and `CORS_ORIGIN` to your production domain.
+When `dist/apps/alpha-trader-web/browser` exists (after `npm run build`), the server automatically serves the Angular app from the same origin. Set `SERVE_WEB_APP=true` to force this in production.
+
+```sh
+SERVE_WEB_APP=true NODE_ENV=production node apps/alpha-trader-server/dist/main.js
+```
+
+Set `WEB_APP_URL` and `CORS_ORIGIN` to your public URL (e.g. `https://alpha-trader.onrender.com`).
 
 ### Tests
 
@@ -365,6 +371,170 @@ flowchart LR
 ```
 
 On startup, the server bootstraps open positions for all configured indices, connects Fyers WebSocket streams (when enabled), and begins streaming deck ticks to connected clients during market hours (NSE session).
+
+---
+
+## Deploy on Render
+
+Alpha Trader runs as a **single Render Web Service** that serves both the API and the Angular app from one URL. This is required because the web app calls `/api` on the same origin and the Fyers OAuth callback must hit your server.
+
+### Architecture on Render
+
+```
+Browser  →  https://your-app.onrender.com
+              ├── /api/*     → Fastify API + SSE streams
+              └── /*         → Angular SPA (static files)
+MongoDB Atlas  ←  MONGODB_URL (external, required)
+Fyers API      ←  OAuth + market data
+```
+
+### Step 1 — MongoDB Atlas (required)
+
+Render cannot reach a localhost database. Use [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) free tier:
+
+1. Create a free M0 cluster.
+2. **Database Access** → add a database user (username + password).
+3. **Network Access** → allow `0.0.0.0/0` (or Render egress IPs if you restrict).
+4. **Connect** → choose **Drivers** → copy the connection string.
+5. Replace `<password>` and set the database name, e.g.:
+
+```
+mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/alpha-trader?retryWrites=true&w=majority
+```
+
+### Step 2 — Fyers API app
+
+In the [Fyers API dashboard](https://myapi.fyers.in/dashboard/):
+
+1. Create or open your app.
+2. Set the redirect URL to your Render URL (set this **after** first deploy, or use your planned URL):
+
+```
+https://your-app.onrender.com/api/access-token
+```
+
+3. Note the **App ID** (`FYERS_API_KEY`) and **Secret** (`FYERS_API_SECRET`).
+
+### Step 3 — Create the Render Web Service
+
+**Option A — Blueprint (recommended)**
+
+1. Push this repo to GitHub/GitLab.
+2. In [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint**.
+3. Connect the repo — Render reads `render.yaml` at the repo root.
+4. Fill in secret env vars when prompted (see Step 4).
+
+**Option B — Manual Web Service**
+
+1. **New** → **Web Service** → connect your repo.
+2. Configure:
+
+| Setting | Value |
+|---------|-------|
+| **Runtime** | Node |
+| **Build Command** | `npm install --legacy-peer-deps && npm run build` |
+| **Start Command** | `NODE_ENV=production node apps/alpha-trader-server/dist/main.js` |
+| **Health Check Path** | `/api` |
+
+3. Choose a plan (Free tier works; service sleeps after ~15 min idle and cold-starts on next visit).
+
+### Step 4 — Environment variables
+
+In Render → your service → **Environment**, add:
+
+#### Required
+
+| Variable | Example | Description |
+|----------|---------|-------------|
+| `FYERS_API_KEY` | `XXXXXX-100` | Fyers app ID |
+| `FYERS_API_SECRET` | `your-secret` | Fyers app secret |
+| `FYERS_REDIRECT_URL` | `https://your-app.onrender.com/api/access-token` | Must match Fyers dashboard exactly |
+| `MONGODB_URL` | `mongodb+srv://...` | MongoDB Atlas connection string |
+| `WEB_APP_URL` | `https://your-app.onrender.com` | Public app URL (no trailing slash) |
+| `CORS_ORIGIN` | `https://your-app.onrender.com` | Same as `WEB_APP_URL` for single-origin deploy |
+| `SERVE_WEB_APP` | `true` | Serve Angular build from the same service |
+| `NODE_ENV` | `production` | Production mode |
+| `NODE_VERSION` | `22` | Node.js version (Render native env) |
+
+#### Recommended
+
+| Variable | Example | Description |
+|----------|---------|-------------|
+| `WEB_SESSION_SECRET` | long random string | Cookie signing secret (generate with `openssl rand -hex 32`) |
+
+#### Optional (Render sets automatically)
+
+| Variable | Description |
+|----------|-------------|
+| `PORT` | Injected by Render — do not override unless needed |
+| `RENDER` | Set to `true` on Render — used to detect cloud deploy |
+
+#### Optional tuning
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HOST` | `0.0.0.0` | Bind address |
+| `WEB_DIST_PATH` | auto-detected | Override path to Angular `browser` output |
+| `FYERS_WS_ENABLED` | `true` | Fyers market data WebSocket |
+| `FYERS_ORDER_WS_ENABLED` | `true` | Fyers order WebSocket |
+| `FYERS_WS_LITE_MODE` | `true` | Reduced WS footprint |
+| `ALPHA_WATCH_SYMBOLS` | all indices | Comma-separated symbols for auto-exit watch |
+| `AUTO_EXIT_POLL_INTERVAL_MS` | — | Auto-exit poll interval |
+| `BENCHMARK_FLIP_POLL_MINUTES` | `15` | Benchmark flip-exit poll |
+| `OPEN_POSITIONS_CACHE_TTL_MS` | — | Position REST cache TTL |
+
+**Copy-paste template** (replace placeholders):
+
+```env
+FYERS_API_KEY=<fyers-app-id>
+FYERS_API_SECRET=<fyers-secret>
+FYERS_REDIRECT_URL=https://<your-service>.onrender.com/api/access-token
+MONGODB_URL=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/alpha-trader?retryWrites=true&w=majority
+WEB_APP_URL=https://<your-service>.onrender.com
+CORS_ORIGIN=https://<your-service>.onrender.com
+WEB_SESSION_SECRET=<random-32-byte-hex>
+SERVE_WEB_APP=true
+NODE_ENV=production
+NODE_VERSION=22
+```
+
+### Step 5 — Deploy
+
+1. Click **Deploy** (or push to the connected branch).
+2. Wait for build: `npm install` → `nx build` (server + web).
+3. Open `https://<your-service>.onrender.com`.
+4. Go to **Login** → **Connect Fyers** → complete OAuth.
+5. Confirm `/api/token-status` returns `{ "isTokenValid": true }`.
+
+### Step 6 — Post-deploy checks
+
+| Check | Expected |
+|-------|----------|
+| `GET /api` | `{ "message": "Alpha Trader API", ... }` |
+| App home | Angular shell loads (redirects to `/live/signal`) |
+| Fyers login | Redirect back to app after OAuth |
+| Live deck SSE | Stream connects during market hours |
+| Render logs | `MongoDB connected` and `Serving Angular web app from dist` |
+
+### Render notes
+
+- **Free tier**: Service spins down when idle; first request after sleep takes 30–60s. SSE streams disconnect when the instance sleeps.
+- **Paid tier**: Keeps the instance warm — better for live deck during market hours.
+- **HTTPS**: Render provides TLS automatically; session cookies use `Secure` in production.
+- **Logs**: Dashboard → **Logs** for build errors, Mongo connection, and Fyers auth issues.
+- **Custom domain**: Add under **Settings** → **Custom Domains**, then update `WEB_APP_URL`, `CORS_ORIGIN`, and `FYERS_REDIRECT_URL`.
+
+### Render troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| Build fails on `npm install` | Build command must include `--legacy-peer-deps` |
+| `MongoDB unavailable` in logs | Use Atlas `mongodb+srv://` URL, not `localhost` |
+| OAuth redirect mismatch | `FYERS_REDIRECT_URL` must exactly match Fyers dashboard |
+| Blank page, API works | Confirm `npm run build` produced `dist/apps/alpha-trader-web/browser` and `SERVE_WEB_APP=true` |
+| CORS errors | Set `CORS_ORIGIN` to your exact Render URL (https, no trailing slash) |
+| Token not persisted | Check Atlas user/password and network access `0.0.0.0/0` |
+| Cold start timeout | Upgrade plan or use a cron ping service to keep instance warm |
 
 ---
 

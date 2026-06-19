@@ -71,6 +71,15 @@ export class MarketDataStore {
     return value;
   }
 
+  invalidateLiveHistory(symbol: string): void {
+    const prefix = `live:${symbol}:`;
+    for (const key of this.historyCache.keys()) {
+      if (key.startsWith(prefix)) {
+        this.historyCache.delete(key);
+      }
+    }
+  }
+
   getStats(): MarketDataCacheStats {
     return {
       historyHits: this.historyHits,

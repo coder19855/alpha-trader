@@ -9,7 +9,12 @@ import {
   signal,
 } from '@angular/core';
 import { ChartOverlayLine, DeckLiveTick } from '../../core/models/deck.models';
-import { SpotChartComponent } from '../spot-chart/spot-chart.component';
+import {
+  SpotChartComponent,
+  SpotChartStyle,
+} from '../spot-chart/spot-chart.component';
+
+const CHART_STYLE_STORAGE_KEY = 'alpha-trader.deck-chart-style';
 
 type Candle = { t: number; o: number; h: number; l: number; c: number };
 type ChartTf = '5m' | '15m' | '1h';
@@ -39,7 +44,8 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = [
     <section class="chart-block chart-block-padded">
       <div class="chart-title-row">
         <div class="chart-title">
-          Charts <span class="spot-session-label">09:15–15:30 IST</span>
+          Charts
+          <span class="spot-session-label">Scroll ← for history · IST sessions</span>
         </div>
         @if (patternContext()) {
           <span class="pattern-context">{{ patternContext() }}</span>
@@ -70,19 +76,41 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = [
         }
       </div>
 
-      <div class="chart-tf-tabs" role="tablist" aria-label="Chart timeframe">
-        @for (tf of timeframes; track tf) {
+      <div class="chart-toolbar-row">
+        <div class="chart-tf-tabs" role="tablist" aria-label="Chart timeframe">
+          @for (tf of timeframes; track tf) {
+            <button
+              type="button"
+              class="chart-tf-btn"
+              [class.active]="activeTf() === tf"
+              role="tab"
+              [attr.aria-selected]="activeTf() === tf"
+              (click)="activeTf.set(tf)"
+            >
+              {{ tf }}
+            </button>
+          }
+        </div>
+        <div class="chart-style-toggle" role="group" aria-label="Chart style">
           <button
             type="button"
-            class="chart-tf-btn"
-            [class.active]="activeTf() === tf"
-            role="tab"
-            [attr.aria-selected]="activeTf() === tf"
-            (click)="activeTf.set(tf)"
+            class="chart-style-btn"
+            [class.active]="chartStyle() === 'candlestick'"
+            [attr.aria-pressed]="chartStyle() === 'candlestick'"
+            (click)="setChartStyle('candlestick')"
           >
-            {{ tf }}
+            Candles
           </button>
-        }
+          <button
+            type="button"
+            class="chart-style-btn"
+            [class.active]="chartStyle() === 'line'"
+            [attr.aria-pressed]="chartStyle() === 'line'"
+            (click)="setChartStyle('line')"
+          >
+            Line
+          </button>
+        </div>
       </div>
 
       <div class="multi-chart-grid single-tf-view">
@@ -103,6 +131,7 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = [
                 [overlays]="activeOverlays()"
                 [layers]="layerState()"
                 [timeframe]="activeTf()"
+                [chartStyle]="chartStyle()"
               />
             }
           </div>
@@ -164,6 +193,42 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = [
         position: relative;
         min-height: 280px;
       }
+      .chart-toolbar-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 10px 0 8px;
+        padding: 0 4px;
+      }
+      .chart-toolbar-row .chart-tf-tabs {
+        margin: 0;
+        flex: 1 1 220px;
+      }
+      .chart-style-toggle {
+        display: inline-flex;
+        gap: 4px;
+        padding: 3px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .chart-style-btn {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        cursor: pointer;
+      }
+      .chart-style-btn.active {
+        color: var(--text);
+        background: rgba(34, 211, 238, 0.1);
+      }
       .chart-empty {
         position: absolute;
         inset: 0;
@@ -188,6 +253,7 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
   readonly layers = CHART_LAYER_DEFS;
   readonly timeframes: ChartTf[] = ['5m', '15m', '1h'];
   readonly activeTf = signal<ChartTf>('15m');
+  readonly chartStyle = signal<SpotChartStyle>(this.readStoredChartStyle());
   readonly layerState = signal<Record<string, boolean>>(
     Object.fromEntries(CHART_LAYER_DEFS.map((layer) => [layer.id, true])),
   );
@@ -243,6 +309,25 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
         window.setTimeout(() => this.spotChart?.refresh(), 120);
       });
     });
+  }
+
+  setChartStyle(style: SpotChartStyle): void {
+    this.chartStyle.set(style);
+    try {
+      localStorage.setItem(CHART_STYLE_STORAGE_KEY, style);
+    } catch {
+      /* ignore quota / private mode */
+    }
+    this.scheduleChartMount();
+  }
+
+  private readStoredChartStyle(): SpotChartStyle {
+    try {
+      const stored = localStorage.getItem(CHART_STYLE_STORAGE_KEY);
+      return stored === 'line' ? 'line' : 'candlestick';
+    } catch {
+      return 'candlestick';
+    }
   }
 
   tfLabel(tf: ChartTf): string {

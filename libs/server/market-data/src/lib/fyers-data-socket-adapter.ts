@@ -1,3 +1,5 @@
+import { fyersDataSocket } from 'fyers-api-v3';
+
 export interface DataSocketLike {
   on(event: string, cb: (...args: unknown[]) => void): void;
   connect(): void;
@@ -17,15 +19,5 @@ export function createFyersDataSocket(
   logPath = '',
   logEnabled = false,
 ): DataSocketLike {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { fyersDataSocket } = require('fyers-api-v3') as {
-    fyersDataSocket: {
-      getInstance: (
-        token: string,
-        path: string,
-        logging: boolean,
-      ) => DataSocketLike;
-    };
-  };
   return fyersDataSocket.getInstance(accessToken, logPath, logEnabled);
 }

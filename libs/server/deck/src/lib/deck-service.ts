@@ -78,6 +78,8 @@ export interface DeckMarker {
 export interface DeckLiveStreamTick {
   type: 'tick';
   asOf: string;
+  /** When price-action / conviction was last fully recomputed (ISO). */
+  signalCalculatedAt: string;
   tfAligned?: number;
   tfAlignedTotal?: number;
   marketOpen: boolean;
@@ -370,9 +372,11 @@ function buildStreamTickParts(
     vetoMode: params.vetoMode,
   });
 
+  const calculatedAt = new Date().toISOString();
   return {
     type: 'tick',
-    asOf: new Date().toISOString(),
+    asOf: calculatedAt,
+    signalCalculatedAt: calculatedAt,
     tfAligned: aligned,
     tfAlignedTotal: 3,
     marketRegime,
@@ -537,6 +541,16 @@ async function buildPositionsBundle(
   return { openPositions, managementContext };
 }
 
+function resolveDeckTimelineDays(style: TradingStyle): number {
+  if (style === TradingStyle.Scalper) {
+    return DECK_LIVE_TIMELINE.DAYS_BY_STYLE.SCALPER;
+  }
+  if (style === TradingStyle.Positional) {
+    return DECK_LIVE_TIMELINE.DAYS_BY_STYLE.POSITIONAL;
+  }
+  return DECK_LIVE_TIMELINE.DAYS_BY_STYLE.INTRADAY;
+}
+
 async function fetchTimeline(
   fastify: FastifyInstance,
   symbol: string,
@@ -546,7 +560,7 @@ async function fetchTimeline(
     return await computeTechnicalAnalysisTimeline(fastify, {
       symbol,
       tradingStyle: style,
-      days: DECK_LIVE_TIMELINE.DAYS,
+      days: resolveDeckTimelineDays(style),
       maxPoints: DECK_LIVE_TIMELINE.MAX_POINTS,
       includeCandles: true,
     });

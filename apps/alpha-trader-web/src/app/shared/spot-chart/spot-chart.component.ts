@@ -24,6 +24,7 @@ import { ChartOverlayLine } from '../../core/models/deck.models';
 
 type Candle = { t: number; o: number; h: number; l: number; c: number };
 type SpotPoint = { t: number; v: number };
+export type SpotChartStyle = 'candlestick' | 'line';
 
 interface IstChartSession {
   fromMs: number;
@@ -61,6 +62,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() scrubTime: number | null = null;
   @Input() overlays: ChartOverlayLine[] = [];
   @Input() timeframe: '5m' | '15m' | '1h' = '15m';
+  @Input() chartStyle: SpotChartStyle = 'candlestick';
   @Input() layers: Record<string, boolean> = {};
 
   private chart: IChartApi | null = null;
@@ -114,7 +116,8 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       changes['spotSeries'] ||
       changes['scrubTime'] ||
       changes['overlays'] ||
-      changes['layers']
+      changes['layers'] ||
+      changes['chartStyle']
     ) {
       if (!this.chart) {
         this.scheduleInitRetries();
@@ -328,18 +331,23 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   private render(): void {
     if (!this.chart || !this.candleSeries || !this.lineSeries || !this.scrubSeries) return;
 
-    const normalized = this.normalizeCandles(this.candles);
-    const candles = this.filterCandlesToSession(normalized);
+    const candles = this.normalizeCandles(this.candles);
     const spotSeries = this.filterSeriesToSession(this.spotSeries);
     const dataKey = this.buildDataKey(candles, spotSeries);
     const dataChanged = dataKey !== this.lastDataKey;
     this.lastDataKey = dataKey;
 
-    const activeSeries =
-      candles.length > 0 ? this.candleSeries : spotSeries.length ? this.lineSeries : null;
+    const useCandles =
+      this.chartStyle === 'candlestick' && candles.length > 0;
+    const linePoints = this.resolveLinePoints(candles, spotSeries);
+    const activeSeries = useCandles
+      ? this.candleSeries
+      : linePoints.length
+        ? this.lineSeries
+        : null;
 
     try {
-      if (candles.length) {
+      if (useCandles) {
         const data: CandlestickData[] = candles.map((c) => ({
           time: Math.floor(c.t / 1000) as Time,
           open: c.o,
@@ -349,8 +357,8 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
         }));
         this.candleSeries.setData(data);
         this.lineSeries.setData([]);
-      } else if (spotSeries.length) {
-        const data: LineData[] = spotSeries.map((p) => ({
+      } else if (linePoints.length) {
+        const data: LineData[] = linePoints.map((p) => ({
           time: Math.floor(p.t / 1000) as Time,
           value: p.v,
         }));
@@ -399,23 +407,48 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     }
   }
 
+  private resolveLinePoints(candles: Candle[], spotSeries: SpotPoint[]): SpotPoint[] {
+    if (this.chartStyle === 'line' && candles.length) {
+      return candles.map((c) => ({ t: c.t, v: c.c }));
+    }
+    return spotSeries;
+  }
+
   private buildDataKey(candles: Candle[], series: SpotPoint[]): string {
     const lastCandle = candles[candles.length - 1];
     const lastSpot = series[series.length - 1];
-    return `${candles.length}:${lastCandle?.t ?? 0}:${series.length}:${lastSpot?.t ?? 0}`;
+    return `${candles.length}:${lastCandle?.t ?? 0}:${lastCandle?.c ?? 0}:${series.length}:${lastSpot?.t ?? 0}:${lastSpot?.v ?? 0}`;
   }
 
   private focusViewport(candles?: Candle[], series?: SpotPoint[]): void {
     if (!this.chart) return;
-    const normalized = candles ?? this.filterCandlesToSession(this.normalizeCandles(this.candles));
+    const normalized = candles ?? this.normalizeCandles(this.candles);
     const points = series ?? this.filterSeriesToSession(this.spotSeries);
 
-    if (!normalized.length && !points.length) return;
+    if (normalized.length) {
+      const visibleBars = this.defaultVisibleBars();
+      const startIdx = Math.max(0, normalized.length - visibleBars);
+      const fromSec = Math.floor(normalized[startIdx].t / 1000);
+      const lastSec = Math.floor(normalized[normalized.length - 1].t / 1000);
+      const barSec =
+        this.timeframe === '5m' ? 300 : this.timeframe === '1h' ? 3600 : 900;
+      const toSec = lastSec + barSec * 2;
+      try {
+        this.chart.timeScale().setVisibleRange({
+          from: fromSec as Time,
+          to: toSec as Time,
+        });
+        this.hasFocusedSession = true;
+        return;
+      } catch {
+        this.fitChartContent();
+        return;
+      }
+    }
 
-    const anchorMs =
-      normalized[normalized.length - 1]?.t ??
-      points[points.length - 1]?.t ??
-      Date.now();
+    if (!points.length) return;
+
+    const anchorMs = points[points.length - 1]?.t ?? Date.now();
     const session = this.buildIstChartSession(anchorMs);
     const lastSec = Math.floor(anchorMs / 1000);
     const fromSec = Math.floor(session.fromMs / 1000);
@@ -430,6 +463,13 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     } catch {
       this.fitChartContent();
     }
+  }
+
+  /** Default zoom window — full history remains scrollable to the left. */
+  private defaultVisibleBars(): number {
+    if (this.timeframe === '5m') return 156;
+    if (this.timeframe === '1h') return 120;
+    return 80;
   }
 
   private fitChartContent(): void {
@@ -503,16 +543,6 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       });
       this.overlayPriceLines.push({ line: priceLine, series });
     }
-  }
-
-  private filterCandlesToSession(candles: Candle[]): Candle[] {
-    if (!candles.length) return candles;
-    const anchorMs = candles[candles.length - 1]?.t ?? Date.now();
-    const session = this.buildIstChartSession(anchorMs);
-    const filtered = candles.filter(
-      (c) => c.t >= session.fromMs && c.t <= session.closeMs + 5 * 60 * 1000,
-    );
-    return filtered.length ? filtered : candles;
   }
 
   private filterSeriesToSession(series: SpotPoint[]): SpotPoint[] {

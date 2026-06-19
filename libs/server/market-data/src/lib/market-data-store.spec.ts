@@ -31,7 +31,7 @@ describe('MarketDataStore', () => {
     };
 
     await store.getHistory(params, fetch, nowMs);
-    await store.getHistory(params, fetch, nowMs + 30_000);
+    await store.getHistory(params, fetch, nowMs + 15_000);
 
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(store.getStats().historyHits).toBe(1);
@@ -53,7 +53,7 @@ describe('MarketDataStore', () => {
     };
 
     await store.getHistory(params, fetch, nowMs);
-    await store.getHistory(params, fetch, nowMs + 61_000);
+    await store.getHistory(params, fetch, nowMs + 31_000);
 
     expect(fetch).toHaveBeenCalledTimes(2);
   });

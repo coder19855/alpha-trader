@@ -1,5 +1,6 @@
 import 'fastify';
 import type { fyersModel } from 'fyers-api-v3';
+import type { MarketStreamStats } from '@alpha-trader/server-market-data';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -17,6 +18,13 @@ declare module 'fastify' {
         maxAgeMs?: number,
       ) => Array<{ t: number; v: number }>;
       getQuote: (symbol: string) => unknown;
+      getStats: () => MarketStreamStats;
+      syncSession: () => Promise<void>;
+    };
+    fyersOrderStream?: {
+      isEnabled: () => boolean;
+      isConnected: () => boolean;
+      getStats: () => Record<string, unknown>;
       syncSession: () => Promise<void>;
     };
   }

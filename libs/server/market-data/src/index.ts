@@ -21,7 +21,14 @@ export {
 
 export { getQuoteCache } from './lib/quote-cache.js';
 export { getMarketDataStore } from './lib/market-data-store.js';
-export { FyersMarketStreamManager } from './lib/fyers-market-stream-manager.js';
+export {
+  patchFyersCandlesWithLtp,
+  patchLiveHistoryCandles,
+} from './lib/live-history-candle-patch.js';
+export {
+  FyersMarketStreamManager,
+  type MarketStreamStats,
+} from './lib/fyers-market-stream-manager.js';
 export { FyersOrderStreamManager } from './lib/fyers-order-stream-manager.js';
 
 export { fetchFyersHistoryCandles } from './lib/fyers-history-range.js';

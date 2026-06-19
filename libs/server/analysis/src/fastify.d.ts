@@ -1,5 +1,6 @@
 import 'fastify';
 import type { fyersModel } from 'fyers-api-v3';
+import type { MarketStreamStats } from '@alpha-trader/server-market-data';
 import type {
   FlowMode,
   OptionMetricsResponse,
@@ -12,6 +13,25 @@ import type {
 declare module 'fastify' {
   interface FastifyInstance {
     fyers: fyersModel;
+    fyersMarketStream?: {
+      isEnabled: () => boolean;
+      isConnected: () => boolean;
+      getIndexLtp: (symbol: string) => number | null;
+      getOptionLtp: (symbol: string) => number | null;
+      getSpotSeries: (
+        symbol: string,
+        maxAgeMs?: number,
+      ) => Array<{ t: number; v: number }>;
+      getQuote: (symbol: string) => unknown;
+      getStats: () => MarketStreamStats;
+      syncSession: () => Promise<void>;
+    };
+    fyersOrderStream?: {
+      isEnabled: () => boolean;
+      isConnected: () => boolean;
+      getStats: () => Record<string, unknown>;
+      syncSession: () => Promise<void>;
+    };
     momentumDecayPlugin: {
       computeMomentumDecay: (...args: any[]) => any;
       applyMomentumDecay: (...args: any[]) => any;

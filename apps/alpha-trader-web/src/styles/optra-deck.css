@@ -578,6 +578,19 @@ body.replay-mode {
   color: var(--muted);
 }
 
+.signal-calc-stamp {
+  margin: 8px 0 0;
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.signal-calc-stamp time {
+  color: var(--text, #e8ecf1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+}
+
 .status-line {
   margin: 6px 0 0;
   color: var(--muted);

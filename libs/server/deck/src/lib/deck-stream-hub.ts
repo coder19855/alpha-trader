@@ -2,13 +2,18 @@ import './augment-fastify.js';
 import { randomUUID } from 'crypto';
 import { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { TradingStyle, isIndianMarketOpen } from '@alpha-trader/server-shared';
-import { getOpenPositionsCacheSnapshot } from '@alpha-trader/server-market-data';
+import {
+  getMarketDataStore,
+  getOpenPositionsCacheSnapshot,
+} from '@alpha-trader/server-market-data';
 import {
   buildDeckLiveStreamTick,
   buildDeckPositionsLtpPatch,
   buildDeckPositionsUpdate,
+  DeckCandlePoint,
   DeckLiveStreamTick,
 } from './deck-service.js';
+import { patchMultiTfSpotCandles } from './live-candle-patch.js';
 import type { DeckOpenPositionsPayload } from './deck-open-positions.js';
 
 export interface DeckStreamChannelParams {
@@ -29,6 +34,12 @@ export function deckStreamChannelKey(params: DeckStreamChannelParams): string {
   return `${symbol}:${style}`;
 }
 
+function resolveDeckSignalRefreshMs(): number {
+  const raw = process.env.DECK_SIGNAL_REFRESH_MS;
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+}
+
 function parseTradingStyle(raw?: string): TradingStyle {
   const style = String(raw || TradingStyle.Intraday).toUpperCase();
   if (style === TradingStyle.Scalper) return TradingStyle.Scalper;
@@ -45,8 +56,15 @@ export class DeckStreamHub {
       heartbeatTimer: NodeJS.Timeout | null;
       lastTick: DeckLiveStreamTick | null;
       cachedOpenPositions: DeckOpenPositionsPayload | null;
+      cachedChartCandles: {
+        spotCandles?: DeckCandlePoint[];
+        spotCandles5m?: DeckCandlePoint[];
+        spotCandles15m?: DeckCandlePoint[];
+        spotCandles1h?: DeckCandlePoint[];
+      } | null;
       tickInFlight: boolean;
       ltpInFlight: boolean;
+      signalRefreshTimer: NodeJS.Timeout | null;
     }
   >();
 
@@ -72,11 +90,14 @@ export class DeckStreamHub {
         heartbeatTimer: null,
         lastTick: null,
         cachedOpenPositions: null,
+        cachedChartCandles: null,
         tickInFlight: false,
         ltpInFlight: false,
+        signalRefreshTimer: null,
       };
       this.channels.set(key, channel);
       this.startHeartbeat(channel);
+      this.startSignalRefresh(channel);
     }
 
     channel.subscribers.set(subscriber.id, subscriber);
@@ -87,6 +108,7 @@ export class DeckStreamHub {
       channel?.subscribers.delete(subscriber.id);
       if (channel && channel.subscribers.size === 0) {
         this.stopHeartbeat(channel);
+        this.stopSignalRefresh(channel);
         this.channels.delete(key);
       }
     };
@@ -95,6 +117,7 @@ export class DeckStreamHub {
   shutdown(): void {
     for (const channel of this.channels.values()) {
       this.stopHeartbeat(channel);
+      this.stopSignalRefresh(channel);
     }
     this.channels.clear();
   }
@@ -102,6 +125,27 @@ export class DeckStreamHub {
   getSubscriberCount(params: DeckStreamChannelParams): number {
     const key = deckStreamChannelKey(params);
     return this.channels.get(key)?.subscribers.size ?? 0;
+  }
+
+  seedChartCandles(
+    params: DeckStreamChannelParams,
+    candles: {
+      spotCandles?: DeckCandlePoint[];
+      spotCandles5m?: DeckCandlePoint[];
+      spotCandles15m?: DeckCandlePoint[];
+      spotCandles1h?: DeckCandlePoint[];
+    },
+  ): void {
+    const key = deckStreamChannelKey(params);
+    const channel = this.channels.get(key);
+    if (!channel) return;
+
+    channel.cachedChartCandles = {
+      spotCandles: candles.spotCandles?.map((c) => ({ ...c })),
+      spotCandles5m: candles.spotCandles5m?.map((c) => ({ ...c })),
+      spotCandles15m: candles.spotCandles15m?.map((c) => ({ ...c })),
+      spotCandles1h: candles.spotCandles1h?.map((c) => ({ ...c })),
+    };
   }
 
   notifyQuoteTicksUpdated(symbols: string[]): void {
@@ -159,6 +203,26 @@ export class DeckStreamHub {
     channel.heartbeatTimer = null;
   }
 
+  private startSignalRefresh(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): void {
+    if (channel.signalRefreshTimer) return;
+    const intervalMs = resolveDeckSignalRefreshMs();
+    channel.signalRefreshTimer = setInterval(() => {
+      if (!isIndianMarketOpen() || channel.subscribers.size === 0) return;
+      getMarketDataStore().invalidateLiveHistory(channel.params.symbol.trim());
+      void this.sendTick(channel, true);
+    }, intervalMs);
+    channel.signalRefreshTimer.unref?.();
+  }
+
+  private stopSignalRefresh(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): void {
+    if (channel.signalRefreshTimer) clearInterval(channel.signalRefreshTimer);
+    channel.signalRefreshTimer = null;
+  }
+
   private broadcast(
     channel: NonNullable<ReturnType<typeof this.channels.get>>,
     payload: unknown,
@@ -179,6 +243,7 @@ export class DeckStreamHub {
 
   private async sendTick(
     channel: NonNullable<ReturnType<typeof this.channels.get>>,
+    _forceRefresh = false,
   ): Promise<void> {
     if (channel.tickInFlight) return;
     channel.tickInFlight = true;
@@ -190,7 +255,8 @@ export class DeckStreamHub {
       );
       channel.lastTick = tick;
       channel.cachedOpenPositions = tick.openPositions ?? channel.cachedOpenPositions;
-      this.broadcast(channel, tick);
+      const chartPatch = this.patchCachedChartCandles(channel, tick.lastPrice);
+      this.broadcast(channel, chartPatch ? { ...tick, ...chartPatch } : tick);
     } catch (err) {
       this.log.warn({ err, channel: channel.params }, 'Deck stream tick failed');
       this.broadcast(channel, {
@@ -221,12 +287,28 @@ export class DeckStreamHub {
           managementContext: patch.managementContext,
         };
       }
-      this.broadcast(channel, patch);
+      const chartPatch = this.patchCachedChartCandles(channel, patch.lastPrice);
+      this.broadcast(channel, chartPatch ? { ...patch, ...chartPatch } : patch);
     } catch (err) {
       this.log.warn({ err, channel: channel.params }, 'Deck LTP patch failed');
     } finally {
       channel.ltpInFlight = false;
     }
+  }
+
+  private patchCachedChartCandles(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+    ltp: number | null | undefined,
+  ): Record<string, DeckCandlePoint[]> | null {
+    if (!channel.cachedChartCandles || ltp == null || !Number.isFinite(ltp) || ltp <= 0) {
+      return null;
+    }
+
+    const patched = patchMultiTfSpotCandles(channel.cachedChartCandles, ltp);
+    if (!Object.keys(patched).length) return null;
+
+    channel.cachedChartCandles = { ...channel.cachedChartCandles, ...patched };
+    return patched;
   }
 
   private async sendPositionsUpdate(

@@ -1,0 +1,23 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy: Dashboard → New → Blueprint → connect this repo
+
+services:
+  - type: web
+    name: alpha-trader
+    runtime: node
+    plan: free
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    startCommand: NODE_ENV=production node apps/alpha-trader-server/dist/main.js
+    healthCheckPath: /api
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_WEB_APP
+        value: "true"
+      - key: HOST
+        value: 0.0.0.0
+      # Set these in the Render dashboard (do not commit secrets):
+      # FYERS_API_KEY, FYERS_API_SECRET, FYERS_REDIRECT_URL,
+      # MONGODB_URL, WEB_APP_URL, CORS_ORIGIN, WEB_SESSION_SECRET

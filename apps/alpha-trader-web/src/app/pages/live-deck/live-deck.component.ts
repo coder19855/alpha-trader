@@ -32,6 +32,9 @@ import { MarketRegimeComponent } from '../../shared/market-regime/market-regime.
 import { VetoBreakupComponent } from '../../shared/veto-breakup/veto-breakup.component';
 import { VetoStripComponent } from '../../shared/veto-strip/veto-strip.component';
 import { StrategyPanelComponent } from '../../shared/strategy-panel/strategy-panel.component';
+import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/signal-readout-help.component';
+import { patchMultiTfSpotCandles } from '../../core/utils/live-candle-patch';
+import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timestamp';
 
 @Component({
   selector: 'app-live-deck',
@@ -51,6 +54,7 @@ import { StrategyPanelComponent } from '../../shared/strategy-panel/strategy-pan
     VetoStripComponent,
     AutoExitPanelComponent,
     StrategyPanelComponent,
+    SignalReadoutHelpComponent,
   ],
   template: `
     <section class="deck-page">
@@ -81,6 +85,7 @@ import { StrategyPanelComponent } from '../../shared/strategy-panel/strategy-pan
           class="tab-panel"
           [class.active]="ctx.activeTab() === 'signal'"
         >
+          <app-signal-readout-help />
           @if (data.chartVetoed) {
             <p class="veto-score-notice" role="status">
               Chart veto active — {{ data.vetoReason || 'structure block' }}
@@ -111,6 +116,12 @@ import { StrategyPanelComponent } from '../../shared/strategy-panel/strategy-pan
               </div>
             </div>
             <p class="status-line">{{ data.bias || '—' }}</p>
+            <p class="signal-calc-stamp" role="status">
+              Signal calculated:
+              <time [attr.datetime]="data.signalCalculatedAt ?? data.asOf">
+                {{ formatSignalCalculatedAt(data.signalCalculatedAt ?? data.asOf) }}
+              </time>
+            </p>
             <app-market-regime [regime]="data.marketRegime" />
           </section>
 
@@ -349,6 +360,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   readonly settings = signal<SettingsSnapshot | null>(null);
   readonly error = signal<string | null>(null);
   readonly drilldownOpen = signal(true);
+  protected readonly formatSignalCalculatedAt = formatSignalCalculatedAt;
 
   constructor() {
     effect(() => {
@@ -544,10 +556,13 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
 
   /** Enrichment lacks gauges/action — never use it as the initial tick. */
   private mergeChartPatch(patch: Partial<DeckLiveTick>): void {
-    this.pendingChartPatch = { ...(this.pendingChartPatch ?? {}), ...patch };
+    this.pendingChartPatch = this.withLiveChartCandles({
+      ...(this.pendingChartPatch ?? {}),
+      ...patch,
+    });
     this.tick.update((prev) => {
       if (!prev) return prev;
-      const next = { ...prev, ...patch };
+      const next = this.withLiveChartCandles({ ...prev, ...patch }) as DeckLiveTick;
       this.deckAlerts.evaluate(prev, next);
       return next;
     });
@@ -555,11 +570,13 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
 
   private applyTick(data: DeckLiveTick): void {
     const prev = this.tick();
-    const next = {
+    const next = this.withLiveChartCandles({
       ...(prev ?? {}),
       ...(this.pendingChartPatch ?? {}),
       ...data,
-    } as DeckLiveTick;
+      signalCalculatedAt:
+        data.signalCalculatedAt ?? data.asOf ?? prev?.signalCalculatedAt,
+    }) as DeckLiveTick;
     this.tick.set(next);
     if (prev) {
       this.deckAlerts.evaluate(prev, next);
@@ -575,5 +592,14 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       live: true,
       asOf: next.asOf,
     });
+  }
+
+  private withLiveChartCandles<T extends Partial<DeckLiveTick>>(tick: T): T {
+    if (!Number.isFinite(tick.lastPrice) || (tick.lastPrice ?? 0) <= 0) {
+      return tick;
+    }
+    const candlePatch = patchMultiTfSpotCandles(tick, tick.lastPrice!);
+    if (!Object.keys(candlePatch).length) return tick;
+    return { ...tick, ...candlePatch };
   }
 }

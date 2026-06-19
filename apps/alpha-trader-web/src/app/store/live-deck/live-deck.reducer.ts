@@ -1,6 +1,7 @@
 import { EntityAdapter, EntityState, createEntityAdapter } from '@ngrx/entity';
 import { createReducer, on } from '@ngrx/store';
 import { DeckLiveTick, SettingsSnapshot } from '../../core/models/deck.models';
+import { patchMultiTfSpotCandles } from '../../core/utils/live-candle-patch';
 import { LiveDeckActions } from './live-deck.actions';
 
 export interface LiveTickRecord extends DeckLiveTick {
@@ -33,15 +34,22 @@ function setLoading(state: LiveDeckState, deckKey: string, loading: boolean): Li
   return { ...state, loadingKeys, activeDeckKey: deckKey };
 }
 
+function withLiveChartCandles<T extends DeckLiveTick>(tick: T): T {
+  if (!Number.isFinite(tick.lastPrice) || tick.lastPrice <= 0) return tick;
+  const candlePatch = patchMultiTfSpotCandles(tick, tick.lastPrice);
+  if (!Object.keys(candlePatch).length) return tick;
+  return { ...tick, ...candlePatch };
+}
+
 function upsertTick(state: LiveDeckState, deckKey: string, tick: DeckLiveTick): LiveDeckState {
   const pending = state.pendingChartPatchByKey[deckKey];
-  const merged = {
+  const merged = withLiveChartCandles({
     ...(state.entities[deckKey] ?? {}),
     ...(pending ?? {}),
     ...tick,
     id: deckKey,
     deckKey,
-  } as LiveTickRecord;
+  } as LiveTickRecord);
   return liveTickAdapter.upsertOne(merged, {
     ...state,
     activeDeckKey: deckKey,
@@ -74,7 +82,12 @@ export const liveDeckReducer = createReducer(
     if (!existing) {
       return { ...state, pendingChartPatchByKey };
     }
-    const merged = { ...existing, ...patch, id: deckKey, deckKey } as LiveTickRecord;
+    const merged = withLiveChartCandles({
+      ...existing,
+      ...patch,
+      id: deckKey,
+      deckKey,
+    } as LiveTickRecord);
     return liveTickAdapter.upsertOne(merged, { ...state, pendingChartPatchByKey });
   }),
   on(LiveDeckActions.loadFailed, (state, { deckKey, error }) => ({

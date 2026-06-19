@@ -494,10 +494,11 @@ export default fp(
         useMomentumBias &&
         momentumDecayResult.decayPercent >= 0.35
       ) {
-        if (momentumAwareScore < -0.2) bias = 'Moderate Bearish';
+        if (Math.abs(primaryScore) < 0.1) bias = 'Neutral';
+        else if (momentumAwareScore < -0.2) bias = 'Moderate Bearish';
         else if (momentumAwareScore > 0.2) bias = 'Moderate Bullish';
         else bias = 'Neutral';
-      } else if (Math.abs(biasScore) < 0.1) {
+      } else if (Math.abs(primaryScore) < 0.1 || Math.abs(biasScore) < 0.1) {
         bias = 'Neutral';
       } else if (biasScore > 0) {
         bias = 'Moderate Bullish';

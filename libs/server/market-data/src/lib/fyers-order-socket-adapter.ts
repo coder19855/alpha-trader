@@ -1,3 +1,5 @@
+import { fyersOrderSocket } from 'fyers-api-v3';
+
 export interface FyersWsPositionRow {
   symbol?: string;
   netQty?: number;
@@ -32,13 +34,5 @@ export function createFyersOrderSocket(
   logPath = '',
   logEnabled = false,
 ): OrderSocketLike {
-  const { fyersOrderSocket } = require('fyers-api-v3') as {
-    fyersOrderSocket: new (
-      token: string,
-      logPath: string,
-      logEnabled: boolean,
-    ) => OrderSocketLike;
-  };
-
   return new fyersOrderSocket(accessToken, logPath, logEnabled);
 }

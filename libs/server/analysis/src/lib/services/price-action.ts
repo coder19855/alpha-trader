@@ -20,6 +20,7 @@ import {
 import { ResponseStatus } from '@alpha-trader/server-shared';
 import { parseVetoModeQuery } from '@alpha-trader/server-shared';
 import { TradingStyle } from '@alpha-trader/server-shared';
+import { patchLiveHistoryCandles } from '@alpha-trader/server-market-data';
 
 export default async function technicalAnalysisRoute(fastify: FastifyInstance) {
   fastify.get('/api/technical-analysis', async (request, reply) => {
@@ -98,9 +99,20 @@ export default async function technicalAnalysisRoute(fastify: FastifyInstance) {
         });
       }
 
-      const candles5m = res5m.candles;
-      const candles15m = res15m.candles;
-      const candles1h = res1h.candles;
+      const liveLtp = fastify.fyersMarketStream?.getIndexLtp(symbol) ?? null;
+      const patched = patchLiveHistoryCandles(
+        symbol,
+        {
+          '5': res5m.candles,
+          '15': res15m.candles,
+          '60': res1h.candles,
+        },
+        liveLtp,
+        Math.floor(rangeTo / 1000),
+      );
+      const candles5m = patched['5'];
+      const candles15m = patched['15'];
+      const candles1h = patched['60'];
 
       // Parse trading style (aligns with /score-metrics)
       const styleStr = (styleQuery || 'INTRADAY').toUpperCase();
@@ -406,7 +418,8 @@ export default async function technicalAnalysisRoute(fastify: FastifyInstance) {
         primaryTimeframe = '15m';
       }
 
-      const primaryLastPrice = primaryCandles[primaryCandles.length - 1][4];
+      const primaryLastPrice =
+        liveLtp ?? primaryCandles[primaryCandles.length - 1][4];
       const chartPatternPrimary =
         primaryTimeframe === '5m'
           ? chartPattern5m

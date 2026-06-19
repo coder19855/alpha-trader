@@ -60,7 +60,14 @@ function handleDeckStream(
 
   void buildDeckLiveStreamEnrichment(fastify, params)
     .then((enrichment) => {
-      if (!closed) writeSse(reply, enrichment);
+      if (closed) return;
+      fastify.deckStreamHub.seedChartCandles(params, {
+        spotCandles: enrichment.spotCandles,
+        spotCandles5m: enrichment.spotCandles5m,
+        spotCandles15m: enrichment.spotCandles15m,
+        spotCandles1h: enrichment.spotCandles1h,
+      });
+      writeSse(reply, enrichment);
     })
     .catch((err) => {
       fastify.log.warn({ err }, 'deck stream enrichment failed');

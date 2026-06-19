@@ -16,6 +16,7 @@ import { VetoBreakupComponent } from '../../shared/veto-breakup/veto-breakup.com
 import { VetoStripComponent } from '../../shared/veto-strip/veto-strip.component';
 import { StrategyPanelComponent } from '../../shared/strategy-panel/strategy-panel.component';
 import { PositionsListComponent } from '../../shared/positions-list/positions-list.component';
+import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/signal-readout-help.component';
 
 @Component({
   selector: 'app-replay-deck',
@@ -34,6 +35,7 @@ import { PositionsListComponent } from '../../shared/positions-list/positions-li
     VetoStripComponent,
     StrategyPanelComponent,
     PositionsListComponent,
+    SignalReadoutHelpComponent,
   ],
   template: `
     <section class="deck-page">
@@ -86,6 +88,7 @@ import { PositionsListComponent } from '../../shared/positions-list/positions-li
         }
 
         <section class="tab-panel" [class.active]="ctx.activeTab() === 'signal'">
+          <app-signal-readout-help />
           <section class="action-card">
             <div class="action-main">
               <span class="action-label">{{ scrubbed()?.action || '—' }}</span>

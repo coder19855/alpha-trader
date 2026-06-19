@@ -33,10 +33,15 @@ export const MIN_CONFIDENCE_AFTER_DECAY: Record<TradingStyle, number> = {
   [TradingStyle.Positional]: 50,
 };
 
-/** Live deck reads at most this many timeline points (15m ≈ 2 sessions). */
+/** Live deck chart + timeline window (candles span full days; points capped separately). */
 export const DECK_LIVE_TIMELINE = {
-  DAYS: 2,
+  DAYS: 7,
   MAX_POINTS: 48,
+  DAYS_BY_STYLE: {
+    SCALPER: 5,
+    INTRADAY: 7,
+    POSITIONAL: 30,
+  },
 } as const;
 
 /** Defaults for /api/technical-analysis/timeline */

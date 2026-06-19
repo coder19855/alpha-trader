@@ -49,3 +49,4 @@ test-output
 .angular
 
 .env
+*.log

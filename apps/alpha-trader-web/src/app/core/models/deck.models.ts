@@ -130,6 +130,8 @@ export interface DeckLiveTick {
   type?: 'tick';
   mode?: 'live';
   asOf: string;
+  /** ISO timestamp when price-action / conviction was last fully recomputed. */
+  signalCalculatedAt?: string;
   symbol?: string;
   symbolLabel?: string;
   tradingStyle?: string;
