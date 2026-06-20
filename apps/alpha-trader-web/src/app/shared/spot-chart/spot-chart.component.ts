@@ -61,6 +61,15 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() spotSeries: SpotPoint[] = [];
   @Input() scrubTime: number | null = null;
   @Input() overlays: ChartOverlayLine[] = [];
+  @Input() chartPatternNeckline?: number;
+  @Input() patternInsights: Array<{
+    timeframe: string;
+    pattern: string;
+    tone: string;
+    label: string;
+    status?: string;
+    biasLabel?: string;
+  }> = [];
   @Input() timeframe: '5m' | '15m' | '1h' = '15m';
   @Input() chartStyle: SpotChartStyle = 'candlestick';
   @Input() layers: Record<string, boolean> = {};
@@ -73,6 +82,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   private ema21Series: ISeriesApi<'Line'> | null = null;
   private supportTrendSeries: ISeriesApi<'Line'> | null = null;
   private resistanceTrendSeries: ISeriesApi<'Line'> | null = null;
+  private patternSeries: ISeriesApi<'Line'> | null = null;
   private overlayPriceLines: Array<{
     line: IPriceLine;
     series: ISeriesApi<'Candlestick'> | ISeriesApi<'Line'>;
@@ -116,6 +126,8 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       changes['spotSeries'] ||
       changes['scrubTime'] ||
       changes['overlays'] ||
+      changes['chartPatternNeckline'] ||
+      changes['patternInsights'] ||
       changes['layers'] ||
       changes['chartStyle']
     ) {
@@ -189,6 +201,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.ema21Series = null;
     this.supportTrendSeries = null;
     this.resistanceTrendSeries = null;
+    this.patternSeries = null;
     this.overlayPriceLines = [];
     this.lastDataKey = '';
     this.hasFocusedSession = false;
@@ -305,6 +318,13 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       priceLineVisible: false,
       lastValueVisible: false,
     });
+    this.patternSeries = this.chart.addSeries(LineSeries, {
+      color: '#a78bfa',
+      lineWidth: 2,
+      lineStyle: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
     this.render();
   }
 
@@ -393,6 +413,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
 
       this.applyOverlayLines(activeSeries);
       this.applyStudyLines(candles);
+      this.applyPatternOverlay(activeSeries, candles, spotSeries);
     } catch (err) {
       console.warn('[spot-chart] render failed', err);
     }
@@ -583,6 +604,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.ema21Series?.setData([]);
     this.supportTrendSeries?.setData([]);
     this.resistanceTrendSeries?.setData([]);
+    this.patternSeries?.setData([]);
   }
 
   private applyStudyLines(candles: Candle[]): void {
@@ -631,6 +653,138 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       console.warn('[spot-chart] study lines failed', err);
       this.clearStudyLines();
     }
+  }
+
+  private applyPatternOverlay(
+    series: ISeriesApi<'Candlestick'> | ISeriesApi<'Line'> | null,
+    candles: Candle[],
+    spotSeries: SpotPoint[],
+  ): void {
+    if (!series || !this.patternSeries) return;
+
+    const patternEnabled = this.layerOn('pattern');
+    if (!patternEnabled) {
+      this.patternSeries.setData([]);
+      return;
+    }
+
+    const pattern = this.patternInsights.find(
+      (item) => item.label === 'Chart Pattern' && item.timeframe === this.timeframe,
+    );
+    const patternColor = this.resolvePatternColor(pattern?.pattern, pattern?.tone);
+    const necklineEnabled = Number.isFinite(this.chartPatternNeckline);
+    if (!pattern && !necklineEnabled) {
+      this.patternSeries.setData([]);
+      return;
+    }
+
+    const pivots = this.buildPatternPivots(candles);
+    if (pivots.length < 2) {
+      this.patternSeries.setData([]);
+      return;
+    }
+
+    const points: LineData[] = pivots.map((pivot) => ({
+      time: Math.floor(candles[pivot.index].t / 1000) as Time,
+      value: +pivot.price.toFixed(2),
+    }));
+    this.patternSeries.applyOptions({
+      color: patternColor,
+      lineWidth: 2,
+      lineStyle: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+
+    if (pattern?.pattern) {
+      const normalized = pattern.pattern.toLowerCase();
+      if (
+        normalized.includes('double top') ||
+        normalized.includes('head and shoulders') ||
+        normalized.includes('inverse head and shoulders') ||
+        normalized.includes('double bottom') ||
+        normalized.includes('wedge') ||
+        normalized.includes('triangle') ||
+        normalized.includes('flag') ||
+        normalized.includes('pennant')
+      ) {
+        this.patternSeries.setData(points);
+      } else {
+        this.patternSeries.setData(points.slice(-4));
+      }
+    } else {
+      this.patternSeries.setData(points);
+    }
+
+  }
+
+  private buildPatternPivots(candles: Candle[]): Array<{ index: number; price: number }> {
+    const highs = this.findSwingHighs(candles, 2).map((p) => ({
+      index: p.index,
+      price: p.price,
+      kind: 'high' as const,
+    }));
+    const lows = this.findSwingLows(candles, 2).map((p) => ({
+      index: p.index,
+      price: p.price,
+      kind: 'low' as const,
+    }));
+
+    const combined = [...highs, ...lows].sort((a, b) => a.index - b.index);
+    const deduped: Array<{ index: number; price: number; kind: 'high' | 'low' }> = [];
+    for (const pivot of combined) {
+      const prev = deduped[deduped.length - 1];
+      if (!prev) {
+        deduped.push(pivot);
+        continue;
+      }
+      if (prev.kind === pivot.kind) {
+        const keep =
+          pivot.kind === 'high'
+            ? pivot.price >= prev.price
+            : pivot.price <= prev.price;
+        if (keep) deduped[deduped.length - 1] = pivot;
+      } else {
+        deduped.push(pivot);
+      }
+    }
+
+    const recent = deduped.slice(-7);
+    const alternating: Array<{ index: number; price: number }> = [];
+    for (const pivot of recent) {
+      const prev = alternating[alternating.length - 1];
+      if (prev && Math.floor(prev.price) === Math.floor(pivot.price)) continue;
+      alternating.push({ index: pivot.index, price: pivot.price });
+    }
+
+    return alternating.length >= 2 ? alternating : [];
+  }
+
+  private resolvePatternColor(pattern?: string, tone?: string): string {
+    const normalized = (pattern ?? '').toLowerCase();
+    if (
+      normalized.includes('double top') ||
+      normalized.includes('head and shoulders') ||
+      normalized.includes('rising wedge') ||
+      normalized.includes('bear flag') ||
+      normalized.includes('descending triangle') ||
+      normalized.includes('trendline break bear')
+    ) {
+      return '#ef4444';
+    }
+    if (
+      normalized.includes('double bottom') ||
+      normalized.includes('inverse head and shoulders') ||
+      normalized.includes('falling wedge') ||
+      normalized.includes('bull flag') ||
+      normalized.includes('ascending triangle') ||
+      normalized.includes('trendline break bull')
+    ) {
+      return '#22c55e';
+    }
+    if ((tone ?? '').toLowerCase() === 'bear') return '#fb923c';
+    if ((tone ?? '').toLowerCase() === 'bull') return '#4ade80';
+    return '#a78bfa';
   }
 
   private computeEmaSeries(candles: Candle[], period: number): LineData[] {

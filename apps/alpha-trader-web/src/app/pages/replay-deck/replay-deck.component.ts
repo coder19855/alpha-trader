@@ -350,6 +350,10 @@ export class ReplayDeckComponent implements OnInit {
     const section = (point?.paDrilldown ?? data.paDrilldown)?.sections?.find(
       (s) => s.id === 'levels',
     );
+    const pattern = (point?.patternInsights ?? data.patternInsights)?.find(
+      (p) => p.label === 'Chart Pattern',
+    );
+    const patternColor = this.resolvePatternColor(pattern?.pattern, pattern?.tone);
     const overlays: ChartOverlayLine[] = [];
     if (section) {
       for (const row of section.rows) {
@@ -381,13 +385,44 @@ export class ReplayDeckComponent implements OnInit {
     if (Number.isFinite(neckline)) {
       overlays.push({
         id: 'pattern',
-        label: 'Neckline',
+        label: pattern?.pattern ? `${this.displayPatternName(pattern.pattern)} neckline` : 'Neckline',
         price: neckline!,
-        color: '#a78bfa',
+        color: patternColor,
         kind: 'hline',
       });
     }
     return overlays;
+  }
+
+  private displayPatternName(pattern: string): string {
+    return pattern.replace(/_/g, ' ');
+  }
+
+  private resolvePatternColor(pattern?: string, tone?: string): string {
+    const normalized = (pattern ?? '').toLowerCase();
+    if (
+      normalized.includes('double top') ||
+      normalized.includes('head and shoulders') ||
+      normalized.includes('rising wedge') ||
+      normalized.includes('bear flag') ||
+      normalized.includes('descending triangle') ||
+      normalized.includes('trendline break bear')
+    ) {
+      return '#ef4444';
+    }
+    if (
+      normalized.includes('double bottom') ||
+      normalized.includes('inverse head and shoulders') ||
+      normalized.includes('falling wedge') ||
+      normalized.includes('bull flag') ||
+      normalized.includes('ascending triangle') ||
+      normalized.includes('trendline break bull')
+    ) {
+      return '#22c55e';
+    }
+    if ((tone ?? '').toLowerCase() === 'bear') return '#fb923c';
+    if ((tone ?? '').toLowerCase() === 'bull') return '#4ade80';
+    return '#a78bfa';
   }
 
   vetoSummary(data: DeckReplayPayload): string {

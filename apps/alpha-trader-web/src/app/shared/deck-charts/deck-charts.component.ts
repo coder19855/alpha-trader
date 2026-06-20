@@ -26,15 +26,56 @@ interface ChartLayerDef {
   swatch: string;
 }
 
-const CHART_LAYER_DEFS: ChartLayerDef[] = [
-  { id: 'ema9', label: '9 EMA', color: '#ef4444', swatch: 'line' },
-  { id: 'ema21', label: '21 EMA', color: '#eab308', swatch: 'line' },
-  { id: 'support', label: 'Support', color: '#22d3ee', swatch: 'hline' },
-  { id: 'resistance', label: 'Resistance', color: '#f472b6', swatch: 'hline' },
-  { id: 'supportTrend', label: 'S trend', color: '#4ade80', swatch: 'dline' },
-  { id: 'resistanceTrend', label: 'R trend', color: '#fb923c', swatch: 'dline' },
-  { id: 'pattern', label: 'Pattern', color: '#a78bfa', swatch: 'pattern' },
+interface ChartLayerGroupDef {
+  id: string;
+  label: string;
+  color: string;
+  swatch: string;
+  childIds: string[];
+  detail: string;
+}
+
+const CHART_LAYER_GROUPS: ChartLayerGroupDef[] = [
+  {
+    id: 'indicators',
+    label: 'Indicators',
+    color: '#ef4444',
+    swatch: 'line',
+    childIds: ['ema9', 'ema21'],
+    detail: 'EMA 9 / EMA 21',
+  },
+  {
+    id: 'priceAction',
+    label: 'Price action',
+    color: '#22d3ee',
+    swatch: 'hline',
+    childIds: ['support', 'resistance'],
+    detail: 'Support / Resistance',
+  },
+  {
+    id: 'trendLines',
+    label: 'Trend lines',
+    color: '#4ade80',
+    swatch: 'dline',
+    childIds: ['supportTrend', 'resistanceTrend'],
+    detail: 'Support trend / Resistance trend',
+  },
+  {
+    id: 'pattern',
+    label: 'Pattern',
+    color: '#a78bfa',
+    swatch: 'pattern',
+    childIds: ['pattern'],
+    detail: 'Chart pattern / neckline',
+  },
 ];
+
+const CHART_LAYER_DEFS: ChartLayerDef[] = CHART_LAYER_GROUPS.map((group) => ({
+  id: group.id,
+  label: group.label,
+  color: group.color,
+  swatch: group.swatch,
+}));
 
 @Component({
   selector: 'app-deck-charts',
@@ -57,21 +98,22 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = [
           <button
             type="button"
             class="chart-layer-btn"
-            [class.active]="isLayerOn(layer.id)"
-            [class.off]="!isLayerOn(layer.id)"
-            [class.unavailable]="!isLayerAvailable(layer.id)"
-            [disabled]="!isLayerAvailable(layer.id)"
-            [attr.aria-pressed]="isLayerOn(layer.id)"
-            (click)="toggleLayer(layer.id)"
+            [class.active]="isGroupOn(layer.id)"
+            [class.off]="!isGroupOn(layer.id)"
+            [class.unavailable]="!isGroupAvailable(layer.id)"
+            [disabled]="!isGroupAvailable(layer.id)"
+            [attr.aria-pressed]="isGroupOn(layer.id)"
+            (click)="toggleGroup(layer.id)"
           >
             <span
               class="chart-layer-swatch"
               [class]="layer.swatch"
               [style.--layer-color]="layer.color"
             ></span>
-            <span class="chart-layer-label" [style.color]="isLayerOn(layer.id) ? layer.color : null">
+            <span class="chart-layer-label" [style.color]="isGroupOn(layer.id) ? layer.color : null">
               {{ layer.label }}
             </span>
+            <span class="chart-layer-detail">{{ groupDetail(layer.id) }}</span>
           </button>
         }
       </div>
@@ -129,6 +171,8 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = [
                 [spotSeries]="seriesFor(activeTf())"
                 [scrubTime]="scrubTime"
                 [overlays]="activeOverlays()"
+                [chartPatternNeckline]="chartPatternNeckline"
+                [patternInsights]="patternInsights ?? []"
                 [layers]="layerState()"
                 [timeframe]="activeTf()"
                 [chartStyle]="chartStyle()"
@@ -229,6 +273,11 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = [
         color: var(--text);
         background: rgba(34, 211, 238, 0.1);
       }
+      .chart-layer-detail {
+        font-size: 0.65rem;
+        color: var(--muted);
+        white-space: nowrap;
+      }
       .chart-empty {
         position: absolute;
         inset: 0;
@@ -255,7 +304,11 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
   readonly activeTf = signal<ChartTf>('15m');
   readonly chartStyle = signal<SpotChartStyle>(this.readStoredChartStyle());
   readonly layerState = signal<Record<string, boolean>>(
-    Object.fromEntries(CHART_LAYER_DEFS.map((layer) => [layer.id, true])),
+    Object.fromEntries(
+      CHART_LAYER_GROUPS.flatMap((group) =>
+        group.childIds.map((id) => [id, false] as const),
+      ),
+    ),
   );
 
   @Input() spotCandles5m: Candle[] = [];
@@ -364,12 +417,32 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
   }
 
   isLayerOn(id: string): boolean {
-    return this.layerState()[id] ?? false;
+    return this.isGroupOn(id);
   }
 
-  toggleLayer(id: string): void {
-    if (!this.isLayerAvailable(id)) return;
-    this.layerState.update((state) => ({ ...state, [id]: !state[id] }));
+  isGroupAvailable(id: string): boolean {
+    const group = CHART_LAYER_GROUPS.find((item) => item.id === id);
+    return group ? group.childIds.some((childId) => this.isChildAvailable(childId)) : false;
+  }
+
+  isGroupOn(id: string): boolean {
+    const group = CHART_LAYER_GROUPS.find((item) => item.id === id);
+    return group ? group.childIds.some((childId) => this.layerState()[childId] === true) : false;
+  }
+
+  toggleGroup(id: string): void {
+    const group = CHART_LAYER_GROUPS.find((item) => item.id === id);
+    if (!group || !this.isGroupAvailable(id)) return;
+    const next = !this.isGroupOn(id);
+    this.layerState.update((state) => {
+      const updated = { ...state };
+      for (const childId of group.childIds) {
+        if (this.isChildAvailable(childId)) {
+          updated[childId] = next;
+        }
+      }
+      return updated;
+    });
   }
 
   activeOverlays(): ChartOverlayLine[] {
@@ -389,5 +462,14 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
       });
     }
     return overlays;
+  }
+
+  groupDetail(id: string): string {
+    const group = CHART_LAYER_GROUPS.find((item) => item.id === id);
+    return group?.detail ?? '';
+  }
+
+  private isChildAvailable(id: string): boolean {
+    return this.isLayerAvailable(id);
   }
 }
