@@ -11,6 +11,7 @@ export const CHANDELIER_HYBRID_MIN_PEAK_R = 1.0;
 
 export type BenchmarkExitPolicy =
   | 'rr-ladder'
+  | 'breakeven-lock'
   | 'chandelier'
   | 'chandelier-hybrid'
   | 'atr-tighten'
@@ -29,6 +30,7 @@ export const PARTIAL_SCALE_TP_R = 1.5;
 
 export const BENCHMARK_EXIT_MATRIX_PRESETS: BenchmarkExitPolicy[] = [
   'rr-ladder',
+  'breakeven-lock',
   'chandelier-hybrid',
   'atr-tighten',
   'partial-scale-50',
@@ -176,6 +178,9 @@ export function isChandelierActive(
 export function describeExitPolicy(policy: BenchmarkExitPolicy): string {
   if (policy === 'chandelier') {
     return `Chandelier exit (${CHANDELIER_DEFAULT_PERIOD}-bar ATR × ${CHANDELIER_DEFAULT_ATR_MULT}) — ratcheting HH/LL −/+ ATR trail; close breach.`;
+  }
+  if (policy === 'breakeven-lock') {
+    return 'Break-even lock — after 1R peak, stop moves to entry and stays there until 1.5R, then resumes the R:R ratchet. Useful for protecting early wins without tightening too fast.';
   }
   if (policy === 'chandelier-hybrid') {
     return `Hybrid exit — R:R ladder + tighter Chandelier (${CHANDELIER_DEFAULT_ATR_MULT}× ATR) after ${CHANDELIER_HYBRID_MIN_PEAK_R}R peak.`;

@@ -41,6 +41,7 @@ function normalizeExitPolicy(value: unknown): BenchmarkExitPolicy {
 function normalizePositionPolicy(value: unknown): BenchmarkPositionPolicy {
   const token = String(value ?? '').trim();
   if (token === 'scale-ladder') return 'scale-ladder';
+  if (token === 'runner-heavy') return 'runner-heavy';
   return 'flat';
 }
 

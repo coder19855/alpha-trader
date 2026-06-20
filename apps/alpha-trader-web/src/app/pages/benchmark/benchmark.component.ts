@@ -272,7 +272,7 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                 }
               } @else {
                 <p class="policy-detail-hint">
-                  Runs {{ options()?.exitPolicies?.length ?? 7 }} replays with
+                  Runs {{ options()?.exitPolicies?.length ?? 8 }} replays with
                   identical entries — only the trailing exit model changes.
                 </p>
               }
@@ -284,7 +284,9 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                 <span>Mode</span>
                 <select [(ngModel)]="positionMode" name="positionMode">
                   <option value="single">Single policy</option>
-                  <option value="matrix">Compare flat vs scale-ladder</option>
+                  <option value="matrix">
+                    Compare flat vs scale ladders
+                  </option>
                 </select>
               </label>
               @if (positionMode === 'single') {
@@ -301,8 +303,8 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                 }
               } @else {
                 <p class="policy-detail-hint">
-                  Compares flat full-size exits vs 33/33/34 scale-out ladder on
-                  the same entries.
+                  Compares flat full-size exits vs balanced 33/33/34 and
+                  runner-heavy 25/25/50 scale-out ladders on the same entries.
                 </p>
               }
             </section>
@@ -1282,7 +1284,7 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
 
   estimatedReplays(): number {
     if (this.exitMode === 'matrix') {
-      return this.options()?.exitPolicies?.length ?? 7;
+      return this.options()?.exitPolicies?.length ?? 8;
     }
     if (this.positionMode === 'matrix') return 2;
     if (this.signalMode === 'matrix') {

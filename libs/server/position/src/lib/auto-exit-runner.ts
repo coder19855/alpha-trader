@@ -70,6 +70,7 @@ function trailStopLabel(hitLevel: string | null | undefined): string | null {
   if (hitLevel === 'CHANDELIER') return 'Chandelier';
   if (hitLevel === 'ATR_TIGHTEN') return 'ATR tighten';
   if (hitLevel === 'STRUCTURE_TRAIL') return 'Structure trail';
+  if (hitLevel === 'BE') return 'Break-even';
   if (hitLevel === 'TRAIL_FLOOR' || hitLevel === '1:1' || hitLevel === '1:1.5') {
     return 'R:R floor';
   }
@@ -454,8 +455,8 @@ export async function attachAutoExitGuard(params: {
 
   const policyHint = describeExitPolicy(pref.exitPolicy);
   const positionHint =
-    pref.positionPolicy === 'scale-ladder'
-      ? describePositionPolicy('scale-ladder')
+    pref.positionPolicy !== 'flat'
+      ? describePositionPolicy(pref.positionPolicy)
       : null;
 
   if (!signal) {

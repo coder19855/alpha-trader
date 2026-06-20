@@ -36,6 +36,7 @@ import { isIndexStopBreached } from './signal-exit-policy.js';
 export type AutoExitHitLevel =
   | 'STOP_LOSS'
   | 'TRAIL_FLOOR'
+  | 'BE'
   | 'CHANDELIER'
   | 'ATR_TIGHTEN'
   | 'STRUCTURE_TRAIL'
@@ -90,6 +91,7 @@ function isIstSessionTightenWindow(nowMs: number): boolean {
 function mapTrailHitLevel(
   hitLevel: ResolvedTrailStop['hitLevel'],
 ): AutoExitHitLevel {
+  if (hitLevel === 'BE') return 'BE';
   if (hitLevel === 'CHANDELIER') return 'CHANDELIER';
   if (hitLevel === 'ATR_TIGHTEN') return 'ATR_TIGHTEN';
   if (hitLevel === 'STRUCTURE_TRAIL') return 'STRUCTURE_TRAIL';
@@ -223,6 +225,8 @@ export function evaluateBenchmarkAutoExitSignal(
           ? 'ATR tighten'
           : mapped === 'STRUCTURE_TRAIL'
             ? 'Structure trail'
+            : mapped === 'BE'
+              ? 'Break-even'
             : 'R:R trail floor';
     return {
       hitLevel: mapped,

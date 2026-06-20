@@ -12,13 +12,14 @@ export type BenchmarkExitModeHintKey = 'default' | 'single' | 'matrix';
 export type BenchmarkPositionModeHintKey =
   | 'flat'
   | 'scale-ladder'
+  | 'runner-heavy'
   | 'matrix';
 
 export function describeExitModeHint(
   mode: BenchmarkExitModeHintKey,
 ): string {
   if (mode === 'matrix') {
-    return 'Runs seven full replays on the same entries — R:R ladder, hybrid Chandelier, ATR tighten, 50% partial @ 1.5R, structure trail, momentum decay, and pure Chandelier. Results rank which exit model kept the most R.';
+    return 'Runs eight full replays on the same entries — R:R ladder, break-even lock, hybrid Chandelier, ATR tighten, 50% partial @ 1.5R, structure trail, momentum decay, and pure Chandelier. Results rank which exit model kept the most R.';
   }
   if (mode === 'single') {
     return 'One exit policy for the whole run. Pick a policy below — the hint updates with a concrete example of how that trail behaves.';
@@ -32,6 +33,8 @@ export function describeExitPolicyDetail(
   switch (policy) {
     case 'rr-ladder':
       return 'R:R ladder — stop ratchets at fixed R floors. At 1R peak, stop moves to breakeven; floors lock at 1R (1.25R peak), 1.5R (1.5R peak), 2.5R, then 4R as price extends; beyond 4R the floor trails peak − 1R. Example: CE entry 24,000, risk 80 pts → peak 24,120 (+1.5R) floors stop at 24,120 (+1.5R); a pullback to that level exits +1.5R instead of giving back the whole move.';
+    case 'breakeven-lock':
+      return 'Break-even lock — after 1R peak, stop stays at entry until 1.5R, then resumes the normal R:R ratchet. Example: a fast 1R pop protects the trade early without jumping to the first profit floor too soon.';
     case 'chandelier-hybrid':
       return 'Hybrid — keeps R:R floors, then after 1R peak also tracks a Chandelier stop (22-bar ATR × 3 from highest high / lowest low). The tighter of R:R floor vs Chandelier wins. Example: trending day — Chandelier rides 24,000 → 24,200; choppy day — R:R floor at +1R banks profit before Chandelier whipsaws.';
     case 'atr-tighten':
@@ -55,8 +58,10 @@ export function describePositionModeDetail(
   switch (mode) {
     case 'scale-ladder':
       return 'Scale-out ladder — splits one logical position into thirds at R targets: 33% booked at 1.5R, 33% at 2.5R, final 34% rides the exit trail (usually to 4R or stop). Example: 3-unit risk budget — +1.5R on first third = +0.5R blended; if runner hits 4R on last third, total ≈ 0.5 + 0.83 + 1.36 ≈ +2.7R vs +4R all-in flat size.';
+    case 'runner-heavy':
+      return 'Runner-heavy ladder — books 25% at 1.5R, 25% at 2.5R, then lets 50% run. Example: better for trend days where the last half captures the big extension instead of cutting the runner too early.';
     case 'matrix':
-      return 'Position matrix — two replays: flat size (100% one exit) vs scale-out ladder above, same entries and exit policy. Shows whether partial booking helps or hurts on your window.';
+      return 'Position matrix — three replays: flat size (100% one exit), scale-out ladder, and runner-heavy ladder, same entries and exit policy. Shows whether partial booking helps or hurts on your window.';
     case 'flat':
     default:
       return 'Flat size — enter once at full risk budget; entire position exits on one stop/target event. Example: +2.5R hit means the whole trade scores +2.5R. Simplest baseline; pair with exit matrix to test trails without partials.';
@@ -69,6 +74,7 @@ export function buildExitPolicyHints(): Record<
 > {
   const policies: BenchmarkExitPolicy[] = [
     'rr-ladder',
+    'breakeven-lock',
     'chandelier-hybrid',
     'atr-tighten',
     'partial-scale-50',
@@ -88,6 +94,7 @@ export function buildPositionModeHints(): Record<
   return {
     flat: describePositionModeDetail('flat'),
     'scale-ladder': describePositionModeDetail('scale-ladder'),
+    'runner-heavy': describePositionModeDetail('runner-heavy'),
     matrix: describePositionModeDetail('matrix'),
   };
 }
@@ -105,6 +112,7 @@ export function buildExitModeHints(): Record<
 
 const EXIT_POLICY_LABELS: Record<BenchmarkExitPolicy, string> = {
   'rr-ladder': 'R:R ladder (default)',
+  'breakeven-lock': 'Break-even lock',
   'chandelier-hybrid': 'Hybrid (R:R + Chandelier)',
   'atr-tighten': 'ATR tighten (3×→2.5×→1.75×)',
   'partial-scale-50': 'Partial 50% @ 1.5R',
@@ -116,6 +124,7 @@ const EXIT_POLICY_LABELS: Record<BenchmarkExitPolicy, string> = {
 const POSITION_POLICY_LABELS: Record<BenchmarkPositionPolicy, string> = {
   flat: 'Flat size',
   'scale-ladder': 'Scale-out ladder',
+  'runner-heavy': 'Runner-heavy ladder',
 };
 
 export function buildAutoExitPolicyOptions(): Array<{

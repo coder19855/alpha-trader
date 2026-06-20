@@ -57,6 +57,9 @@ import { NotificationService } from '../../core/services/notification.service';
         @if (exitPolicyHint()) {
           <p class="auto-exit-policy-hint">{{ exitPolicyHint() }}</p>
         }
+        @if (positionPolicyHint()) {
+          <p class="auto-exit-policy-hint">{{ positionPolicyHint() }}</p>
+        }
       }
       <p class="auto-exit-live-status muted">
         {{ liveStatus() }}
@@ -108,6 +111,12 @@ export class AutoExitPanelComponent implements OnInit {
     const s = this.snapshot();
     if (!s) return '';
     return s.exitPolicies.find((p) => p.id === s.exitPolicy)?.hint ?? '';
+  }
+
+  positionPolicyHint(): string {
+    const s = this.snapshot();
+    if (!s) return '';
+    return s.positionPolicies.find((p) => p.id === s.positionPolicy)?.hint ?? '';
   }
 
   patch(patch: Partial<AutoExitSnapshot>): void {

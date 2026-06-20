@@ -13,6 +13,7 @@ import {
 
 const EXIT_POLICY_LABELS: Record<BenchmarkExitPolicy, string> = {
   'rr-ladder': 'R:R ladder (default)',
+  'breakeven-lock': 'Break-even lock',
   'chandelier-hybrid': 'Hybrid (R:R + Chandelier)',
   'atr-tighten': 'ATR tighten (3×→2×)',
   'partial-scale-50': 'Partial 50% @ 1.5R',

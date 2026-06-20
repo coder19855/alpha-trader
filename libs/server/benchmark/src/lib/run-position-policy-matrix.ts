@@ -14,6 +14,7 @@ import {
 const POSITION_POLICY_LABELS: Record<BenchmarkPositionPolicy, string> = {
   flat: 'Flat (full size)',
   'scale-ladder': 'Scale-out ladder (33/33/34)',
+  'runner-heavy': 'Runner-heavy ladder (25/25/50)',
 };
 
 export async function runPositionPolicyMatrix(

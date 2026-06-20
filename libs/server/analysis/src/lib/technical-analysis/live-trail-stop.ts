@@ -49,6 +49,20 @@ export function resolveTrailStop(
     rrFloorR != null
       ? floorPriceFromR(action, setup.entry, setup.risk, rrFloorR)
       : null;
+  const breakevenLockR =
+    peakR >= 1
+      ? peakR < 1.5
+        ? 0
+        : peakR < 2.5
+          ? 1
+          : peakR < 4
+            ? 1.5
+            : Math.max(4, +(peakR - 1).toFixed(3))
+      : null;
+  const breakevenLockPrice =
+    breakevenLockR != null
+      ? floorPriceFromR(action, setup.entry, setup.risk, breakevenLockR)
+      : null;
   const chandelierStop = chandelier?.stopPrice ?? null;
   const chandelierActive =
     chandelierStop != null &&
@@ -94,16 +108,25 @@ export function resolveTrailStop(
 
   if (
     exitPolicy === 'rr-ladder' ||
+    exitPolicy === 'breakeven-lock' ||
     exitPolicy === 'partial-scale-50' ||
     exitPolicy === 'momentum-decay-exit'
   ) {
-    if (rrFloorPrice == null || rrFloorR == null) return null;
+    const floorR =
+      exitPolicy === 'breakeven-lock'
+        ? breakevenLockR
+        : rrFloorR;
+    const floorPrice =
+      exitPolicy === 'breakeven-lock'
+        ? breakevenLockPrice
+        : rrFloorPrice;
+    if (floorPrice == null || floorR == null) return null;
     return {
-      stopPrice: rrFloorPrice,
-      hitLevel: formatTrailFloorHitLevel(rrFloorR),
-      exitR: rrFloorR,
-      trailFloorR: rrFloorR,
-      trailFloorPrice: rrFloorPrice,
+      stopPrice: floorPrice,
+      hitLevel: formatTrailFloorHitLevel(floorR),
+      exitR: floorR,
+      trailFloorR: floorR,
+      trailFloorPrice: floorPrice,
     };
   }
 

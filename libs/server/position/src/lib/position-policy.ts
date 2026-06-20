@@ -9,7 +9,7 @@ import {
   TradeTakeProfitLevel,
 } from '@alpha-trader/server-shared';
 
-export type BenchmarkPositionPolicy = 'flat' | 'scale-ladder';
+export type BenchmarkPositionPolicy = 'flat' | 'scale-ladder' | 'runner-heavy';
 
 export type ScaleOutTier = 0 | 1 | 2 | 3;
 
@@ -20,13 +20,20 @@ export const SCALE_LADDER_TIER_FRACTIONS: Record<1 | 2 | 3, number> = {
   3: 0.34,
 };
 
+export const RUNNER_HEAVY_TIER_FRACTIONS: Record<1 | 2 | 3, number> = {
+  1: 0.25,
+  2: 0.25,
+  3: 0.5,
+};
+
 export const BENCHMARK_POSITION_MATRIX_PRESETS: BenchmarkPositionPolicy[] = [
   'flat',
   'scale-ladder',
+  'runner-heavy',
 ];
 
 export interface ScaleOutState {
-  mode: 'partial-50' | 'ladder';
+  mode: 'partial-50' | 'ladder' | 'runner-heavy';
   bankedR: number;
   remainingFraction: number;
   tiersBanked: ScaleOutTier;
@@ -37,6 +44,9 @@ export function describePositionPolicy(
 ): string {
   if (policy === 'scale-ladder') {
     return 'Scale-out ladder (33% @ 1.5R · 33% @ 2.5R · 34% runner trailed)';
+  }
+  if (policy === 'runner-heavy') {
+    return 'Runner-heavy ladder (25% @ 1.5R · 25% @ 2.5R · 50% runner trailed)';
   }
   return 'Flat size (single entry, full exit)';
 }
@@ -52,6 +62,9 @@ export function parseBenchmarkPositionPolicy(
     p === 'partial-ladder'
   ) {
     return 'scale-ladder';
+  }
+  if (p === 'runner-heavy' || p === 'runner-ladder') {
+    return 'runner-heavy';
   }
   if (p === 'position-flat' || p === 'flat-size') {
     return 'flat';
@@ -93,6 +106,14 @@ export function initScaleOutState(
       tiersBanked: 0,
     };
   }
+  if (positionPolicy === 'runner-heavy') {
+    return {
+      mode: 'runner-heavy',
+      bankedR: 0,
+      remainingFraction: 1,
+      tiersBanked: 0,
+    };
+  }
   return null;
 }
 
@@ -124,7 +145,10 @@ export function updateScaleOutOnTierTouch(
   }
 
   for (let tier = (state.tiersBanked + 1) as 1 | 2 | 3; tier <= touchedTier; tier += 1) {
-    const fraction = SCALE_LADDER_TIER_FRACTIONS[tier];
+    const fraction =
+      state.mode === 'runner-heavy'
+        ? RUNNER_HEAVY_TIER_FRACTIONS[tier]
+        : SCALE_LADDER_TIER_FRACTIONS[tier];
     const tierR = tierRMultiplier(tiers, tier);
     state.bankedR = +(state.bankedR + fraction * tierR).toFixed(4);
     state.remainingFraction = +(state.remainingFraction - fraction).toFixed(4);

@@ -121,16 +121,6 @@ export const BENCHMARK_SIGNAL_PRESETS: Record<string, BenchmarkSignalProfile> = 
     requireHighVolume: true,
     requireBos: true,
   },
-  'breakout-vol-bos-retest': {
-    id: 'breakout-vol-bos-retest',
-    label: 'Breakout + volume + BOS + retest',
-    entryMode: 'signal',
-    timeframes: ['5m', '15m', '1h'],
-    requireBreakout: true,
-    requireHighVolume: true,
-    requireBos: true,
-    requireRetest: true,
-  },
   'pattern-vol-adx': {
     id: 'pattern-vol-adx',
     label: 'Pattern breakout + volume + ADX',
@@ -268,7 +258,6 @@ export const BENCHMARK_MATRIX_PRESETS = [
   'breakout-macd-vol',
   'breakout-ema-vol',
   'breakout-tech-vol',
-  'breakout-vol-bos-retest',
   'bollinger-vol',
   'bollinger-macd-vol',
 ] as const;
