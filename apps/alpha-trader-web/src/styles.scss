@@ -27,7 +27,7 @@ select {
 
 app-root {
   display: block;
-  height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Optra shell grid targets #web-shell — keep .web-shell as alias */
@@ -35,8 +35,8 @@ html.web-layout #web-shell,
 html.web-layout .web-shell {
   display: grid;
   grid-template-columns: var(--web-sidebar-width, 232px) minmax(0, 1fr);
-  min-height: 100vh;
-  height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
 }
 
 @media (max-width: 900px) {
