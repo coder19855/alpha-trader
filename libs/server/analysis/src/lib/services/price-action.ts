@@ -466,6 +466,7 @@ export default async function technicalAnalysisRoute(fastify: FastifyInstance) {
             breakout: primaryBreakout,
             support: primarySR.support,
             resistance: primarySR.resistance,
+            candles: primaryCandles,
           },
           momentum: {
             fakeout15m,

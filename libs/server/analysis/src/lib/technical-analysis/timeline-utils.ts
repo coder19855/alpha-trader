@@ -168,6 +168,12 @@ export function getNseSessionCloseSec(epochSec: number): number {
   return Math.floor(Date.UTC(y, m - 1, d, 10, 0, 0) / 1000);
 }
 
+export function getNseSessionOpenSec(epochSec: number): number {
+  const { y, m, d } = getIstYmd(epochSec);
+  // 09:15 IST = 03:45 UTC on the same IST calendar date
+  return Math.floor(Date.UTC(y, m - 1, d, 3, 45, 0) / 1000);
+}
+
 export function resolveSimulationUntilSec(
   asOfSec: number,
   tradingStyle: TradingStyle,

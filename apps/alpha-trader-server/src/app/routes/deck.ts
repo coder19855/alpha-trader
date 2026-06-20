@@ -253,4 +253,30 @@ export default async function deckRoutes(fastify: FastifyInstance) {
       return reply.code(502).send({ error: message });
     }
   });
+
+  fastify.get('/api/deck/funds', async (request, reply) => {
+    const sessionReady = await fastify.ensureFyersSession();
+    if (!sessionReady) {
+      return reply.code(503).send({
+        error: 'Fyers session expired — log in again.',
+      });
+    }
+    try {
+      const res = await (fastify.fyers as any).get_funds();
+      if (res.s !== 'ok' || !res.fund_limit?.length) {
+        return { available: 0, title: 'Equity', raw: [] };
+      }
+      const limits = res.fund_limit as Array<{ title?: string; equityAmount?: number }>;
+      const equity = limits.find((l) => /equity|cash|available/i.test(l.title || '')) || limits[0];
+      return {
+        available: equity?.equityAmount || 0,
+        title: equity?.title || 'Equity',
+        raw: limits,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      fastify.log.warn({ err }, 'deck funds failed');
+      return reply.code(502).send({ error: message });
+    }
+  });
 }

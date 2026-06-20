@@ -20,7 +20,6 @@ export const selectPriceChange = createSelector(selectDeckTracker, (t) => t.pric
 export const selectPriceChangeClass = createSelector(selectDeckTracker, (t) => t.priceChangeClass);
 export const selectConnected = createSelector(selectDeckTracker, (t) => t.connected);
 export const selectLiveBadge = createSelector(selectDeckTracker, (t) => t.liveBadge);
-export const selectLastUpdated = createSelector(selectDeckTracker, (t) => t.lastUpdated);
 export const selectStyleLabel = createSelector(selectDeckTracker, (t) => t.styleLabel);
 
 export const selectDeckTabs = createSelector(selectAppView, (view): DeckTabDef[] => {

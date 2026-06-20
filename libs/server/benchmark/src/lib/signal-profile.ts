@@ -27,6 +27,8 @@ export interface BenchmarkSignalProfile {
   requireBreakout?: boolean;
   /** Last bar volume > 1.5× 20-bar avg on the TF. */
   requireHighVolume?: boolean;
+  /** Require a retest after breakout on the TF (componentSignals.retest === 1). */
+  requireRetest?: boolean;
   /** Confirmed chart pattern breakout (or range/trendline break) on the TF. */
   requireChartPatternBreakout?: boolean;
   /** BOS (+1/−1) must agree with breakout direction on the TF. */
@@ -118,6 +120,16 @@ export const BENCHMARK_SIGNAL_PRESETS: Record<string, BenchmarkSignalProfile> = 
     requireBreakout: true,
     requireHighVolume: true,
     requireBos: true,
+  },
+  'breakout-vol-bos-retest': {
+    id: 'breakout-vol-bos-retest',
+    label: 'Breakout + volume + BOS + retest',
+    entryMode: 'signal',
+    timeframes: ['5m', '15m', '1h'],
+    requireBreakout: true,
+    requireHighVolume: true,
+    requireBos: true,
+    requireRetest: true,
   },
   'pattern-vol-adx': {
     id: 'pattern-vol-adx',
@@ -256,6 +268,7 @@ export const BENCHMARK_MATRIX_PRESETS = [
   'breakout-macd-vol',
   'breakout-ema-vol',
   'breakout-tech-vol',
+  'breakout-vol-bos-retest',
   'bollinger-vol',
   'bollinger-macd-vol',
 ] as const;
@@ -428,6 +441,7 @@ function evaluateTimeframe(
 ): SignalProfileMatch | null {
   const breakout = componentValue(snapshot, tf, 'breakout');
   const volume = componentValue(snapshot, tf, 'volume');
+  const retest = componentValue(snapshot, tf, 'retest');
   const bos = componentValue(snapshot, tf, 'bos');
   const adx = componentValue(snapshot, tf, 'adx');
   const rsi = componentValue(snapshot, tf, 'rsi');
@@ -466,6 +480,7 @@ function evaluateTimeframe(
   }
 
   if (profile.requireHighVolume && volume !== 1) return null;
+  if (profile.requireRetest && retest !== 1) return null;
   if (profile.requireBos) {
     if (direction === 'bull' && bos <= 0) return null;
     if (direction === 'bear' && bos >= 0) return null;

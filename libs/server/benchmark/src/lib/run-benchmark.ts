@@ -19,6 +19,7 @@ import {
   resolveSimulationUntilSec,
   sliceCandlesAfter,
   toIso,
+  getNseSessionOpenSec,
 } from '@alpha-trader/server-analysis';
 import { resolveBenchmarkWindowInput } from './benchmark-window.js';
 import { OptionChainSnapshotRecord } from './benchmark-stubs.js';
@@ -321,6 +322,7 @@ async function executeBenchmarkReplay(
   fastify: FastifyInstance,
   input: BenchmarkParams,
 ): Promise<BenchmarkReport> {
+  fastify.decisionEngine.clearDecisionMemory();
   const sessionReady = await fastify.ensureFyersSession();
   if (!sessionReady) {
     throw new Error('Fyers session expired — log in to run benchmark.');
@@ -367,6 +369,7 @@ async function executeBenchmarkReplay(
     getStyleScoringConfig(activeStyle).convictionThreshold.enter;
   const signalProfile = resolveSignalProfile(input.signalProfile);
   const useSignalEntry = signalProfile.entryMode === 'signal';
+  const requireRetest = input.requireRetest === true;
   const snapshotInput = resolveSnapshotInput(
     profileNeedsChartPatterns(signalProfile),
   );
@@ -497,6 +500,9 @@ async function executeBenchmarkReplay(
     maxTradesBlocked: 0,
     cooldownBlocked: 0,
     noTradeWindowBlocked: 0,
+    avoidFirst5MinBlocked: 0,
+    avoidTightRangeBlocked: 0,
+    requireRetestBlocked: 0,
     tradesTaken: 0,
   };
   let end5m = -1;
@@ -555,6 +561,48 @@ async function executeBenchmarkReplay(
     const optionData = isPaOnlyFlow(flowMode)
       ? neutralOptionMetrics(symbol, snapshot.lastPrice)
       : neutralOptionMetrics(symbol, snapshot.lastPrice);
+
+    // Avoid first 5 minutes if requested
+    if (input.avoidFirst5Min) {
+      try {
+        const sessionOpenSec = getNseSessionOpenSec(asOfSec);
+        const fiveMinSec = sessionOpenSec + 5 * 60;
+        if (asOfSec < fiveMinSec) {
+          filterStats.avoidFirst5MinBlocked =
+            (filterStats.avoidFirst5MinBlocked ?? 0) + 1;
+          continue;
+        }
+      } catch {
+        // ignore any calculation errors and proceed
+      }
+    }
+
+    // Avoid tight range / compression when requested
+    if (input.avoidTightRange) {
+      const regime = snapshot.confluenceContext?.volatility;
+      const atrPct = regime?.atrPercentile ?? 100;
+      const sessionPhase = regime?.sessionPhase;
+      if (sessionPhase === 'compression' || atrPct < 30) {
+        filterStats.avoidTightRangeBlocked =
+          (filterStats.avoidTightRangeBlocked ?? 0) + 1;
+        continue;
+      }
+    }
+
+    if (requireRetest) {
+      const retestTimeframes =
+        useSignalEntry && signalProfile.timeframes?.length
+          ? signalProfile.timeframes
+          : [snapshot.primaryTimeframe as '5m' | '15m' | '1h'];
+      const hasRetest = retestTimeframes.some(
+        (tf) => snapshot.componentSignals?.[tf]?.retest === 1,
+      );
+      if (!hasRetest) {
+        filterStats.requireRetestBlocked =
+          (filterStats.requireRetestBlocked ?? 0) + 1;
+        continue;
+      }
+    }
 
     const decision = fastify.decisionEngine.computeTradeDecision(
       snapshot as PriceActionResponse,

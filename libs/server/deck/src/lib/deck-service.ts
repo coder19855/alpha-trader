@@ -120,6 +120,7 @@ export interface DeckLivePayload extends Omit<DeckLiveStreamTick, 'type'> {
   mode: 'live';
   symbol: string;
   symbolLabel: string;
+  lotSize?: number | null;
   tradingStyle: string;
   vetoMode: VetoMode;
   vetoOff: boolean;
@@ -583,6 +584,35 @@ function mapSpotCandles(
   return { c5, c15, c1h };
 }
 
+/** Short TTL cache for heavy live deck payloads to speed first paint and concurrent loads (enrichment + SSE + style changes). */
+const DECK_LIVE_PAYLOAD_TTL_MS = 10_000;
+const deckLivePayloadCache = new Map<
+  string,
+  { value: DeckLivePayload; at: number }
+>();
+const deckLivePayloadInFlight = new Map<string, Promise<DeckLivePayload>>();
+
+function makeDeckLiveCacheKey(
+  symbol: string,
+  style: TradingStyle,
+  vetoMode: VetoMode,
+): string {
+  return `${symbol.trim()}:${style}:${vetoMode}`;
+}
+
+export function invalidateDeckLivePayloadCache(symbol?: string): void {
+  if (!symbol) {
+    deckLivePayloadCache.clear();
+    return;
+  }
+  const prefix = `${symbol.trim()}:`;
+  for (const k of Array.from(deckLivePayloadCache.keys())) {
+    if (k.startsWith(prefix)) {
+      deckLivePayloadCache.delete(k);
+    }
+  }
+}
+
 export async function buildDeckLiveStreamTick(
   fastify: FastifyInstance,
   params: { symbol: string; tradingStyle?: string; vetoMode?: VetoMode },
@@ -630,65 +660,92 @@ export async function buildDeckLivePayload(
 ): Promise<DeckLivePayload> {
   const style = parseTradingStyle(params.tradingStyle);
   const vetoMode = params.vetoMode ?? fastify.preferences.getSettings().vetoMode;
-  const [decision, timeline] = await Promise.all([
-    buildDeckDecision(fastify, params.symbol.trim(), style, vetoMode),
-    fetchTimeline(fastify, params.symbol.trim(), style),
-  ]);
-  const indexSymbol = decision.symbol || params.symbol.trim();
-  const { openPositions, managementContext } = await buildPositionsBundle(
-    fastify,
-    indexSymbol,
-    decision,
-    style,
-    { executeAutoExit: isIndianMarketOpen() },
-  );
-  const tick = buildStreamTickParts(fastify, {
-    symbol: params.symbol.trim(),
-    style,
-    vetoMode,
-    decision,
-    openPositions,
-    managementContext,
-  });
-  const points = timeline?.points ?? [];
-  const streamSpotSeries =
-    fastify.fyersMarketStream?.getSpotSeries(indexSymbol) ?? [];
-  const spotSeries = mergeSpotSeriesWithStream(
-    timelineToSpotSeries(points),
-    streamSpotSeries,
-  );
-  const multiCandles = mapSpotCandles(timeline);
+  const key = makeDeckLiveCacheKey(params.symbol, style, vetoMode);
+  const now = Date.now();
 
-  return {
-    mode: 'live',
-    symbol: indexSymbol,
-    symbolLabel: shortSymbol(indexSymbol),
-    tradingStyle: String(style),
-    vetoMode,
-    vetoOff: isVetoOff(vetoMode),
-    spotCandles: multiCandles.c5.length
-      ? multiCandles.c5
-      : spotSeriesToSyntheticCandles(spotSeries),
-    spotCandles5m: multiCandles.c5,
-    spotCandles15m: multiCandles.c15,
-    spotCandles1h: multiCandles.c1h,
-    convictionSeries: points.map((p) => ({
-      t: p.asOf,
-      option: 0,
-      priceAction: Math.round(Math.abs(p.mtfScore) * 100),
-      combined: p.signal.confidence,
-    })),
-    markers: timelineMarkers(points),
-    events: buildDeckEvents(
-      timelineMarkers(points),
-      timelineToVetoSeries(points),
-    ),
-    vetoTimeline: timelineToVetoSeries(points),
-    openPositions,
-    ...tick,
-    spotSeries,
-    marketRegime: tick.marketRegime,
-  };
+  // Serve from short cache for first paint speed (concurrent fast/enrichment/SSE + style changes)
+  const cached = deckLivePayloadCache.get(key);
+  if (cached && now - cached.at < DECK_LIVE_PAYLOAD_TTL_MS) {
+    return cached.value;
+  }
+
+  // Dedup concurrent first-paint computes for the same key
+  const inFlight = deckLivePayloadInFlight.get(key);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const computePromise = (async () => {
+    const [decision, timeline] = await Promise.all([
+      buildDeckDecision(fastify, params.symbol.trim(), style, vetoMode),
+      fetchTimeline(fastify, params.symbol.trim(), style),
+    ]);
+    const indexSymbol = decision.symbol || params.symbol.trim();
+    const lotMeta = FYERS_OPTION_INDEX_SYMBOLS.find((s) => s.symbol === indexSymbol);
+    const { openPositions, managementContext } = await buildPositionsBundle(
+      fastify,
+      indexSymbol,
+      decision,
+      style,
+      { executeAutoExit: isIndianMarketOpen() },
+    );
+    const tick = buildStreamTickParts(fastify, {
+      symbol: params.symbol.trim(),
+      style,
+      vetoMode,
+      decision,
+      openPositions,
+      managementContext,
+    });
+    const points = timeline?.points ?? [];
+    const streamSpotSeries =
+      fastify.fyersMarketStream?.getSpotSeries(indexSymbol) ?? [];
+    const spotSeries = mergeSpotSeriesWithStream(
+      timelineToSpotSeries(points),
+      streamSpotSeries,
+    );
+    const multiCandles = mapSpotCandles(timeline);
+
+    const payload: DeckLivePayload = {
+      mode: 'live',
+      symbol: indexSymbol,
+      symbolLabel: shortSymbol(indexSymbol),
+      lotSize: lotMeta?.lotSize ?? null,
+      tradingStyle: String(style),
+      vetoMode,
+      vetoOff: isVetoOff(vetoMode),
+      spotCandles: multiCandles.c5.length
+        ? multiCandles.c5
+        : spotSeriesToSyntheticCandles(spotSeries),
+      spotCandles5m: multiCandles.c5,
+      spotCandles15m: multiCandles.c15,
+      spotCandles1h: multiCandles.c1h,
+      convictionSeries: points.map((p) => ({
+        t: p.asOf,
+        option: 0,
+        priceAction: Math.round(Math.abs(p.mtfScore) * 100),
+        combined: p.signal.confidence,
+      })),
+      markers: timelineMarkers(points),
+      events: buildDeckEvents(
+        timelineMarkers(points),
+        timelineToVetoSeries(points),
+      ),
+      vetoTimeline: timelineToVetoSeries(points),
+      openPositions,
+      ...tick,
+      spotSeries,
+      marketRegime: tick.marketRegime,
+    };
+
+    deckLivePayloadCache.set(key, { value: payload, at: Date.now() });
+    return payload;
+  })().finally(() => {
+    deckLivePayloadInFlight.delete(key);
+  });
+
+  deckLivePayloadInFlight.set(key, computePromise);
+  return computePromise;
 }
 
 export async function buildDeckLiveFastPayload(

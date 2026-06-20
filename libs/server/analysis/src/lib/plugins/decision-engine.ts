@@ -19,6 +19,12 @@ import {
   ChaseDecayResult,
   evaluateChaseDecay,
 } from '../technical-analysis/chase-decay.js';
+import {
+  clearDecisionMemory,
+  DECISION_HISTORY_MAX,
+  detectSecondEntry,
+  getDecisionHistory,
+} from './decision-memory.js';
 
 export interface DecisionEngineOptions {
   vetoMode?: VetoMode;
@@ -41,7 +47,7 @@ export default fp(
     // Core brain logic moved here for maintainability
     /**
      * Computes the confluent decision based on technical analysis and option flow metrics.
-     * 
+     *
      * @param {PriceActionResponse} price - The price action response containing signals and timeframe scores.
      * @param {OptionMetricsResponse} option - The option metrics including Greeks and OI data.
      * @param {TradingStyle} style - The active trading style governing the weighting of timeframes.
@@ -59,8 +65,7 @@ export default fp(
       const vetoOff = isVetoOff(vetoMode);
       const vetoRelaxed = vetoMode === 'relaxed';
       const flowMode: FlowMode =
-        options?.flowMode ??
-        (options?.optionFlowOff ? 'pa-only' : 'blend');
+        options?.flowMode ?? (options?.optionFlowOff ? 'pa-only' : 'blend');
       const paOnlyFlow = isPaOnlyFlow(flowMode);
       const optionOnlyFlow = isOptionOnlyFlow(flowMode);
       const singleSourceFlow = isSingleSourceFlow(flowMode);
@@ -87,13 +92,15 @@ export default fp(
       // Alignment: number of TFs with same sign as primary (new logic)
       const primarySign = Math.sign(primaryScore);
       let alignedCount = 0;
-      allTFs.forEach(s => {
+      allTFs.forEach((s) => {
         if (primarySign === 0 || Math.sign(s) === primarySign) alignedCount++;
       });
 
       // Higher TF confirmation (1h supports primary) - confirmation only, not part of core conviction
       const h1 = tf['1h'] ?? 0;
-      const higherTFConfirm = (primaryTF === '1h') || (Math.sign(h1) === primarySign && Math.abs(h1) > 0.15);
+      const higherTFConfirm =
+        primaryTF === '1h' ||
+        (Math.sign(h1) === primarySign && Math.abs(h1) > 0.15);
 
       const isQuiet = Math.abs(primaryScore) < 0.15 || alignedCount <= 1;
 
@@ -101,7 +108,10 @@ export default fp(
       const priceConf = price.signal.confidence;
 
       // Conviction driven by primary TF score + style-specific new elements (FVG/OB on primary + ATR/ADX)
-      let primaryConviction = Math.min(95, Math.max(0, Math.round(priceConf * 0.8 + Math.abs(primaryScore) * 50)));
+      let primaryConviction = Math.min(
+        95,
+        Math.max(0, Math.round(priceConf * 0.8 + Math.abs(primaryScore) * 50)),
+      );
 
       const se2 = price.structureElements || {};
       const priceAtr2 = price.atr || { '5m': 0, '15m': 0, '1h': 0 };
@@ -284,8 +294,12 @@ export default fp(
       } else if (optionOnlyFlow) {
         alignment = optionDirection !== 'neutral' ? 3 : 0;
         if (optionComponentStrength > 0.35) pushBonus('Strong option flow', 10);
-        if (optionComponentStrength < -0.35) pushBonus('Strong option flow', 10);
-      } else if (priceDirection === optionDirection && priceDirection !== 'neutral') {
+        if (optionComponentStrength < -0.35)
+          pushBonus('Strong option flow', 10);
+      } else if (
+        priceDirection === optionDirection &&
+        priceDirection !== 'neutral'
+      ) {
         alignment = 3;
         pushBonus('PA + option same direction', 18);
       } else if (
@@ -367,19 +381,6 @@ export default fp(
         }
       }
 
-      const bonusTotal = convictionBonuses.reduce((sum, b) => sum + b.points, 0);
-      const uncappedConviction = weightedBaseConviction + bonusTotal;
-
-      // Final decision driven by style-weighted blended conviction
-      let action: 'CE-BUY' | 'PE-BUY' | 'NEUTRAL' | 'NO-TRADE' = 'NO-TRADE';
-      let conviction = Math.min(95, Math.max(0, Math.round(blended)));
-      if (uncappedConviction > 95 && conviction === 95) {
-        convictionBonuses.push({
-          label: '95% entry cap',
-          points: 95 - uncappedConviction,
-        });
-      }
-
       const highThreshold = convictionThreshold.enter;
       const mediumThreshold = convictionThreshold.medium;
       const strongThreshold = convictionThreshold.strong;
@@ -397,10 +398,34 @@ export default fp(
 
       const structuralGatesOk =
         (vetoOff || vetoRelaxed || conflictLevel !== 'HIGH') &&
-        (optionOnlyFlow
-          ? optionDirection !== 'neutral'
-          : alignedCount > 0) &&
+        (optionOnlyFlow ? optionDirection !== 'neutral' : alignedCount > 0) &&
         !optionStronglyAgainst;
+
+      const symbol = price.symbol;
+      const history = symbol ? getDecisionHistory(symbol) : undefined;
+      if (symbol && history && tradeDirection !== 'neutral' && structuralGatesOk) {
+        const currentTrigger =
+          tradeDirection === 'bullish' ? 'CE-BUY' : 'PE-BUY';
+        if (detectSecondEntry(history, currentTrigger)) {
+          pushBonus('Second Entry (H2/L2) boost', 15);
+        }
+      }
+
+      const bonusTotal = convictionBonuses.reduce(
+        (sum, b) => sum + b.points,
+        0,
+      );
+      const uncappedConviction = weightedBaseConviction + bonusTotal;
+
+      // Final decision driven by style-weighted blended conviction
+      let action: 'CE-BUY' | 'PE-BUY' | 'NEUTRAL' | 'NO-TRADE' = 'NO-TRADE';
+      let conviction = Math.min(95, Math.max(0, Math.round(blended)));
+      if (uncappedConviction > 95 && conviction === 95) {
+        convictionBonuses.push({
+          label: '95% entry cap',
+          points: 95 - uncappedConviction,
+        });
+      }
 
       if (
         conviction >= highThreshold &&
@@ -417,12 +442,23 @@ export default fp(
         action = tradeDirection === 'bullish' ? 'CE-BUY' : 'PE-BUY';
       } else if (conflictLevel === 'HIGH' || alignedCount === 0) {
         const hasNeutralOpportunity =
-          (ivRegime.includes('Crushed') || ivRegime.includes('Low IV') || isQuiet) &&
+          (ivRegime.includes('Crushed') ||
+            ivRegime.includes('Low IV') ||
+            isQuiet) &&
           (optionScore > 5 || Math.abs(optionComponentStrength) > 0.12);
 
         if (hasNeutralOpportunity) {
           action = 'NEUTRAL';
-          conviction = Math.min(65, Math.max(25, Math.round(optionConviction * 0.7 + (ivRegime.includes('Crushed') ? 18 : 0))));
+          conviction = Math.min(
+            65,
+            Math.max(
+              25,
+              Math.round(
+                optionConviction * 0.7 +
+                  (ivRegime.includes('Crushed') ? 18 : 0),
+              ),
+            ),
+          );
         } else {
           action = 'NO-TRADE';
         }
@@ -437,7 +473,13 @@ export default fp(
         conviction = 0;
       }
 
-      if (action !== 'NO-TRADE' && action !== 'NEUTRAL' && isQuiet && (ivRegime.includes('Crushed') || ivRegime.includes('Low IV')) && conviction < 55) {
+      if (
+        action !== 'NO-TRADE' &&
+        action !== 'NEUTRAL' &&
+        isQuiet &&
+        (ivRegime.includes('Crushed') || ivRegime.includes('Low IV')) &&
+        conviction < 55
+      ) {
         action = 'NEUTRAL';
         conviction = Math.max(conviction, 35);
       }
@@ -480,20 +522,38 @@ export default fp(
         momentumDecayResult.decayPercent >= 0.3;
       const biasScore = useMomentumBias ? momentumAwareScore : primaryScore;
 
-      let bias: 'Strong Bullish' | 'Moderate Bullish' | 'Neutral' | 'Moderate Bearish' | 'Strong Bearish' = 'Neutral';
+      let bias:
+        | 'Strong Bullish'
+        | 'Moderate Bullish'
+        | 'Neutral'
+        | 'Moderate Bearish'
+        | 'Strong Bearish' = 'Neutral';
 
-      if (biasScore > 0.25 && conviction >= highThreshold && !optionStronglyAgainst) {
-        bias = 'Strong Bullish';
-      } else if (biasScore > 0.1 && conviction >= mediumThreshold && !optionStronglyAgainst) {
-        bias = 'Moderate Bullish';
-      } else if (biasScore < -0.25 && conviction >= highThreshold && !optionStronglyAgainst) {
-        bias = 'Strong Bearish';
-      } else if (biasScore < -0.1 && conviction >= mediumThreshold && !optionStronglyAgainst) {
-        bias = 'Moderate Bearish';
-      } else if (
-        useMomentumBias &&
-        momentumDecayResult.decayPercent >= 0.35
+      if (
+        biasScore > 0.25 &&
+        conviction >= highThreshold &&
+        !optionStronglyAgainst
       ) {
+        bias = 'Strong Bullish';
+      } else if (
+        biasScore > 0.1 &&
+        conviction >= mediumThreshold &&
+        !optionStronglyAgainst
+      ) {
+        bias = 'Moderate Bullish';
+      } else if (
+        biasScore < -0.25 &&
+        conviction >= highThreshold &&
+        !optionStronglyAgainst
+      ) {
+        bias = 'Strong Bearish';
+      } else if (
+        biasScore < -0.1 &&
+        conviction >= mediumThreshold &&
+        !optionStronglyAgainst
+      ) {
+        bias = 'Moderate Bearish';
+      } else if (useMomentumBias && momentumDecayResult.decayPercent >= 0.35) {
         if (Math.abs(primaryScore) < 0.1) bias = 'Neutral';
         else if (momentumAwareScore < -0.2) bias = 'Moderate Bearish';
         else if (momentumAwareScore > 0.2) bias = 'Moderate Bullish';
@@ -672,9 +732,21 @@ export default fp(
         ivRegime,
       );
 
+      // Save decision to memory for future ticks/bars
+      if (
+        history &&
+        (action === 'CE-BUY' ||
+          action === 'PE-BUY' ||
+          action === 'NEUTRAL' ||
+          action === 'NO-TRADE')
+      ) {
+        history.push(action);
+        if (history.length > DECISION_HISTORY_MAX) history.shift();
+      }
+
       return {
         bias,
-        action,  // legacy - still used internally for strategy selection path (will be removed later)
+        action, // legacy - still used internally for strategy selection path (will be removed later)
         conviction,
         weightedBaseConviction,
         convictionBonuses,
@@ -1022,6 +1094,7 @@ export default fp(
       ): TradeDecisionResult => {
         return computeConfluentDecision(priceData, optionData, style, options);
       },
+      clearDecisionMemory,
     };
 
     fastify.decorate('decisionEngine', decisionEngine);

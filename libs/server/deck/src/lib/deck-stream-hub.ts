@@ -12,6 +12,7 @@ import {
   buildDeckPositionsUpdate,
   DeckCandlePoint,
   DeckLiveStreamTick,
+  invalidateDeckLivePayloadCache,
 } from './deck-service.js';
 import { patchMultiTfSpotCandles } from './live-candle-patch.js';
 import type { DeckOpenPositionsPayload } from './deck-open-positions.js';
@@ -211,6 +212,7 @@ export class DeckStreamHub {
     channel.signalRefreshTimer = setInterval(() => {
       if (!isIndianMarketOpen() || channel.subscribers.size === 0) return;
       getMarketDataStore().invalidateLiveHistory(channel.params.symbol.trim());
+      invalidateDeckLivePayloadCache(channel.params.symbol.trim());
       void this.sendTick(channel, true);
     }, intervalMs);
     channel.signalRefreshTimer.unref?.();

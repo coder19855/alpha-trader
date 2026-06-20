@@ -35,7 +35,7 @@ export function describeExitPolicyDetail(
     case 'chandelier-hybrid':
       return 'Hybrid — keeps R:R floors, then after 1R peak also tracks a Chandelier stop (22-bar ATR × 3 from highest high / lowest low). The tighter of R:R floor vs Chandelier wins. Example: trending day — Chandelier rides 24,000 → 24,200; choppy day — R:R floor at +1R banks profit before Chandelier whipsaws.';
     case 'atr-tighten':
-      return 'ATR tighten — Chandelier-style trail starts at 3× ATR; once peak reaches 1.5R, trail tightens to 2× ATR. Example: CE from 24,000 with 80-pt risk — early move uses wide 3× room; after +120 pts (1.5R) the stop hugs closer to lock more of an extended trend.';
+      return 'ATR tighten — starts at 3× ATR, tightens to 2.5× ATR after 0.7R, then 1.75× ATR after 1R. Example: CE from 24,000 with 80-pt risk — early move gets room, then the stop tightens in two steps to lock more of an extended trend without choking the first push.';
     case 'partial-scale-50':
       return 'Partial 50% @ 1.5R — when price tags 1.5R, half the position is booked at +1.5R and the rest keeps the R:R ladder trail. Example: 2-lot mental size — at +1.5R one lot exits for +1.5R; runner might finish +2.5R or stop at breakeven, blending to ~+2R total vs all-or-nothing.';
     case 'structure-trail':
@@ -106,7 +106,7 @@ export function buildExitModeHints(): Record<
 const EXIT_POLICY_LABELS: Record<BenchmarkExitPolicy, string> = {
   'rr-ladder': 'R:R ladder (default)',
   'chandelier-hybrid': 'Hybrid (R:R + Chandelier)',
-  'atr-tighten': 'ATR tighten (3×→2×)',
+  'atr-tighten': 'ATR tighten (3×→2.5×→1.75×)',
   'partial-scale-50': 'Partial 50% @ 1.5R',
   'structure-trail': 'Structure swing trail',
   'momentum-decay-exit': 'Momentum decay exit',

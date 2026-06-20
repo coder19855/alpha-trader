@@ -41,6 +41,7 @@ declare module 'fastify' {
           chaseDecay?: boolean;
         },
       ) => TradeDecisionResult;
+      clearDecisionMemory: () => void;
     };
     aiAgent?: {
       analyze: (request: Record<string, unknown>) => Promise<AIAnalysisResponse>;

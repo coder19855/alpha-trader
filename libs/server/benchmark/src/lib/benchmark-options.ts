@@ -128,6 +128,8 @@ export function buildBenchmarkOptionsResponse(
       flowMode: 'pa-only' as const,
       chaseDecay: false,
       greenDayStop: false,
+      avoidFirst5Min: false,
+      avoidTightRange: false,
       dailyLossCapR: BENCHMARK_DAILY_LOSS_CAP_R,
       signalProfile: 'engine',
     },
@@ -243,6 +245,9 @@ export function normalizeWebConfigInput(
     pnlModel,
     chaseDecay: readBool(body, 'chaseDecay') || undefined,
     greenDayStop: readBool(body, 'greenDayStop') || undefined,
+    avoidFirst5Min: readBool(body, 'avoidFirst5Min') || undefined,
+    avoidTightRange: readBool(body, 'avoidTightRange') || undefined,
+    requireRetest: readBool(body, 'requireRetest') || undefined,
     dailyLossCapR:
       typeof body.dailyLossCapR === 'number'
         ? body.dailyLossCapR
@@ -288,6 +293,9 @@ export function resolveBenchmarkWebConfigDefaults(
     positionPolicy: autoExit.positionPolicy,
     chaseDecay: false,
     greenDayStop: false,
+    avoidFirst5Min: false,
+    avoidTightRange: false,
+    requireRetest: false,
     dailyLossCapR: BENCHMARK_DAILY_LOSS_CAP_R,
     signalProfile: 'engine',
   };

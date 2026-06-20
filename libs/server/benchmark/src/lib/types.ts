@@ -90,6 +90,12 @@ export interface BenchmarkParams {
   dailyLossCapR?: number;
   /** Penalize or block entries when the move has already extended. */
   chaseDecay?: boolean;
+  /** Avoid entries within the first 5 minutes of the session */
+  avoidFirst5Min?: boolean;
+  /** Avoid entries when market is in a tight range */
+  avoidTightRange?: boolean;
+  /** Only enter after a confirmed retest. */
+  requireRetest?: boolean;
   /** Epoch ms when the benchmark job entered the running phase. */
   runStartedAtMs?: number;
   /**
@@ -231,6 +237,9 @@ export interface BenchmarkFilterStats {
   maxTradesBlocked: number;
   cooldownBlocked: number;
   noTradeWindowBlocked?: number;
+  avoidFirst5MinBlocked?: number;
+  avoidTightRangeBlocked?: number;
+  requireRetestBlocked?: number;
   tradesTaken: number;
 }
 

@@ -294,6 +294,49 @@ export default fp(
       return 0;
     };
 
+    const detectBuildUp = (
+      candles: FyersAPI.Candle[],
+      support: number,
+      resistance: number,
+      atr: number,
+    ): { buildupRes: boolean; buildupSup: boolean } => {
+      if (candles.length < 5 || support <= 0 || resistance <= 0 || !atr) {
+        return { buildupRes: false, buildupSup: false };
+      }
+      const last5 = candles.slice(-5);
+      const tolerance = (resistance - support) * 0.15;
+      
+      const avgRange = last5.reduce((sum, c) => sum + (c[2] - c[3]), 0) / 5;
+      const isCompressed = avgRange < atr * 0.85;
+      
+      const closeToResistance = last5.every(c => c[4] > resistance - tolerance && c[4] <= resistance + tolerance * 0.5);
+      const closeToSupport = last5.every(c => c[4] < support + tolerance && c[4] >= support - tolerance * 0.5);
+      
+      return {
+        buildupRes: isCompressed && closeToResistance,
+        buildupSup: isCompressed && closeToSupport,
+      };
+    };
+
+    const detectReversalClimax = (
+      candles: FyersAPI.Candle[],
+      atr: number,
+    ): { climaxBull: boolean; climaxBear: boolean } => {
+      if (candles.length < 3 || !atr || atr <= 0) {
+        return { climaxBull: false, climaxBear: false };
+      }
+      const last3 = candles.slice(-3);
+      const move = last3[2][4] - last3[0][1];
+      
+      const isExtremeBullish = move > atr * 2.5;
+      const isExtremeBearish = move < -atr * 2.5;
+      
+      return {
+        climaxBull: isExtremeBullish,
+        climaxBear: isExtremeBearish,
+      };
+    };
+
     const scoreTimeFrameContext = ({
       structure,
       breakout,
@@ -633,6 +676,7 @@ export default fp(
         breakout: number;
         support: number;
         resistance: number;
+        candles?: FyersAPI.Candle[];
       };
       momentum?: {
         fakeout15m?: number;
@@ -761,6 +805,63 @@ export default fp(
       ) {
         allowTrade = false;
         noteVeto('Range compression: score too weak for trend entry');
+      }
+
+      // Step 2.2: Volman Build-up Squeeze Check for breakout trades
+      if (allowTrade && primary.breakout !== 0 && !vetoOff) {
+        const support = primary.support;
+        const resistance = primary.resistance;
+        const hasValidSr =
+          support > 0 &&
+          Number.isFinite(resistance) &&
+          resistance > support;
+
+        if (!hasValidSr) {
+          allowTrade = false;
+          noteVeto('Breakout entry rejected: support/resistance unavailable');
+        } else if (primary.candles && momentum?.primaryAtr) {
+          const buildup = detectBuildUp(
+            primary.candles,
+            support,
+            resistance,
+            momentum.primaryAtr,
+          );
+          const lacksBuildup =
+            (primary.breakout === 1 && !buildup.buildupRes) ||
+            (primary.breakout === -1 && !buildup.buildupSup);
+
+          if (lacksBuildup) {
+            if (vetoRelaxed) {
+              confluenceBoost -= 15;
+            } else {
+              allowTrade = false;
+              noteVeto(
+                'Breakout entry rejected: lack of Volman build-up (compaction)',
+              );
+            }
+          }
+        } else if (vetoRelaxed) {
+          confluenceBoost -= 15;
+        } else {
+          allowTrade = false;
+          noteVeto(
+            'Breakout entry rejected: insufficient data for Volman build-up check',
+          );
+        }
+      }
+
+      // Step 2.3: Al Brooks Reversal Climax Check
+      if (allowTrade && primary.candles && momentum?.primaryAtr && !vetoOff) {
+        const climax = detectReversalClimax(primary.candles, momentum.primaryAtr);
+        const enteringInClimaxDirection = (isBullishPrimary && climax.climaxBull) || (isBearishPrimary && climax.climaxBear);
+        if (enteringInClimaxDirection) {
+          if (vetoRelaxed) {
+            confluenceBoost -= 10;
+          } else {
+            allowTrade = false;
+            noteVeto('Extreme trend climax / exhaustion detected on primary TF');
+          }
+        }
       }
 
       // Step 1: intraday — block CE when 5m opposes unless 15m momentum is strong
@@ -1475,6 +1576,8 @@ export default fp(
       detectBOS,
       detectCHOCH,
       detectLiquiditySweep,
+      detectBuildUp,
+      detectReversalClimax,
       scoreTimeFrameContext,
       getTradeRecommendationFromScore,
       getBiasSignalFromScores,

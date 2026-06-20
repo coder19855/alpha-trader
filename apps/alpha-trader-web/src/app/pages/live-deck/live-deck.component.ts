@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { LoaderComponent } from '../../shared/loader/loader.component';
 import { Subscription } from 'rxjs';
 import {
   ChartOverlayLine,
@@ -33,6 +34,8 @@ import { VetoBreakupComponent } from '../../shared/veto-breakup/veto-breakup.com
 import { VetoStripComponent } from '../../shared/veto-strip/veto-strip.component';
 import { StrategyPanelComponent } from '../../shared/strategy-panel/strategy-panel.component';
 import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/signal-readout-help.component';
+import { ComponentsHelpComponent } from '../../shared/components-help/components-help.component';
+import { PositionSizingComponent } from '../../shared/position-sizing/position-sizing.component';
 import { patchMultiTfSpotCandles } from '../../core/utils/live-candle-patch';
 import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timestamp';
 
@@ -43,6 +46,7 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
     CommonModule,
     FormsModule,
     MatProgressSpinnerModule,
+    LoaderComponent,
     PaGaugeComponent,
     BipolarListComponent,
     PaDrilldownComponent,
@@ -55,14 +59,13 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
     AutoExitPanelComponent,
     StrategyPanelComponent,
     SignalReadoutHelpComponent,
+    ComponentsHelpComponent,
+    PositionSizingComponent,
   ],
   template: `
     <section class="deck-page">
       @if (!tick() && !error()) {
-        <div class="loading-overlay" aria-live="polite" aria-busy="true">
-          <mat-spinner diameter="36" />
-          <span class="loading-text">Fetching data…</span>
-        </div>
+        <app-loader message="Fetching data…" sub="Connecting to live stream…" />
       }
 
       @if (error(); as message) {
@@ -75,12 +78,6 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
       }
 
       @if (tick(); as data) {
-        @if (data.vetoTimeline?.length) {
-          <div class="session-rail">
-            <app-veto-strip [timeline]="data.vetoTimeline ?? []" />
-          </div>
-        }
-
         <section
           class="tab-panel"
           [class.active]="ctx.activeTab() === 'signal'"
@@ -119,7 +116,9 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
             <p class="signal-calc-stamp" role="status">
               Signal calculated:
               <time [attr.datetime]="data.signalCalculatedAt ?? data.asOf">
-                {{ formatSignalCalculatedAt(data.signalCalculatedAt ?? data.asOf) }}
+                {{
+                  formatSignalCalculatedAt(data.signalCalculatedAt ?? data.asOf)
+                }}
               </time>
             </p>
             <app-market-regime [regime]="data.marketRegime" />
@@ -145,6 +144,7 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
           [class.active]="ctx.activeTab() === 'components'"
         >
           <section class="component-panel">
+            <app-components-help />
             <div class="panel-head">
               <span>Price action components</span>
               <button
@@ -179,6 +179,9 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
             class="veto-tab-panel"
             [class.has-block]="hasVetoBlock(data)"
           >
+            @if (data.vetoTimeline?.length) {
+              <app-veto-strip [timeline]="data.vetoTimeline ?? []" />
+            }
             <p class="settings-hint">
               Veto mode lives in <strong>Settings</strong> — this view shows the
               live breakup.
@@ -205,6 +208,13 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
           [class.active]="ctx.activeTab() === 'strategy'"
         >
           <app-strategy-panel [strategy]="data.strategyRecommendation" />
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'sizing'"
+        >
+          <app-position-sizing [symbol]="data.symbol" [lotSize]="data.lotSize" />
         </section>
 
         <section
@@ -562,7 +572,10 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     });
     this.tick.update((prev) => {
       if (!prev) return prev;
-      const next = this.withLiveChartCandles({ ...prev, ...patch }) as DeckLiveTick;
+      const next = this.withLiveChartCandles({
+        ...prev,
+        ...patch,
+      }) as DeckLiveTick;
       this.deckAlerts.evaluate(prev, next);
       return next;
     });

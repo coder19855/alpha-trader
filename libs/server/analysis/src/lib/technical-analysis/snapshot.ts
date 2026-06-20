@@ -384,6 +384,7 @@ export function buildPriceActionSnapshot(
       breakout: primaryBreakout,
       support: primarySR.support,
       resistance: primarySR.resistance,
+      candles: primaryCandles,
     },
     momentum: {
       fakeout15m,

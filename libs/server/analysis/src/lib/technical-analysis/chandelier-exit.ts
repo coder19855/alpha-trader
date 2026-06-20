@@ -19,8 +19,10 @@ export type BenchmarkExitPolicy =
   | 'momentum-decay-exit';
 
 export const ATR_TIGHTEN_LOOSE_MULT = 3;
-export const ATR_TIGHTEN_TIGHT_MULT = 2;
-export const ATR_TIGHTEN_ACTIVATE_PEAK_R = 1.5;
+export const ATR_TIGHTEN_EARLY_MULT = 2.5;
+export const ATR_TIGHTEN_TIGHT_MULT = 1.75;
+export const ATR_TIGHTEN_EARLY_PEAK_R = 0.7;
+export const ATR_TIGHTEN_ACTIVATE_PEAK_R = 1;
 
 export const PARTIAL_SCALE_FRACTION = 0.5;
 export const PARTIAL_SCALE_TP_R = 1.5;
@@ -49,9 +51,13 @@ export function resolveChandelierMultiplier(
   defaultMult: number,
 ): number {
   if (policy === 'atr-tighten') {
-    return peakR >= ATR_TIGHTEN_ACTIVATE_PEAK_R
-      ? ATR_TIGHTEN_TIGHT_MULT
-      : ATR_TIGHTEN_LOOSE_MULT;
+    if (peakR >= ATR_TIGHTEN_ACTIVATE_PEAK_R) {
+      return ATR_TIGHTEN_TIGHT_MULT;
+    }
+    if (peakR >= ATR_TIGHTEN_EARLY_PEAK_R) {
+      return ATR_TIGHTEN_EARLY_MULT;
+    }
+    return ATR_TIGHTEN_LOOSE_MULT;
   }
   return defaultMult;
 }
@@ -175,7 +181,7 @@ export function describeExitPolicy(policy: BenchmarkExitPolicy): string {
     return `Hybrid exit — R:R ladder + tighter Chandelier (${CHANDELIER_DEFAULT_ATR_MULT}× ATR) after ${CHANDELIER_HYBRID_MIN_PEAK_R}R peak.`;
   }
   if (policy === 'atr-tighten') {
-    return `ATR tighten — ${ATR_TIGHTEN_LOOSE_MULT}× ATR until ${ATR_TIGHTEN_ACTIVATE_PEAK_R}R peak, then ${ATR_TIGHTEN_TIGHT_MULT}× ATR ratchet.`;
+    return `ATR tighten — ${ATR_TIGHTEN_LOOSE_MULT}× ATR until ${ATR_TIGHTEN_EARLY_PEAK_R}R peak, then ${ATR_TIGHTEN_EARLY_MULT}× ATR until ${ATR_TIGHTEN_ACTIVATE_PEAK_R}R, then ${ATR_TIGHTEN_TIGHT_MULT}× ATR ratchet.`;
   }
   if (policy === 'partial-scale-50') {
     return `Partial scale-out — bank ${PARTIAL_SCALE_FRACTION * 100}% at ${PARTIAL_SCALE_TP_R}R; trail remainder on R:R ladder.`;

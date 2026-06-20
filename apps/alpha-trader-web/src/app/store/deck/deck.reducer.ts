@@ -15,7 +15,6 @@ export interface DeckTrackerState {
   priceChangeClass: 'up' | 'down' | 'muted';
   connected: boolean;
   liveBadge: boolean;
-  lastUpdated: string;
   styleLabel: string;
 }
 
@@ -34,7 +33,6 @@ export const initialDeckTrackerState: DeckTrackerState = {
   priceChangeClass: 'muted',
   connected: false,
   liveBadge: false,
-  lastUpdated: '—',
   styleLabel: TRADING_STYLE_LABELS.INTRADAY,
 };
 
@@ -96,13 +94,6 @@ export const deckUiReducer = createReducer(
 
     if (params.connected !== undefined) tracker.connected = params.connected;
     if (params.live !== undefined) tracker.liveBadge = params.live;
-    if (params.asOf) {
-      tracker.lastUpdated = new Date(params.asOf).toLocaleTimeString('en-IN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-    }
 
     if (params.price != null && !Number.isNaN(Number(params.price))) {
       const price = Number(params.price);

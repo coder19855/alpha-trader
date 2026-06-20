@@ -10,6 +10,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { LoaderComponent } from '../../shared/loader/loader.component';
 import { FormsModule } from '@angular/forms';
 import {
   AreaSeries,
@@ -65,25 +66,32 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
 @Component({
   selector: 'app-benchmark',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoaderComponent],
   template: `
     <section class="deck-page benchmark-page">
       @if (showConfig()) {
         <div class="config-panel" aria-label="Benchmark configuration">
           <header class="config-header">
             <h1>Benchmark</h1>
-            <p class="config-sub">Replay engine signals · PA-only backtest · export results</p>
+            <p class="config-sub">
+              Replay engine signals · PA-only backtest · export results
+            </p>
           </header>
 
           <form class="config-form" (ngSubmit)="run()">
             <section class="config-section">
               <h2>Symbol &amp; style</h2>
               <p class="section-hint">
-                Index to replay. Style sets the primary scan timeframe (Scalper 5m · Intraday 15m · Positional 1h).
+                Index to replay. Style sets the primary scan timeframe (Scalper
+                5m · Intraday 15m · Positional 1h).
               </p>
               <label class="field">
                 <span>Index</span>
-                <select [(ngModel)]="symbol" name="symbol" (ngModelChange)="loadOptions()">
+                <select
+                  [(ngModel)]="symbol"
+                  name="symbol"
+                  (ngModelChange)="loadOptions()"
+                >
                   @for (s of options()?.symbols ?? []; track s.symbol) {
                     <option [value]="s.symbol">{{ s.label }}</option>
                   }
@@ -91,7 +99,11 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
               </label>
               <label class="field">
                 <span>Trading style</span>
-                <select [(ngModel)]="style" name="style" (ngModelChange)="loadOptions()">
+                <select
+                  [(ngModel)]="style"
+                  name="style"
+                  (ngModelChange)="loadOptions()"
+                >
                   @for (s of options()?.tradingStyles ?? []; track s.id) {
                     <option [value]="s.id">{{ s.label }}</option>
                   }
@@ -102,7 +114,9 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
             <section class="config-section">
               <h2>Window</h2>
               <p class="section-hint">
-                Calendar days to replay ({{ limits.minDays }}–{{ limits.maxDays }}). Shorter windows run faster.
+                Calendar days to replay ({{ limits.minDays }}–{{
+                  limits.maxDays
+                }}). Shorter windows run faster.
               </p>
               <div class="field-row">
                 <label class="field">
@@ -130,61 +144,95 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
               <div class="field-row">
                 <label class="field">
                   <span>Window end (optional)</span>
-                  <input type="date" [(ngModel)]="windowEndDate" name="windowEndDate" />
+                  <input
+                    type="date"
+                    [(ngModel)]="windowEndDate"
+                    name="windowEndDate"
+                  />
                 </label>
                 <label class="field">
                   <span>Window start (optional)</span>
-                  <input type="date" [(ngModel)]="windowStartDate" name="windowStartDate" />
+                  <input
+                    type="date"
+                    [(ngModel)]="windowStartDate"
+                    name="windowStartDate"
+                  />
                 </label>
               </div>
             </section>
 
             <section class="config-section">
               <h2>Flow &amp; session filters</h2>
-              <p class="section-hint">{{ options()?.notes?.optionFlow }}</p>
-              <label class="field">
-                <span>Flow mode</span>
-                <select [(ngModel)]="flowMode" name="flowMode">
-                  @for (f of options()?.flowModes ?? []; track f.id) {
-                    <option [value]="f.id">{{ f.label }}</option>
-                  }
-                </select>
+              <p class="section-hint">PA-only mode (option flow disabled for entry decisions)</p>
+              <label class="check-field">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="chaseDecay"
+                  name="chaseDecay"
+                />
+                <span
+                  >Chase decay — penalize or block late extended entries</span
+                >
               </label>
               <label class="check-field">
-                <input type="checkbox" [(ngModel)]="chaseDecay" name="chaseDecay" />
-                <span>Chase decay — penalize or block late extended entries</span>
-              </label>
-              <label class="check-field">
-                <input type="checkbox" [(ngModel)]="greenDayStop" name="greenDayStop" />
-                <span>Green day stop — no further entries after any trade closes ≥1R</span>
+                <input
+                  type="checkbox"
+                  [(ngModel)]="greenDayStop"
+                  name="greenDayStop"
+                />
+                <span
+                  >Green day stop — no further entries after any trade closes
+                  ≥1R</span
+                >
               </label>
               <label class="check-field">
                 <input type="checkbox" [(ngModel)]="lossCap" name="lossCap" />
                 <span>Daily loss cap — stop session when day net ≤ −2R</span>
+              </label>
+              <label class="check-field">
+                <input type="checkbox" [(ngModel)]="avoidFirst5Min" name="avoidFirst5Min" />
+                <span>Avoid first 5-min candle — skip entries within first 5m</span>
+              </label>
+              <label class="check-field">
+                <input type="checkbox" [(ngModel)]="avoidTightRange" name="avoidTightRange" />
+                <span>Avoid tight range — skip entries when market is range-bound</span>
+              </label>
+              <label class="check-field">
+                <input type="checkbox" [(ngModel)]="requireRetest" name="requireRetest" />
+                <span>Require retest — enter only after breakout retest</span>
               </label>
             </section>
 
             <section class="config-section">
               <h2>Signal entry</h2>
               <p class="section-hint">
-                How entries fire. Default engine uses full PA conviction gates; fast presets use
-                breakout, volume, and indicator filters on 5m/15m/1h.
+                How entries fire. Default engine uses full PA conviction gates;
+                fast presets use breakout, volume, and indicator filters on
+                5m/15m/1h.
               </p>
               <label class="field">
                 <span>Mode</span>
                 <select [(ngModel)]="signalMode" name="signalMode">
-                  <option value="engine">Default engine (PA conviction gates)</option>
+                  <option value="engine">
+                    Default engine (PA conviction gates)
+                  </option>
                   <option value="single">Single fast-entry preset</option>
+                  <option value="matrix">Compare all entry combos (matrix)</option>
                 </select>
               </label>
               @if (signalMode === 'single') {
                 <label class="field">
                   <span>Preset</span>
                   <select [(ngModel)]="signalProfile" name="signalProfile">
-                    @for (group of options()?.signalPresetGroups ?? []; track group.id) {
+                    @for (
+                      group of options()?.signalPresetGroups ?? [];
+                      track group.id
+                    ) {
                       <optgroup [label]="group.label">
                         @for (preset of group.presets; track preset.id) {
-                          <option [value]="preset.id">{{ preset.label }}</option>
+                          <option [value]="preset.id">
+                            {{ preset.label }}
+                          </option>
                         }
                       </optgroup>
                     }
@@ -193,6 +241,11 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                 @if (signalProfileHint()) {
                   <p class="policy-detail-hint">{{ signalProfileHint() }}</p>
                 }
+              }
+              @if (signalMode === 'matrix') {
+                <p class="policy-detail-hint">
+                  Will run the default engine + all fast-entry presets and compare results side-by-side.
+                </p>
               }
             </section>
 
@@ -219,7 +272,8 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                 }
               } @else {
                 <p class="policy-detail-hint">
-                  Runs {{ options()?.exitPolicies?.length ?? 7 }} replays with identical entries — only the trailing exit model changes.
+                  Runs {{ options()?.exitPolicies?.length ?? 7 }} replays with
+                  identical entries — only the trailing exit model changes.
                 </p>
               }
             </section>
@@ -247,7 +301,8 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                 }
               } @else {
                 <p class="policy-detail-hint">
-                  Compares flat full-size exits vs 33/33/34 scale-out ladder on the same entries.
+                  Compares flat full-size exits vs 33/33/34 scale-out ladder on
+                  the same entries.
                 </p>
               }
             </section>
@@ -273,18 +328,33 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
             </section>
 
             <div class="run-estimate" aria-live="polite">
-              <span>{{ days }} day replay · {{ estimatedReplays() }} run(s) · ~{{ estimateMinutes() }} min</span>
-              <span class="run-estimate-hint">{{ options()?.notes?.simulation }}</span>
+              <span
+                >{{ days }} day replay · {{ estimatedReplays() }} run(s) · ~{{
+                  estimateMinutes()
+                }}
+                min</span
+              >
+              <span class="run-estimate-hint">{{
+                options()?.notes?.simulation
+              }}</span>
             </div>
 
             @if (estimatedReplays() > limits.maxReplaysWithoutConfirm) {
               <label class="check-field">
-                <input type="checkbox" [(ngModel)]="confirmLargeRun" name="confirmLargeRun" />
-                <span>Confirm large run ({{ estimatedReplays() }} replays)</span>
+                <input
+                  type="checkbox"
+                  [(ngModel)]="confirmLargeRun"
+                  name="confirmLargeRun"
+                />
+                <span
+                  >Confirm large run ({{ estimatedReplays() }} replays)</span
+                >
               </label>
             }
 
-            <button type="submit" class="run-btn" [disabled]="running()">Run benchmark</button>
+            <button type="submit" class="run-btn" [disabled]="running()">
+              Run benchmark
+            </button>
             @if (error()) {
               <p class="config-error" role="alert">{{ error() }}</p>
             }
@@ -293,41 +363,54 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
       }
 
       @if (running()) {
-        <div class="loading-overlay" aria-live="polite" aria-busy="true">
-          <div class="loading-spinner" role="status"></div>
-          <span class="loading-text">{{ loadingTitle() }}</span>
-          <span class="loading-sub">{{ progressSubtext() }}</span>
-          <div class="progress-wrap">
-            <div class="progress-track" aria-hidden="true">
-              <div class="progress-fill" [style.width.%]="progressPercent()"></div>
-            </div>
-            <span class="progress-percent">{{ progressPercent() }}% · {{ runTimer() }}</span>
-          </div>
-        </div>
+        <app-loader
+          [message]="loadingTitle()"
+          [sub]="progressSubtext()"
+          [progress]="progressPercent()"
+        />
       }
 
-      @if (report(); as r) {
+      @if (!showConfig() && report(); as r) {
         <div id="benchmark-app">
           <header class="top-bar">
             <div class="top-left">
               <h1>{{ symbolLabel() }}</h1>
               <div class="meta-row">
                 <span class="pill">{{ styleLabel() }}</span>
-                <span class="pill muted-pill">{{ r.params?.days ?? days }}d</span>
+                <span class="pill muted-pill"
+                  >{{ r.params?.days ?? days }}d</span
+                >
+                @if (r.params?.windowStartDate || r.params?.windowEndDate) {
+                  <span class="pill muted-pill">{{ windowRange(r) }}</span>
+                }
                 <span class="pill ai-pill">{{ aiModeLabel() }}</span>
               </div>
             </div>
             <div class="top-right">
               @if (r.durationMs) {
-                <span class="timer-display">{{ formatElapsed(r.durationMs) }}</span>
+                <span class="timer-display">{{
+                  formatElapsed(r.durationMs)
+                }}</span>
               }
-              <button type="button" class="rerun-btn" (click)="openConfig()">Edit &amp; rerun</button>
-              <button type="button" class="export-btn" (click)="openExportSheet()">Export</button>
+              <button type="button" class="rerun-btn" (click)="openConfig()">
+                Edit &amp; rerun
+              </button>
+              <button
+                type="button"
+                class="export-btn"
+                (click)="openExportSheet()"
+              >
+                Export
+              </button>
               <span class="muted">{{ formatGenerated(r.generatedAt) }}</span>
             </div>
           </header>
 
-          <nav class="results-tabs" role="tablist" aria-label="Benchmark results">
+          <nav
+            class="results-tabs"
+            role="tablist"
+            aria-label="Benchmark results"
+          >
             @for (tab of resultTabs; track tab.id) {
               <button
                 type="button"
@@ -352,7 +435,9 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                   <div class="capital-start">
                     <span class="capital-label">Starting</span>
                     <span class="capital-amount">
-                      ₹{{ r.capitalSummary.startingCapitalInr | number: '1.0-0' }}
+                      ₹{{
+                        r.capitalSummary.startingCapitalInr | number: '1.0-0'
+                      }}
                     </span>
                   </div>
                   <div class="capital-arrow" aria-hidden="true">→</div>
@@ -384,7 +469,11 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                 @for (kpi of kpiCards(r); track kpi.label) {
                   <div class="kpi-card" [class.wide]="kpi.wide">
                     <span class="kpi-label">{{ kpi.label }}</span>
-                    <span class="kpi-value" [class.positive]="kpi.tone === 'win'" [class.negative]="kpi.tone === 'loss'">
+                    <span
+                      class="kpi-value"
+                      [class.positive]="kpi.tone === 'win'"
+                      [class.negative]="kpi.tone === 'loss'"
+                    >
                       {{ kpi.value }}
                     </span>
                     @if (kpi.sub) {
@@ -417,7 +506,8 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                     </span>
                     <span class="matrix-winner-sub">
                       {{ matrixWinner(r)?.summary?.winRate ?? 0 }}% win ·
-                      {{ matrixWinner(r)?.summary?.totalSignals ?? 0 }} trades · see Details for trade log
+                      {{ matrixWinner(r)?.summary?.totalSignals ?? 0 }} trades ·
+                      see Details for trade log
                     </span>
                   </div>
                 </div>
@@ -425,7 +515,9 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                 <section class="matrix-panel">
                   <div class="section-head">
                     <h2>Matrix comparison</h2>
-                    <span class="muted">{{ sortedMatrixVariants(r).length }} variants</span>
+                    <span class="muted"
+                      >{{ sortedMatrixVariants(r).length }} variants</span
+                    >
                   </div>
                   <div class="matrix-table-wrap">
                     <table class="matrix-table">
@@ -442,23 +534,40 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                       </thead>
                       <tbody>
                         @for (v of sortedMatrixVariants(r); track v.profileId) {
-                          <tr [class.matrix-row-winner]="v.profileId === r.matrixComparison?.winnerId">
+                          <tr
+                            [class.matrix-row-winner]="
+                              v.profileId === r.matrixComparison?.winnerId
+                            "
+                          >
                             <td>{{ v.rank ?? '—' }}</td>
                             <td class="matrix-combo-cell">
-                              <span class="matrix-combo-name">{{ v.label }}</span>
-                              @if (v.profileId === r.matrixComparison?.winnerId) {
+                              <span class="matrix-combo-name">{{
+                                v.label
+                              }}</span>
+                              @if (
+                                v.profileId === r.matrixComparison?.winnerId
+                              ) {
                                 <span class="matrix-winner-pill">★</span>
                               }
                             </td>
-                            <td [class.positive]="v.totalPnlR >= 0" [class.negative]="v.totalPnlR < 0">
+                            <td
+                              [class.positive]="v.totalPnlR >= 0"
+                              [class.negative]="v.totalPnlR < 0"
+                            >
                               <strong>{{ v.totalPnlR }}R</strong>
                             </td>
-                            <td [class.positive]="(v.deltaVsBaselineR ?? 0) >= 0" [class.negative]="(v.deltaVsBaselineR ?? 0) < 0">
+                            <td
+                              [class.positive]="(v.deltaVsBaselineR ?? 0) >= 0"
+                              [class.negative]="(v.deltaVsBaselineR ?? 0) < 0"
+                            >
                               {{ formatDeltaR(v.deltaVsBaselineR) }}
                             </td>
                             <td>{{ v.summary.winRate }}%</td>
                             <td>{{ v.summary.totalSignals }}</td>
-                            <td [class.positive]="v.summary.avgPnlR >= 0" [class.negative]="v.summary.avgPnlR < 0">
+                            <td
+                              [class.positive]="v.summary.avgPnlR >= 0"
+                              [class.negative]="v.summary.avgPnlR < 0"
+                            >
                               {{ v.summary.avgPnlR }}R
                             </td>
                           </tr>
@@ -505,7 +614,8 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                     [class.positive]="reportSummary(r).totalR >= 0"
                     [class.negative]="reportSummary(r).totalR < 0"
                   >
-                    {{ reportSummary(r).totalR >= 0 ? '+' : '' }}{{ reportSummary(r).totalR }}R
+                    {{ reportSummary(r).totalR >= 0 ? '+' : ''
+                    }}{{ reportSummary(r).totalR }}R
                   </span>
                 </div>
                 <div #equityChartHost class="equity-chart"></div>
@@ -523,7 +633,9 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                         <div
                           class="exit-bar-fill"
                           [class]="row.cls"
-                          [style.width.%]="exitBarWidth(row.count, r.trades.length)"
+                          [style.width.%]="
+                            exitBarWidth(row.count, r.trades.length)
+                          "
                         ></div>
                       </div>
                       <span class="exit-bar-count">{{ row.count }}</span>
@@ -535,7 +647,11 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
               <section class="table-section">
                 <div class="section-head">
                   <h2>Trade log</h2>
-                  <span class="muted">{{ r.trades.length }} signal{{ r.trades.length === 1 ? '' : 's' }}</span>
+                  <span class="muted"
+                    >{{ r.trades.length }} signal{{
+                      r.trades.length === 1 ? '' : 's'
+                    }}</span
+                  >
                 </div>
                 <div class="table-wrap">
                   <table>
@@ -559,37 +675,48 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                         >
                           <td>
                             {{ t.sessionDate }}<br />
-                            <span class="muted">{{ formatTradeTime(t.signalAtISO) }}</span>
+                            <span class="muted">{{
+                              formatTradeTime(t.signalAtISO)
+                            }}</span>
                           </td>
-                          <td [class]="tradeSideClass(t)">{{ tradeSide(t) }}</td>
+                          <td [class]="tradeSideClass(t)">
+                            {{ tradeSide(t) }}
+                          </td>
                           <td>
                             {{ fmtPrice(t.indexEntry) }}
                             @if (t.optionEntryPremium != null) {
                               <br />
                               <span class="muted">
-                                opt ₹{{ t.optionEntryPremium }}→₹{{ t.optionExitPremium }} δ{{
-                                  t.optionDelta
+                                opt ₹{{ t.optionEntryPremium }}→₹{{
+                                  t.optionExitPremium
                                 }}
+                                δ{{ t.optionDelta }}
                               </span>
                             }
                           </td>
                           <td>
-                            <span class="hit-sl">SL {{ fmtPrice(t.stopLoss) }}</span><br />
+                            <span class="hit-sl"
+                              >SL {{ fmtPrice(t.stopLoss) }}</span
+                            ><br />
                             <span class="muted">
-                              {{ fmtPrice(t.takeProfit1) }} / {{ fmtPrice(t.takeProfit2) }} /
+                              {{ fmtPrice(t.takeProfit1) }} /
+                              {{ fmtPrice(t.takeProfit2) }} /
                               {{ fmtPrice(t.takeProfit3) }}
                             </span>
                           </td>
                           <td [class]="tradeHitClass(t)">
                             {{ hitLabel(t.hitLevel, t.exitStatus) }}<br />
-                            <span class="muted">&#64; {{ fmtPrice(t.indexExit) }}</span>
+                            <span class="muted"
+                              >&#64; {{ fmtPrice(t.indexExit) }}</span
+                            >
                           </td>
                           <td [class]="pnlClass(t.pnlR)">
                             {{ t.pnlR >= 0 ? '+' : '' }}{{ t.pnlR }}R
                             @if (t.pnlInr != null) {
                               <br />
                               <span class="muted">
-                                {{ t.pnlInr >= 0 ? '+' : '' }}{{ fmtInr(t.pnlInr) }}
+                                {{ t.pnlInr >= 0 ? '+' : ''
+                                }}{{ fmtInr(t.pnlInr) }}
                               </span>
                             }
                           </td>
@@ -606,17 +733,25 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                           >
                             <td colspan="7" class="verdict-subrow">
                               @if (t.engineVerdict) {
-                                <div class="verdict-engine">{{ t.engineVerdict }}</div>
+                                <div class="verdict-engine">
+                                  {{ t.engineVerdict }}
+                                </div>
                               }
                               @if (t.aiVerdictSummary) {
-                                <div class="ai-line">{{ t.aiVerdictSummary }}</div>
+                                <div class="ai-line">
+                                  {{ t.aiVerdictSummary }}
+                                </div>
                               }
                             </td>
                           </tr>
                         }
                       } @empty {
                         <tr>
-                          <td colspan="7" class="muted" style="text-align: center">
+                          <td
+                            colspan="7"
+                            class="muted"
+                            style="text-align: center"
+                          >
                             No qualifying signals in this window.
                           </td>
                         </tr>
@@ -634,26 +769,50 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                 <h2>Strategy overview</h2>
                 <div class="strategy-comparison">
                   @if (hasMatrix(r)) {
-                    @for (v of sortedMatrixVariants(r).slice(0, 3); track v.profileId; let idx = $index) {
-                      <div class="strategy-card" [class.winner]="v.profileId === r.matrixComparison?.winnerId">
+                    @for (
+                      v of sortedMatrixVariants(r).slice(0, 3);
+                      track v.profileId;
+                      let idx = $index
+                    ) {
+                      <div
+                        class="strategy-card"
+                        [class.winner]="
+                          v.profileId === r.matrixComparison?.winnerId
+                        "
+                      >
                         <div class="strategy-card-head">
                           <strong>{{ v.label }}</strong>
                           <span class="strategy-rank">
-                            {{ v.profileId === r.matrixComparison?.winnerId ? 'Winner' : '#' + (idx + 1) }}
+                            {{
+                              v.profileId === r.matrixComparison?.winnerId
+                                ? 'Winner'
+                                : '#' + (idx + 1)
+                            }}
                           </span>
                         </div>
                         <div class="strategy-stats">
                           <span>
                             Total
-                            <strong [class.positive]="v.totalPnlR >= 0" [class.negative]="v.totalPnlR < 0">
+                            <strong
+                              [class.positive]="v.totalPnlR >= 0"
+                              [class.negative]="v.totalPnlR < 0"
+                            >
                               {{ v.totalPnlR }}R
                             </strong>
                           </span>
-                          <span>Win <strong>{{ v.summary.winRate }}%</strong></span>
-                          <span>Trades <strong>{{ v.summary.totalSignals }}</strong></span>
+                          <span
+                            >Win <strong>{{ v.summary.winRate }}%</strong></span
+                          >
+                          <span
+                            >Trades
+                            <strong>{{ v.summary.totalSignals }}</strong></span
+                          >
                           <span>
                             Δ base
-                            <strong [class.positive]="(v.deltaVsBaselineR ?? 0) >= 0" [class.negative]="(v.deltaVsBaselineR ?? 0) < 0">
+                            <strong
+                              [class.positive]="(v.deltaVsBaselineR ?? 0) >= 0"
+                              [class.negative]="(v.deltaVsBaselineR ?? 0) < 0"
+                            >
                               {{ formatDeltaR(v.deltaVsBaselineR) }}
                             </strong>
                           </span>
@@ -669,13 +828,27 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                       <div class="strategy-stats">
                         <span>
                           Total
-                          <strong [class.positive]="reportSummary(r).totalR >= 0" [class.negative]="reportSummary(r).totalR < 0">
+                          <strong
+                            [class.positive]="reportSummary(r).totalR >= 0"
+                            [class.negative]="reportSummary(r).totalR < 0"
+                          >
                             {{ reportSummary(r).totalR }}R
                           </strong>
                         </span>
-                        <span>Win <strong>{{ reportSummary(r).winRate }}%</strong></span>
-                        <span>Trades <strong>{{ reportSummary(r).totalTrades }}</strong></span>
-                        <span>Avg <strong>{{ reportSummary(r).avgR }}R</strong></span>
+                        <span
+                          >Win
+                          <strong>{{ reportSummary(r).winRate }}%</strong></span
+                        >
+                        <span
+                          >Trades
+                          <strong>{{
+                            reportSummary(r).totalTrades
+                          }}</strong></span
+                        >
+                        <span
+                          >Avg
+                          <strong>{{ reportSummary(r).avgR }}R</strong></span
+                        >
                       </div>
                     </div>
                   }
@@ -700,21 +873,34 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                 <div class="section-head history-head">
                   <h2>Run history</h2>
                   @if (history().length) {
-                    <button type="button" class="history-clear-btn" (click)="clearHistory()">Clear all</button>
+                    <button
+                      type="button"
+                      class="history-clear-btn"
+                      (click)="clearHistory()"
+                    >
+                      Clear all
+                    </button>
                   }
                 </div>
                 <p class="history-hint">
-                  Runs are saved locally. Select up to <strong>3</strong> to compare side-by-side, or tap
-                  <strong>Open</strong> to reload a full report.
+                  Runs are saved locally. Select up to <strong>3</strong> to
+                  compare side-by-side, or tap <strong>Open</strong> to reload a
+                  full report.
                 </p>
                 <div class="history-tray">
                   @if (!history().length) {
                     <p class="history-empty">
-                      No saved runs yet — complete a benchmark and it will appear here.
+                      No saved runs yet — complete a benchmark and it will
+                      appear here.
                     </p>
                   } @else {
                     @for (entry of history(); track entry.reportId) {
-                      <div class="history-item" [class.selected]="compareSelection().has(entry.reportId)">
+                      <div
+                        class="history-item"
+                        [class.selected]="
+                          compareSelection().has(entry.reportId)
+                        "
+                      >
                         <label class="history-check">
                           <input
                             type="checkbox"
@@ -723,20 +909,36 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                           />
                         </label>
                         <div class="history-item-main">
-                          <span class="history-item-label">{{ entry.label }}</span>
+                          <span class="history-item-label">{{
+                            entry.label
+                          }}</span>
                           <span class="history-item-stats">
-                            <span [class.positive]="entry.totalR >= 0" [class.negative]="entry.totalR < 0">
+                            <span
+                              [class.positive]="entry.totalR >= 0"
+                              [class.negative]="entry.totalR < 0"
+                            >
                               {{ entry.totalR }}R
                             </span>
-                            · {{ entry.winRate }}% win · {{ entry.trades }} trades
+                            · {{ entry.winRate }}% win ·
+                            {{ entry.trades }} trades
                           </span>
-                          <span class="history-item-time">{{ formatGenerated(entry.generatedAt) }}</span>
+                          <span class="history-item-time">{{
+                            formatGenerated(entry.generatedAt)
+                          }}</span>
                         </div>
                         <div class="history-item-actions">
-                          <button type="button" class="history-open-btn" (click)="openHistoryReport(entry.reportId)">
+                          <button
+                            type="button"
+                            class="history-open-btn"
+                            (click)="openHistoryReport(entry.reportId)"
+                          >
                             Open
                           </button>
-                          <button type="button" class="history-remove-btn" (click)="removeHistory(entry.reportId)">
+                          <button
+                            type="button"
+                            class="history-remove-btn"
+                            (click)="removeHistory(entry.reportId)"
+                          >
                             Remove
                           </button>
                         </div>
@@ -747,7 +949,10 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
               </section>
 
               @if (compareSelection().size >= 2) {
-                <section class="compare-runs-panel" aria-label="Side-by-side comparison">
+                <section
+                  class="compare-runs-panel"
+                  aria-label="Side-by-side comparison"
+                >
                   <h2>Side-by-side</h2>
                   <div class="compare-runs-table-wrap">
                     <table class="compare-runs-table">
@@ -760,10 +965,16 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
                         </tr>
                       </thead>
                       <tbody>
-                        @for (entry of selectedHistory(); track entry.reportId) {
+                        @for (
+                          entry of selectedHistory();
+                          track entry.reportId
+                        ) {
                           <tr>
                             <td>{{ entry.label }}</td>
-                            <td [class.positive]="entry.totalR >= 0" [class.negative]="entry.totalR < 0">
+                            <td
+                              [class.positive]="entry.totalR >= 0"
+                              [class.negative]="entry.totalR < 0"
+                            >
                               {{ entry.totalR }}R
                             </td>
                             <td>{{ entry.winRate }}%</td>
@@ -781,7 +992,11 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
         </div>
       }
       @if (showExportSheet()) {
-        <div class="export-sheet" role="dialog" aria-labelledby="export-sheet-title">
+        <div
+          class="export-sheet"
+          role="dialog"
+          aria-labelledby="export-sheet-title"
+        >
           <div class="export-sheet-backdrop" (click)="closeExportSheet()"></div>
           <div class="export-sheet-panel">
             <div class="export-sheet-head">
@@ -796,7 +1011,8 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
               </button>
             </div>
             <p class="export-sheet-hint">
-              Copy text below or download a multi-sheet Excel workbook for comparisons.
+              Copy text below or download a multi-sheet Excel workbook for
+              comparisons.
             </p>
             <div class="export-tabs" role="tablist" aria-label="Export format">
               @for (tab of exportTabs; track tab.id) {
@@ -819,10 +1035,18 @@ const HISTORY_STORAGE_KEY = 'alpha-trader-benchmark-history-v1';
               [value]="exportText()"
             ></textarea>
             <div class="export-actions">
-              <button type="button" class="export-copy-btn" (click)="copyExportText()">
+              <button
+                type="button"
+                class="export-copy-btn"
+                (click)="copyExportText()"
+              >
                 Copy to clipboard
               </button>
-              <button type="button" class="export-xlsx-btn" (click)="downloadExcelReport()">
+              <button
+                type="button"
+                class="export-xlsx-btn"
+                (click)="downloadExcelReport()"
+              >
                 Download Excel
               </button>
               @if (exportCopied()) {
@@ -861,11 +1085,13 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
   maxTradesPerDay: number | null = null;
   windowStartDate = '';
   windowEndDate = '';
-  flowMode = 'pa-only';
   chaseDecay = false;
   greenDayStop = false;
   lossCap = false;
-  signalMode: 'engine' | 'single' = 'engine';
+  avoidFirst5Min = false;
+  avoidTightRange = false;
+  requireRetest = false;
+  signalMode: 'engine' | 'single' | 'matrix' = 'engine';
   signalProfile = 'breakout-vol';
   exitMode: 'single' | 'matrix' = 'single';
   exitPolicy = 'rr-ladder';
@@ -875,7 +1101,12 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
   pnlModel = 'index';
   confirmLargeRun = false;
 
-  limits = { minDays: 3, maxDays: 90, maxTradesPerDay: 20, maxReplaysWithoutConfirm: 20 };
+  limits = {
+    minDays: 3,
+    maxDays: 90,
+    maxTradesPerDay: 20,
+    maxReplaysWithoutConfirm: 20,
+  };
 
   readonly options = signal<BenchmarkOptions | null>(null);
   readonly jobStatus = signal<BenchmarkJobStatus | null>(null);
@@ -915,12 +1146,16 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   readonly styleLabel = computed(() => {
-    const match = this.options()?.tradingStyles.find((s) => s.id === this.style);
+    const match = this.options()?.tradingStyles.find(
+      (s) => s.id === this.style,
+    );
     return match?.label ?? this.style;
   });
 
   readonly progressSubtext = computed(
-    () => this.jobStatus()?.progress?.message || 'Fetching candles & replaying signals',
+    () =>
+      this.jobStatus()?.progress?.message ||
+      'Fetching candles & replaying signals',
   );
 
   readonly loadingTitle = computed(() => {
@@ -930,7 +1165,9 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
     return 'Running backtest…';
   });
 
-  readonly progressPercent = computed(() => this.jobStatus()?.progress?.percent ?? 0);
+  readonly progressPercent = computed(
+    () => this.jobStatus()?.progress?.percent ?? 0,
+  );
 
   readonly runTimer = computed(() => this.formatElapsed(this.runElapsedMs()));
 
@@ -942,7 +1179,9 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   readonly compareVerdict = computed(() => {
-    const selected = [...this.selectedHistory()].sort((a, b) => b.totalR - a.totalR);
+    const selected = [...this.selectedHistory()].sort(
+      (a, b) => b.totalR - a.totalR,
+    );
     if (selected.length < 2) return '';
     const winner = selected[0];
     const runner = selected[1];
@@ -972,12 +1211,20 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
         this.options.set(opts);
         this.limits = opts.limits;
         this.days = Number(opts.defaults['days'] ?? this.days);
-        this.exitPolicy = String(opts.defaults['exitPolicy'] ?? this.exitPolicy);
-        this.positionPolicy = String(opts.defaults['positionPolicy'] ?? this.positionPolicy);
-        this.flowMode = String(opts.defaults['flowMode'] ?? this.flowMode);
+        this.exitPolicy = String(
+          opts.defaults['exitPolicy'] ?? this.exitPolicy,
+        );
+        this.positionPolicy = String(
+          opts.defaults['positionPolicy'] ?? this.positionPolicy,
+        );
         this.aiMode = String(opts.defaults['aiMode'] ?? this.aiMode);
         this.pnlModel = String(opts.defaults['pnlModel'] ?? this.pnlModel);
-        const defaultProfile = String(opts.defaults['signalProfile'] ?? 'engine');
+        this.requireRetest = Boolean(
+          opts.defaults['requireRetest'] ?? this.requireRetest,
+        );
+        const defaultProfile = String(
+          opts.defaults['signalProfile'] ?? 'engine',
+        );
         if (defaultProfile && defaultProfile !== 'engine') {
           this.signalMode = 'single';
           this.signalProfile = defaultProfile;
@@ -1006,15 +1253,24 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   exitPolicyHint(): string {
-    return this.options()?.exitPolicies.find((p) => p.id === this.exitPolicy)?.hint ?? '';
+    return (
+      this.options()?.exitPolicies.find((p) => p.id === this.exitPolicy)
+        ?.hint ?? ''
+    );
   }
 
   positionPolicyHint(): string {
-    return this.options()?.positionPolicies.find((p) => p.id === this.positionPolicy)?.hint ?? '';
+    return (
+      this.options()?.positionPolicies.find((p) => p.id === this.positionPolicy)
+        ?.hint ?? ''
+    );
   }
 
   aiModeLabel(): string {
-    return this.options()?.aiModes.find((m) => m.id === this.aiMode)?.label ?? this.aiMode;
+    return (
+      this.options()?.aiModes.find((m) => m.id === this.aiMode)?.label ??
+      this.aiMode
+    );
   }
 
   estimateMinutes(): string {
@@ -1029,11 +1285,19 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
       return this.options()?.exitPolicies?.length ?? 7;
     }
     if (this.positionMode === 'matrix') return 2;
+    if (this.signalMode === 'matrix') {
+      // engine + fast presets
+      const presets = this.options()?.signalPresets?.length ?? 10;
+      return presets + 1;
+    }
     return 1;
   }
 
   openConfig(): void {
     this.showConfig.set(true);
+    // Clear previous results so they don't remain visible when scrolling while editing config
+    this.report.set(null);
+    this.jobStatus.set(null);
   }
 
   openExportSheet(): void {
@@ -1100,7 +1364,8 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   tradeHitClass(t: BenchmarkReport['trades'][number]): string {
-    if (t.hitLevel === 'STOP_LOSS' || t.exitStatus === 'STOP_LOSS') return 'hit-sl';
+    if (t.hitLevel === 'STOP_LOSS' || t.exitStatus === 'STOP_LOSS')
+      return 'hit-sl';
     if (t.hitLevel === 'SIGNAL_FLIP') return 'hit-tp';
     return 'hit-tp';
   }
@@ -1145,20 +1410,20 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
       symbol: this.symbol,
       tradingStyle: this.style,
       days: this.days,
-      flowMode: this.flowMode,
       aiMode: this.aiMode,
       pnlModel: this.pnlModel,
       chaseDecay: this.chaseDecay,
       greenDayStop: this.greenDayStop,
       confirmLargeRun:
-        this.confirmLargeRun ||
-        replays > this.limits.maxReplaysWithoutConfirm,
+        this.confirmLargeRun || replays > this.limits.maxReplaysWithoutConfirm,
     };
     if (this.lossCap) {
       body['dailyLossCapR'] = -2;
     }
     if (this.exitMode === 'matrix') {
-      body['exitMatrix'] = (this.options()?.exitPolicies ?? []).map((p) => p.id);
+      body['exitMatrix'] = (this.options()?.exitPolicies ?? []).map(
+        (p) => p.id,
+      );
     } else {
       body['exitPolicy'] = this.exitPolicy;
     }
@@ -1174,7 +1439,13 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     if (this.windowStartDate) body['windowStartDate'] = this.windowStartDate;
     if (this.windowEndDate) body['windowEndDate'] = this.windowEndDate;
-    if (this.signalMode === 'single' && this.signalProfile) {
+    body['avoidFirst5Min'] = this.avoidFirst5Min;
+    body['avoidTightRange'] = this.avoidTightRange;
+    body['requireRetest'] = this.requireRetest;
+    if (this.signalMode === 'matrix') {
+      const all = (this.options()?.signalPresets ?? []).map((p) => p.id);
+      body['signalMatrix'] = ['engine', ...all.filter((id) => id !== 'engine')];
+    } else if (this.signalMode === 'single' && this.signalProfile) {
       body['signalProfile'] = this.signalProfile;
     }
 
@@ -1184,7 +1455,7 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
         this.stopRunTimer();
         this.running.set(false);
         this.showConfig.set(true);
-        this.error.set(err?.error?.error || err.message || 'Start failed');
+        this.error.set(this.formatServerError(err) || 'Start failed');
       },
     });
   }
@@ -1282,7 +1553,9 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
         `Matrix winner <strong>${r.matrixComparison.winnerLabel}</strong> — <strong>${winner?.totalPnlR ?? 0}R</strong> (${winner?.summary.winRate ?? 0}% win, ${winner?.summary.totalSignals ?? 0} trades)`,
       );
     } else {
-      lines.push(`Active profile: <strong>${this.policyWinnerLabel(r)}</strong>`);
+      lines.push(
+        `Active profile: <strong>${this.policyWinnerLabel(r)}</strong>`,
+      );
     }
     lines.push(
       `Net engine result: <strong>${summary.totalR}R</strong> · ${summary.winRate}% win · ${summary.totalTrades} signals`,
@@ -1319,7 +1592,9 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
     const filterLine = this.filterStatsLine(r);
     if (filterLine) lines.push(filterLine);
     if (!r.params?.aiMode || r.params.aiMode === 'off') {
-      lines.push('AI mode is off — run with shadow or active to compare engine vs model opinions.');
+      lines.push(
+        'AI mode is off — run with shadow or active to compare engine vs model opinions.',
+      );
     }
     return lines;
   }
@@ -1329,13 +1604,24 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!f) return '';
     const parts: string[] = [];
     if (f.chaseDecayFiltered > 0 || f.chaseBlocked > 0) {
-      parts.push(`chase decay blocked ${f.chaseBlocked}, filtered ${f.chaseDecayFiltered}`);
+      parts.push(
+        `chase decay blocked ${f.chaseBlocked}, filtered ${f.chaseDecayFiltered}`,
+      );
     }
     if (f.sessionDayBlocked > 0) {
       parts.push(`session rules blocked ${f.sessionDayBlocked}`);
     }
     if (f.maxTradesBlocked > 0) {
       parts.push(`max-trades cap blocked ${f.maxTradesBlocked}`);
+    }
+    if ((f.avoidFirst5MinBlocked ?? 0) > 0) {
+      parts.push(`first-5m blocked ${f.avoidFirst5MinBlocked}`);
+    }
+    if ((f.avoidTightRangeBlocked ?? 0) > 0) {
+      parts.push(`tight-range blocked ${f.avoidTightRangeBlocked}`);
+    }
+    if ((f.requireRetestBlocked ?? 0) > 0) {
+      parts.push(`retest gate blocked ${f.requireRetestBlocked}`);
     }
     if (!parts.length) return '';
     return `Entry filters: ${parts.join(' · ')}.`;
@@ -1346,7 +1632,9 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
       return r.matrixComparison.winnerLabel;
     }
     const exit = this.exitPolicyLabel(r.params?.exitPolicy ?? this.exitPolicy);
-    const position = this.positionPolicyLabel(r.params?.positionPolicy ?? this.positionPolicy);
+    const position = this.positionPolicyLabel(
+      r.params?.positionPolicy ?? this.positionPolicy,
+    );
     return `${exit} · ${position}`;
   }
 
@@ -1357,9 +1645,12 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
 
   runSuggestion(r: BenchmarkReport): string {
     const summary = this.reportSummary(r);
-    if (!summary.totalTrades) return 'No trades fired — widen the window or relax entry filters.';
-    if (summary.totalR >= 2) return `Strong edge — ${summary.totalR}R over ${summary.totalTrades} trades.`;
-    if (summary.totalR >= 0) return `Marginal positive — ${summary.totalR}R; watch drawdowns before sizing up.`;
+    if (!summary.totalTrades)
+      return 'No trades fired — widen the window or relax entry filters.';
+    if (summary.totalR >= 2)
+      return `Strong edge — ${summary.totalR}R over ${summary.totalTrades} trades.`;
+    if (summary.totalR >= 0)
+      return `Marginal positive — ${summary.totalR}R; watch drawdowns before sizing up.`;
     return `Underwater — ${summary.totalR}R; revisit exit policy or trading style.`;
   }
 
@@ -1368,15 +1659,35 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
     const total = Math.max(1, r.trades.length);
     void total;
     return [
-      { label: 'Stop loss', count: this.exitCount(r.trades, 'STOP_LOSS'), cls: 'sl' },
+      {
+        label: 'Stop loss',
+        count: this.exitCount(r.trades, 'STOP_LOSS'),
+        cls: 'sl',
+      },
       { label: 'Early 1R', count: tp['1:1'] ?? 0, cls: 'tp1' },
       { label: 'TP 1:1.5', count: tp['1:1.5'] ?? 0, cls: 'tp1' },
       { label: 'TP 1:2.5', count: tp['1:2.5'] ?? 0, cls: 'tp2' },
       { label: 'TP 1:4', count: tp['1:4'] ?? 0, cls: 'tp3' },
-      { label: 'Trail ratchet', count: this.exitCount(r.trades, 'TRAIL_FLOOR'), cls: 'tp3' },
-      { label: 'Signal flip', count: this.exitCount(r.trades, 'SIGNAL_FLIP'), cls: 'tp1' },
-      { label: 'Session tighten', count: this.exitCount(r.trades, 'SESSION_TIGHTEN'), cls: 'tp2' },
-      { label: 'Session end', count: this.exitCount(r.trades, 'SESSION_END'), cls: 'session' },
+      {
+        label: 'Trail ratchet',
+        count: this.exitCount(r.trades, 'TRAIL_FLOOR'),
+        cls: 'tp3',
+      },
+      {
+        label: 'Signal flip',
+        count: this.exitCount(r.trades, 'SIGNAL_FLIP'),
+        cls: 'tp1',
+      },
+      {
+        label: 'Session tighten',
+        count: this.exitCount(r.trades, 'SESSION_TIGHTEN'),
+        cls: 'tp2',
+      },
+      {
+        label: 'Session end',
+        count: this.exitCount(r.trades, 'SESSION_END'),
+        cls: 'session',
+      },
     ];
   }
 
@@ -1391,6 +1702,43 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
       hour: '2-digit',
       minute: '2-digit',
     });
+  }
+
+  formatDateShort(isoDate: string): string {
+    return new Date(isoDate).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+
+  windowRange(r: BenchmarkReport): string | null {
+    const start = r.params?.windowStartDate;
+    const end = r.params?.windowEndDate;
+    if (start && end) return `${this.formatDateShort(start)} → ${this.formatDateShort(end)}`;
+    if (start) return `from ${this.formatDateShort(start)}`;
+    if (end) return `to ${this.formatDateShort(end)}`;
+    return null;
+  }
+
+  formatServerError(err: any): string {
+    if (!err) return '';
+    if (typeof err === 'string') return err;
+    const payload = err.error ?? err;
+    if (!payload) return '';
+    if (typeof payload === 'string') return payload;
+    if (payload?.error) {
+      if (typeof payload.error === 'string') return payload.error;
+      if (payload.error?.message) return payload.error.message;
+    }
+    if (payload?.message) return payload.message;
+    if (err?.message) return err.message;
+    try {
+      const json = JSON.stringify(payload);
+      return json.length > 500 ? json.slice(0, 500) + '…' : json;
+    } catch {
+      return String(payload);
+    }
   }
 
   formatElapsed(ms: number): string {
@@ -1418,7 +1766,11 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
     this.jobStatus.set({
       jobId: '',
       status: 'complete',
-      progress: { phase: 'complete', percent: 100, message: 'Opening cached benchmark results' },
+      progress: {
+        phase: 'complete',
+        percent: 100,
+        message: 'Opening cached benchmark results',
+      },
       reportId,
       error: null,
       jobMaxMs: null,
@@ -1433,13 +1785,15 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
       error: (err) => {
         this.running.set(false);
         this.showConfig.set(true);
-        this.error.set(err?.error?.error || err.message || 'Report failed');
+        this.error.set(this.formatServerError(err) || 'Report failed');
       },
     });
   }
 
   removeHistory(reportId: string): void {
-    this.history.update((entries) => entries.filter((entry) => entry.reportId !== reportId));
+    this.history.update((entries) =>
+      entries.filter((entry) => entry.reportId !== reportId),
+    );
     this.compareSelection.update((current) => {
       const next = new Set(current);
       next.delete(reportId);
@@ -1497,7 +1851,7 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
                 this.stopRunTimer();
                 this.running.set(false);
                 this.showConfig.set(true);
-                this.error.set(err?.error?.error || err.message || 'Report failed');
+                this.error.set(this.formatServerError(err) || 'Report failed');
               },
             });
           }
@@ -1512,7 +1866,7 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
           this.stopRunTimer();
           this.running.set(false);
           this.showConfig.set(true);
-          this.error.set(err.message || 'Polling failed');
+          this.error.set(this.formatServerError(err) || 'Polling failed');
         },
       });
   }
@@ -1549,7 +1903,10 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
         background: { type: ColorType.Solid, color: '#161a20' },
         textColor: '#8b95a8',
       },
-      grid: { vertLines: { color: '#252b36' }, horzLines: { color: '#252b36' } },
+      grid: {
+        vertLines: { color: '#252b36' },
+        horzLines: { color: '#252b36' },
+      },
       rightPriceScale: { borderColor: '#252b36' },
       timeScale: { borderColor: '#252b36', timeVisible: true },
     });
@@ -1575,7 +1932,10 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
         background: { type: ColorType.Solid, color: '#161a20' },
         textColor: '#8b95a8',
       },
-      grid: { vertLines: { color: '#252b36' }, horzLines: { color: '#252b36' } },
+      grid: {
+        vertLines: { color: '#252b36' },
+        horzLines: { color: '#252b36' },
+      },
       rightPriceScale: { borderColor: '#252b36' },
       timeScale: { borderColor: '#252b36', timeVisible: true },
     });
@@ -1632,7 +1992,8 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private exitCount(trades: BenchmarkReport['trades'], key: string): number {
-    return trades.filter((t) => t.hitLevel === key || t.exitStatus === key).length;
+    return trades.filter((t) => t.hitLevel === key || t.exitStatus === key)
+      .length;
   }
 
   private exitPolicyLabel(id: string): string {
@@ -1640,7 +2001,9 @@ export class BenchmarkComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private positionPolicyLabel(id: string): string {
-    return this.options()?.positionPolicies.find((p) => p.id === id)?.label ?? id;
+    return (
+      this.options()?.positionPolicies.find((p) => p.id === id)?.label ?? id
+    );
   }
 
   private loadHistory(): void {

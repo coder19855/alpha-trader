@@ -53,4 +53,8 @@ export class DeckApiService {
   patchAutoExit(patch: Partial<AutoExitSnapshot>) {
     return this.http.patch<AutoExitSnapshot>('/api/deck/auto-exit', patch);
   }
+
+  getFunds() {
+    return this.http.get<{ available: number; title?: string; raw?: any[] }>('/api/deck/funds');
+  }
 }

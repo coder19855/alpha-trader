@@ -9,7 +9,6 @@ import {
   selectConnected,
   selectDeckTabs,
   selectLastPrice,
-  selectLastUpdated,
   selectLiveBadge,
   selectPriceChange,
   selectPriceChangeClass,
@@ -26,6 +25,7 @@ export type DeckTab =
   | 'components'
   | 'veto'
   | 'strategy'
+  | 'sizing'
   | 'charts'
   | 'events'
   | 'positions'
@@ -39,9 +39,9 @@ export interface DeckTabDef {
 
 export const LIVE_TABS: DeckTabDef[] = [
   { id: 'signal', label: 'Signal', icon: 'insights' },
-  { id: 'components', label: 'Components', icon: 'tune' },
   { id: 'veto', label: 'Veto', icon: 'block' },
   { id: 'strategy', label: 'Strategy', icon: 'psychology' },
+  { id: 'sizing', label: 'Sizing', icon: 'calculate' },
   { id: 'charts', label: 'Chart', icon: 'show_chart' },
   { id: 'events', label: 'Events', icon: 'notifications' },
   { id: 'positions', label: 'Positions', icon: 'account_balance_wallet' },
@@ -50,9 +50,9 @@ export const LIVE_TABS: DeckTabDef[] = [
 
 export const REPLAY_TABS: DeckTabDef[] = [
   { id: 'signal', label: 'Signal', icon: 'insights' },
-  { id: 'components', label: 'Components', icon: 'tune' },
   { id: 'veto', label: 'Veto', icon: 'block' },
   { id: 'strategy', label: 'Strategy', icon: 'psychology' },
+  { id: 'sizing', label: 'Sizing', icon: 'calculate' },
   { id: 'charts', label: 'Chart', icon: 'show_chart' },
   { id: 'events', label: 'Events', icon: 'notifications' },
   { id: 'positions', label: 'Positions', icon: 'account_balance_wallet' },
@@ -75,21 +75,45 @@ export function tradingStyleLabel(style: string): string {
 export class DeckContextService {
   private readonly store = inject(Store);
 
-  readonly appView = toSignal(this.store.select(selectAppView), { initialValue: 'live' as AppView });
-  readonly activeTab = toSignal(this.store.select(selectActiveTab), { initialValue: 'signal' as DeckTab });
-  readonly symbol = toSignal(this.store.select(selectSymbol), { initialValue: 'NSE:NIFTY50-INDEX' });
-  readonly style = toSignal(this.store.select(selectStyle), { initialValue: 'INTRADAY' as TradingStyle });
-  readonly symbolLabel = toSignal(this.store.select(selectSymbolLabel), { initialValue: 'NIFTY' });
-  readonly lastPrice = toSignal(this.store.select(selectLastPrice), { initialValue: null as number | null });
-  readonly priceChange = toSignal(this.store.select(selectPriceChange), { initialValue: '—' });
-  readonly priceChangeClass = toSignal(this.store.select(selectPriceChangeClass), {
-    initialValue: 'muted' as 'up' | 'down' | 'muted',
+  readonly appView = toSignal(this.store.select(selectAppView), {
+    initialValue: 'live' as AppView,
   });
-  readonly connected = toSignal(this.store.select(selectConnected), { initialValue: false });
-  readonly liveBadge = toSignal(this.store.select(selectLiveBadge), { initialValue: false });
-  readonly lastUpdated = toSignal(this.store.select(selectLastUpdated), { initialValue: '—' });
-  readonly styleLabel = toSignal(this.store.select(selectStyleLabel), { initialValue: TRADING_STYLE_LABELS.INTRADAY });
-  readonly deckTabs = toSignal(this.store.select(selectDeckTabs), { initialValue: LIVE_TABS });
+  readonly activeTab = toSignal(this.store.select(selectActiveTab), {
+    initialValue: 'signal' as DeckTab,
+  });
+  readonly symbol = toSignal(this.store.select(selectSymbol), {
+    initialValue: 'NSE:NIFTY50-INDEX',
+  });
+  readonly style = toSignal(this.store.select(selectStyle), {
+    initialValue: 'INTRADAY' as TradingStyle,
+  });
+  readonly symbolLabel = toSignal(this.store.select(selectSymbolLabel), {
+    initialValue: 'NIFTY',
+  });
+  readonly lastPrice = toSignal(this.store.select(selectLastPrice), {
+    initialValue: null as number | null,
+  });
+  readonly priceChange = toSignal(this.store.select(selectPriceChange), {
+    initialValue: '—',
+  });
+  readonly priceChangeClass = toSignal(
+    this.store.select(selectPriceChangeClass),
+    {
+      initialValue: 'muted' as 'up' | 'down' | 'muted',
+    },
+  );
+  readonly connected = toSignal(this.store.select(selectConnected), {
+    initialValue: false,
+  });
+  readonly liveBadge = toSignal(this.store.select(selectLiveBadge), {
+    initialValue: false,
+  });
+  readonly styleLabel = toSignal(this.store.select(selectStyleLabel), {
+    initialValue: TRADING_STYLE_LABELS.INTRADAY,
+  });
+  readonly deckTabs = toSignal(this.store.select(selectDeckTabs), {
+    initialValue: LIVE_TABS,
+  });
 
   readonly symbols = [
     'NSE:NIFTY50-INDEX',
@@ -99,7 +123,9 @@ export class DeckContextService {
   ];
 
   setAppView(view: AppView): void {
-    this.store.dispatch(DeckUiActions.routeSynced({ view, tab: this.activeTab() }));
+    this.store.dispatch(
+      DeckUiActions.routeSynced({ view, tab: this.activeTab() }),
+    );
   }
 
   setTab(tab: DeckTab): void {

@@ -83,6 +83,7 @@ export {
   buildTradeSetup,
   getIstSessionKey,
   getNseSessionCloseSec,
+  getNseSessionOpenSec,
   parseEpochMs,
   resolveSimulationUntilSec,
   sliceCandlesAfter,

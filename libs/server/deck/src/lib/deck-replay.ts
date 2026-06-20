@@ -7,6 +7,7 @@ import {
 } from '@alpha-trader/server-analysis';
 import {
   FlowMode,
+  FYERS_OPTION_INDEX_SYMBOLS,
   getIstSessionClock,
   getStyleScoringConfig,
   TechnicalAnalysisTimelineResponse,
@@ -68,6 +69,7 @@ export interface DeckReplayPayload {
   mode: 'replay';
   symbol: string;
   symbolLabel: string;
+  lotSize?: number | null;
   tradingStyle: string;
   sessionDate: string;
   entryThreshold: number;
@@ -286,10 +288,12 @@ export async function buildDeckReplayPayload(
     getStyleScoringConfig(style).convictionThreshold.enter;
   const lastPoint = points[points.length - 1];
 
+  const lotMeta = FYERS_OPTION_INDEX_SYMBOLS.find((s) => s.symbol === indexSymbol);
   return {
     mode: 'replay',
     symbol: indexSymbol,
     symbolLabel: shortSymbol(indexSymbol),
+    lotSize: lotMeta?.lotSize ?? null,
     tradingStyle: String(style),
     sessionDate: date,
     entryThreshold,

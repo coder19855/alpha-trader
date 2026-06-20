@@ -13,7 +13,6 @@ import {
   NavigationEnd,
   Router,
   RouterLink,
-  RouterLinkActive,
   RouterOutlet,
 } from '@angular/router';
 import { filter } from 'rxjs';
@@ -46,232 +45,12 @@ interface AppNavItem {
     CommonModule,
     RouterOutlet,
     RouterLink,
-    RouterLinkActive,
     MatIconModule,
     MatSelectModule,
     ToastStackComponent,
   ],
-  styles: [
-    `
-      :host {
-        display: block;
-        height: 100vh;
-        overflow: hidden;
-      }
-    `,
-  ],
-  template: `
-    @if (logoutOpen()) {
-      <div class="web-modal" role="dialog" aria-modal="true">
-        <div class="web-modal-card">
-          <h2>Log out of Fyers?</h2>
-          <p>
-            This clears the server session. Live data pauses until you log in
-            again.
-          </p>
-          @if (logoutError()) {
-            <p class="web-modal-error">{{ logoutError() }}</p>
-          }
-          <div class="web-modal-actions">
-            <button
-              type="button"
-              class="web-modal-btn secondary"
-              (click)="closeLogout()"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              class="web-modal-btn danger"
-              [disabled]="logoutBusy()"
-              (click)="confirmLogout()"
-            >
-              Log out
-            </button>
-          </div>
-        </div>
-      </div>
-    }
-
-    <div
-      class="web-sidebar-backdrop"
-      [class.hidden]="!sidebarOpen()"
-      aria-hidden="true"
-      (click)="setSidebarOpen(false)"
-    ></div>
-
-    <div
-      id="web-shell"
-      class="web-shell"
-      [class.sidebar-collapsed]="sidebarCollapsed() && !isMobileSidebar()"
-    >
-      <aside class="web-sidebar" aria-label="Main navigation">
-        <div class="web-sidebar-head">
-          <a
-            class="web-sidebar-brand"
-            routerLink="/"
-            aria-label="Alpha Trader home"
-          >
-            <img
-              class="web-brand-mark"
-              src="brand-mark.svg"
-              width="32"
-              height="32"
-              alt=""
-            />
-            <span class="web-brand-text">Alpha Trader</span>
-          </a>
-          <button
-            type="button"
-            class="web-sidebar-close"
-            aria-label="Close menu"
-            (click)="setSidebarOpen(false)"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div class="web-sidebar-nav">
-          <nav class="web-nav-apps" aria-label="Apps">
-            @for (item of appNav; track item.path) {
-              <a
-                class="web-nav-item"
-                [routerLink]="item.path"
-                routerLinkActive="active"
-                [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
-                (click)="closeSidebarIfMobile()"
-              >
-                <mat-icon aria-hidden="true">{{ item.icon }}</mat-icon>
-                <span class="nav-label">{{ item.label }}</span>
-              </a>
-            }
-          </nav>
-
-          @if (ctx.deckTabs().length) {
-            <div class="web-nav-divider"></div>
-            <nav class="web-nav-tabs" aria-label="Deck sections">
-              @for (tab of ctx.deckTabs(); track tab.id) {
-                <button
-                  type="button"
-                  class="tab-btn web-nav-item"
-                  [class.active]="ctx.activeTab() === tab.id"
-                  (click)="selectTab(tab.id)"
-                >
-                  <mat-icon aria-hidden="true">{{ tab.icon }}</mat-icon>
-                  <span class="nav-label">{{ tab.label }}</span>
-                </button>
-              }
-            </nav>
-          }
-        </div>
-
-        <div class="web-sidebar-foot">
-          <div class="web-theme-switcher">
-            <span class="web-sidebar-section-label">Theme</span>
-            <div class="theme-select-wrap">
-              <mat-select
-                class="theme-select"
-                [value]="themes.active()"
-                (selectionChange)="themes.apply($event.value)"
-                panelClass="theme-select-panel"
-                aria-label="Color theme"
-              >
-                @for (theme of themes.themes; track theme) {
-                  <mat-option [value]="theme">
-                    <span class="theme-option-row">
-                      <span
-                        class="theme-option-dot"
-                        [attr.data-theme]="theme"
-                      ></span>
-                      <span>{{ themeLabel(theme) }}</span>
-                    </span>
-                  </mat-option>
-                }
-              </mat-select>
-            </div>
-          </div>
-          <button
-            type="button"
-            class="web-nav-item web-nav-logout"
-            (click)="openLogout()"
-          >
-            <mat-icon aria-hidden="true">logout</mat-icon>
-            <span class="nav-label">Logout</span>
-          </button>
-        </div>
-      </aside>
-
-      <div class="web-main">
-        <header class="web-topbar">
-          <div class="web-topbar-left">
-            <button
-              type="button"
-              class="web-menu-btn"
-              aria-label="Toggle navigation"
-              [attr.aria-expanded]="sidebarOpen() || !sidebarCollapsed()"
-              (click)="toggleNav()"
-            >
-              <span class="web-menu-icon" aria-hidden="true"></span>
-            </button>
-            <span class="web-tracker-symbol">{{ ctx.symbolLabel() }}</span>
-            <span class="web-tracker-price">
-              {{
-                ctx.lastPrice() !== null
-                  ? (ctx.lastPrice() | number: '1.2-2')
-                  : '—'
-              }}
-            </span>
-            <span class="web-tracker-change" [class]="ctx.priceChangeClass()">
-              {{ ctx.priceChange() }}
-            </span>
-            <span class="pill">{{ ctx.styleLabel() }}</span>
-          </div>
-          <div class="web-topbar-right topbar-meta">
-            <div class="topbar-status-col">
-              <div class="topbar-status-row">
-                <span class="conn-dot" [class.ok]="ctx.connected()"></span>
-                <span>{{
-                  ctx.connected() ? 'Connected' : 'Disconnected'
-                }}</span>
-                <span>·</span>
-                <span>Updated {{ ctx.lastUpdated() }}</span>
-                @if (!session()?.auth?.fyersValid) {
-                  <span>·</span>
-                  <button
-                    type="button"
-                    class="connect-fyers-btn"
-                    (click)="login()"
-                  >
-                    Connect Fyers
-                  </button>
-                }
-              </div>
-              <div class="topbar-ist-row">
-                <time class="topbar-ist-clock" [attr.datetime]="istNowIso()">
-                  {{ istNow() }}
-                </time>
-                @if (marketOpen()) {
-                  <span class="live-badge">Live</span>
-                } @else {
-                  <span
-                    class="market-closed-pill"
-                    [title]="'NSE session ' + sessionHours"
-                  >
-                    Market closed
-                  </span>
-                }
-              </div>
-            </div>
-          </div>
-        </header>
-        <div class="web-content">
-          <router-outlet />
-        </div>
-      </div>
-    </div>
-
-    <app-toast-stack />
-  `,
+  styleUrls: ['./shell.component.scss'],
+  templateUrl: './shell.component.html',
 })
 export class ShellComponent implements OnInit, OnDestroy {
   readonly ctx = inject(DeckContextService);
@@ -336,6 +115,15 @@ export class ShellComponent implements OnInit, OnDestroy {
   selectTab(tab: DeckTab): void {
     this.ctx.setTab(tab);
     this.closeSidebarIfMobile();
+  }
+
+  appNavActive(item: AppNavItem): boolean {
+    const view = this.ctx.appView();
+    if (item.path.startsWith('/live') || item.path === '/')
+      return view === 'live';
+    if (item.path.startsWith('/replay')) return view === 'replay';
+    if (item.path.startsWith('/benchmark')) return view === 'benchmark';
+    return false;
   }
 
   login(): void {

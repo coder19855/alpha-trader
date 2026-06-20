@@ -73,6 +73,9 @@ export interface BenchmarkFilterStats {
   maxTradesBlocked: number;
   cooldownBlocked: number;
   noTradeWindowBlocked?: number;
+  avoidFirst5MinBlocked?: number;
+  avoidTightRangeBlocked?: number;
+  requireRetestBlocked?: number;
   tradesTaken: number;
 }
 
@@ -111,6 +114,7 @@ export interface BenchmarkReport {
     greenDayStop?: boolean;
     dailyLossCapR?: number;
     maxTradesPerDay?: number;
+    requireRetest?: boolean;
     windowStartDate?: string;
     windowEndDate?: string;
   };

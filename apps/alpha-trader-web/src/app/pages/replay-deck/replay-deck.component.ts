@@ -2,7 +2,11 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { ChartOverlayLine, DeckReplayPayload } from '../../core/models/deck.models';
+import { LoaderComponent } from '../../shared/loader/loader.component';
+import {
+  ChartOverlayLine,
+  DeckReplayPayload,
+} from '../../core/models/deck.models';
 import { DeckContextService } from '../../core/services/deck-context.service';
 import { DeckApiService } from '../../core/services/deck-api.service';
 import { NotificationService } from '../../core/services/notification.service';
@@ -17,6 +21,8 @@ import { VetoStripComponent } from '../../shared/veto-strip/veto-strip.component
 import { StrategyPanelComponent } from '../../shared/strategy-panel/strategy-panel.component';
 import { PositionsListComponent } from '../../shared/positions-list/positions-list.component';
 import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/signal-readout-help.component';
+import { ComponentsHelpComponent } from '../../shared/components-help/components-help.component';
+import { PositionSizingComponent } from '../../shared/position-sizing/position-sizing.component';
 
 @Component({
   selector: 'app-replay-deck',
@@ -25,6 +31,7 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
     CommonModule,
     FormsModule,
     MatProgressSpinnerModule,
+    LoaderComponent,
     PaGaugeComponent,
     BipolarListComponent,
     PaDrilldownComponent,
@@ -36,6 +43,8 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
     StrategyPanelComponent,
     PositionsListComponent,
     SignalReadoutHelpComponent,
+    ComponentsHelpComponent,
+    PositionSizingComponent,
   ],
   template: `
     <section class="deck-page">
@@ -54,40 +63,40 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
       </div>
 
       @if (loading()) {
-        <div class="loading-overlay" aria-live="polite">
-          <mat-spinner diameter="36" />
-          <span class="loading-text">Loading replay…</span>
-        </div>
+        <app-loader message="Loading replay…" sub="Preparing session data…" />
       }
 
       @if (payload(); as data) {
         @if (data.vetoTimeline?.length || data.replayPoints.length) {
           <div class="session-rail has-replay-scrub">
-            @if (data.vetoTimeline?.length) {
-              <app-veto-strip [timeline]="data.vetoTimeline ?? []" />
-            }
             @if (data.replayPoints.length) {
-            <div class="replay-dock">
-              <div class="replay-meta">
-                <span>{{ scrubIndex() + 1 }} / {{ data.replayPoints.length }}</span>
-                @if (scrubbed()?.t) {
-                  <span>{{ formatScrubTime(scrubbed()!.t) }}</span>
-                }
+              <div class="replay-dock">
+                <div class="replay-meta">
+                  <span
+                    >{{ scrubIndex() + 1 }} /
+                    {{ data.replayPoints.length }}</span
+                  >
+                  @if (scrubbed()?.t) {
+                    <span>{{ formatScrubTime(scrubbed()!.t) }}</span>
+                  }
+                </div>
+                <input
+                  type="range"
+                  class="replay-slider"
+                  min="0"
+                  [max]="Math.max(0, data.replayPoints.length - 1)"
+                  [ngModel]="scrubIndex()"
+                  (ngModelChange)="scrubIndex.set($event)"
+                />
               </div>
-              <input
-                type="range"
-                class="replay-slider"
-                min="0"
-                [max]="Math.max(0, data.replayPoints.length - 1)"
-                [ngModel]="scrubIndex()"
-                (ngModelChange)="scrubIndex.set($event)"
-              />
-            </div>
             }
           </div>
         }
 
-        <section class="tab-panel" [class.active]="ctx.activeTab() === 'signal'">
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'signal'"
+        >
           <app-signal-readout-help />
           <section class="action-card">
             <div class="action-main">
@@ -95,7 +104,9 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
               <div class="entry-conviction">
                 <span class="entry-conviction-label">Conviction</span>
                 <span class="entry-conviction-value">
-                  <span class="conviction">{{ scrubbed()?.conviction ?? 0 }}%</span>
+                  <span class="conviction"
+                    >{{ scrubbed()?.conviction ?? 0 }}%</span
+                  >
                 </span>
               </div>
             </div>
@@ -109,16 +120,28 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
           </section>
           <app-pa-gauge
             [reading]="data.gauges.priceAction"
-            [paPercent]="scrubbed()?.paPercent ?? data.gauges.priceAction.percent"
-            [combinedPercent]="scrubbed()?.paPercent ?? data.lanes?.combinedPercent ?? data.gauges.priceAction.percent"
+            [paPercent]="
+              scrubbed()?.paPercent ?? data.gauges.priceAction.percent
+            "
+            [combinedPercent]="
+              scrubbed()?.paPercent ??
+              data.lanes?.combinedPercent ??
+              data.gauges.priceAction.percent
+            "
             [hideCombinedLane]="true"
-            [weightedBaseConviction]="scrubbed()?.conviction ?? data.entryThreshold"
+            [weightedBaseConviction]="
+              scrubbed()?.conviction ?? data.entryThreshold
+            "
             [entryConviction]="scrubbed()?.conviction ?? 0"
           />
         </section>
 
-        <section class="tab-panel" [class.active]="ctx.activeTab() === 'components'">
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'components'"
+        >
           <section class="component-panel">
+            <app-components-help />
             <div class="panel-head">
               <span>Price action components</span>
               <button
@@ -131,8 +154,8 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
               </button>
             </div>
             <p class="component-scale-hint">
-              Bipolar scale: <strong>−1</strong> bearish · <strong>0</strong> flat ·
-              <strong>+1</strong> bullish.
+              Bipolar scale: <strong>−1</strong> bearish ·
+              <strong>0</strong> flat · <strong>+1</strong> bullish.
             </p>
             <div class="component-list">
               <app-bipolar-list
@@ -149,14 +172,22 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
         </section>
 
         <section class="tab-panel" [class.active]="ctx.activeTab() === 'veto'">
-          <section class="veto-tab-panel" [class.has-block]="hasVetoBlock(data)">
+          <section
+            class="veto-tab-panel"
+            [class.has-block]="hasVetoBlock(data)"
+          >
+            @if (data.vetoTimeline?.length) {
+              <app-veto-strip [timeline]="data.vetoTimeline ?? []" />
+            }
             <section class="veto-breakup-block">
               <div class="panel-head">
                 <span>Veto breakup</span>
                 <span class="panel-note">{{ vetoSummary(data) }}</span>
               </div>
               @if (scrubbed()?.vetoReason) {
-                <p class="veto-breakup-note" role="status">{{ scrubbed()!.vetoReason }}</p>
+                <p class="veto-breakup-note" role="status">
+                  {{ scrubbed()!.vetoReason }}
+                </p>
               }
               <div class="veto-breakup-list">
                 <app-veto-breakup [items]="data.vetoBreakup" />
@@ -165,11 +196,27 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
           </section>
         </section>
 
-        <section class="tab-panel" [class.active]="ctx.activeTab() === 'strategy'">
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'strategy'"
+        >
           <app-strategy-panel [strategy]="scrubbedStrategy(data)" />
         </section>
 
-        <section class="tab-panel" [class.active]="ctx.activeTab() === 'charts'">
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'sizing'"
+        >
+          <app-position-sizing
+            [symbol]="data.symbol"
+            [lotSize]="data.lotSize"
+          />
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'charts'"
+        >
           <app-deck-charts
             [tabActive]="ctx.activeTab() === 'charts'"
             [spotCandles]="data.spotCandles"
@@ -177,29 +224,45 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
             [spotCandles15m]="data.spotCandles15m ?? []"
             [spotCandles1h]="data.spotCandles1h ?? []"
             [spotSeries]="data.spotSeries"
-            [patternInsights]="scrubbed()?.patternInsights ?? data.patternInsights"
+            [patternInsights]="
+              scrubbed()?.patternInsights ?? data.patternInsights
+            "
             [chartPatternNeckline]="scrubbed()?.chartPatternNeckline"
             [chartOverlays]="chartOverlays(scrubbed(), data)"
             [scrubTime]="scrubbed()?.t ?? null"
           />
         </section>
 
-        <section class="tab-panel" [class.active]="ctx.activeTab() === 'events'">
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'events'"
+        >
           <app-event-list [events]="data.events.slice(-20).reverse()" />
         </section>
 
-        <section class="tab-panel" [class.active]="ctx.activeTab() === 'positions'">
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'positions'"
+        >
           <app-positions-list
             [entries]="[]"
-            [note]="'Open positions hidden in replay (historical session view).'"
+            [note]="
+              'Open positions hidden in replay (historical session view).'
+            "
           />
         </section>
 
-        <section class="tab-panel" [class.active]="ctx.activeTab() === 'settings'">
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'settings'"
+        >
           <section class="settings-panel">
-            <p class="settings-preview-tag">Replay preview — settings are read-only.</p>
+            <p class="settings-preview-tag">
+              Replay preview — settings are read-only.
+            </p>
             <p class="muted settings-mode-note">
-              Trading style: {{ data.tradingStyle }} · Session {{ data.sessionDate }}
+              Trading style: {{ data.tradingStyle }} · Session
+              {{ data.sessionDate }}
             </p>
           </section>
         </section>
@@ -222,7 +285,9 @@ export class ReplayDeckComponent implements OnInit {
   readonly ctx = inject(DeckContextService);
   protected readonly Math = Math;
 
-  sessionDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  sessionDate = new Date().toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Kolkata',
+  });
   readonly scrubIndex = signal(0);
   readonly payload = signal<DeckReplayPayload | null>(null);
   readonly loading = signal(false);
@@ -288,7 +353,9 @@ export class ReplayDeckComponent implements OnInit {
     const overlays: ChartOverlayLine[] = [];
     if (section) {
       for (const row of section.rows) {
-        const value = Number.parseFloat(String(row.value).replace(/[^\d.-]/g, ''));
+        const value = Number.parseFloat(
+          String(row.value).replace(/[^\d.-]/g, ''),
+        );
         if (!Number.isFinite(value)) continue;
         if (row.label.toLowerCase().includes('support')) {
           overlays.push({
@@ -334,25 +401,29 @@ export class ReplayDeckComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.deckApi.getReplay(this.ctx.symbol(), this.ctx.style(), this.sessionDate).subscribe({
-      next: (data) => {
-        this.payload.set(data);
-        this.scrubIndex.set(Math.max(0, data.replayPoints.length - 1));
-        this.ctx.updateTracker({
-          symbol: data.symbol,
-          symbolLabel: data.symbolLabel,
-          price: data.replayPoints.at(-1)?.spot ?? null,
-          style: data.tradingStyle,
-          connected: true,
-          live: false,
-          asOf: new Date().toISOString(),
-        });
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.notify.error(err?.error?.error || err.message || 'Replay failed');
-        this.loading.set(false);
-      },
-    });
+    this.deckApi
+      .getReplay(this.ctx.symbol(), this.ctx.style(), this.sessionDate)
+      .subscribe({
+        next: (data) => {
+          this.payload.set(data);
+          this.scrubIndex.set(Math.max(0, data.replayPoints.length - 1));
+          this.ctx.updateTracker({
+            symbol: data.symbol,
+            symbolLabel: data.symbolLabel,
+            price: data.replayPoints.at(-1)?.spot ?? null,
+            style: data.tradingStyle,
+            connected: true,
+            live: false,
+            asOf: new Date().toISOString(),
+          });
+          this.loading.set(false);
+        },
+        error: (err) => {
+          this.notify.error(
+            err?.error?.error || err.message || 'Replay failed',
+          );
+          this.loading.set(false);
+        },
+      });
   }
 }

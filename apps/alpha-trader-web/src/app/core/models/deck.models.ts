@@ -134,6 +134,7 @@ export interface DeckLiveTick {
   signalCalculatedAt?: string;
   symbol?: string;
   symbolLabel?: string;
+  lotSize?: number | null;
   tradingStyle?: string;
   action: string;
   bias?: string;
@@ -230,6 +231,7 @@ export interface DeckReplayPayload {
   mode: 'replay';
   symbol: string;
   symbolLabel: string;
+  lotSize?: number | null;
   tradingStyle: string;
   sessionDate: string;
   entryThreshold: number;
