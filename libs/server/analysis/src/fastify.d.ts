@@ -39,6 +39,17 @@ declare module 'fastify' {
       computeRecentCandleMomentum: (candles: any[], lookback?: number) => number;
     };
     technicalAnalysisPlugin: Record<string, (...args: any[]) => any>;
+    utilsPlugin: Record<string, (...args: any[]) => any>;
+    supportResistancePlugin: {
+      getSupportResistance: (
+        chain: any[],
+      ) => {
+        overallSupport: number | null;
+        overallResistance: number | null;
+        intradaySupport: number | null;
+        intradayResistance: number | null;
+      };
+    };
     decisionEngine: {
       computeTradeDecision: (
         priceData: PriceActionResponse,

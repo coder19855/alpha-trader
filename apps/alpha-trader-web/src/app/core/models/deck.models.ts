@@ -267,6 +267,7 @@ export interface WebSession {
 export interface SettingsSnapshot {
   vetoMode: string;
   tradingStyle: string;
+  optionChainPollMs?: number;
   flowMode: string;
   canPersist: boolean;
   groups: Array<{

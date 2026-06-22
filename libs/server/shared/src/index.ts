@@ -9,6 +9,7 @@ export * from './lib/constants/momentum-decay.js';
 export * from './lib/constants/chase-decay.js';
 export * from './lib/constants/benchmark.js';
 export * from './lib/constants/position-sizing.js';
+export * from './lib/constants/option-chain.js';
 export * from './lib/constants/trade-rr.js';
 export * from './lib/constants/session.js';
 export * from './lib/constants/telegram-notifications.js';

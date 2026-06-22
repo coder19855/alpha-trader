@@ -1,8 +1,12 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnInit, inject, signal, computed, effect } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, inject, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { DeckApiService } from '../../core/services/deck-api.service';
 import { DeckContextService } from '../../core/services/deck-context.service';
+import { OptionChainApiService } from '../../core/services/option-chain-api.service';
+import { TradingStyle } from '../../core/models/deck.models';
+import { OptionMoneyness } from '../../core/models/option-chain.models';
 
 interface RiskRow {
   level: string;
@@ -88,6 +92,29 @@ interface RiskRow {
         </div>
 
         <div class="sizing-field">
+          <label>Strike moneyness (optional)</label>
+          <select
+            class="sizing-input"
+            [ngModel]="moneyness()"
+            (ngModelChange)="onMoneynessChange($event)"
+          >
+            <option value="">None — manual risk</option>
+            <option value="ATM">ATM</option>
+            <option value="OTM">OTM</option>
+            <option value="ITM">ITM</option>
+          </select>
+          <small class="hint">
+            Fetches option chain only when selected. Uses live premium for R:R.
+          </small>
+          @if (moneynessLoading()) {
+            <small class="hint">Fetching chain…</small>
+          }
+          @if (moneynessError()) {
+            <small class="err">{{ moneynessError() }}</small>
+          }
+        </div>
+
+        <div class="sizing-field">
           <label>Est. Risk per Lot (₹)</label>
           <input
             type="number"
@@ -96,7 +123,14 @@ interface RiskRow {
             (ngModelChange)="updateEstRisk($event)"
             step="50"
           />
-          <small class="hint">Premium risk or margin per lot (editable).</small>
+          <small class="hint">
+            @if (chainPremium()) {
+              Premium ₹{{ chainPremium() | number:'1.0-0' }} × lot
+              {{ effectiveLotSize() }} → est. risk.
+            } @else {
+              Premium risk or margin per lot (editable).
+            }
+          </small>
         </div>
 
         <div class="sizing-field">
@@ -172,19 +206,28 @@ interface RiskRow {
     .table-wrap { margin-top: 8px; }
   `]
 })
-export class PositionSizingComponent implements OnInit {
+export class PositionSizingComponent implements OnInit, OnDestroy {
   private readonly api = inject(DeckApiService);
+  private readonly optionApi = inject(OptionChainApiService);
   readonly ctx = inject(DeckContextService);
 
   @Input() symbol: string | null | undefined = null;
   @Input() lotSize: number | null | undefined = null;
+  @Input() paAction: string | null | undefined = null;
+  @Input() tradingStyle: TradingStyle | null | undefined = null;
 
   readonly capital = signal(500000);
   readonly riskPct = signal(1);
   readonly estRiskPerLot = signal(1200);
+  readonly moneyness = signal<OptionMoneyness>('');
+  readonly moneynessLoading = signal(false);
+  readonly moneynessError = signal<string | null>(null);
+  readonly chainPremium = signal<number | null>(null);
   readonly fundsLoading = signal(false);
   readonly fundsError = signal<string | null>(null);
   readonly fundsTitle = signal<string>('');
+
+  private moneynessSub: Subscription | null = null;
 
   readonly effectiveLotSize = computed(() => {
     if (this.lotSize != null) return this.lotSize;
@@ -228,15 +271,54 @@ export class PositionSizingComponent implements OnInit {
     return rows;
   });
 
-  constructor() {
-    // Try to load a reasonable default capital
-    effect(() => {
-      // noop, defaults ok
-    });
+  ngOnInit(): void {
+    // defaults only — funds fetched on demand
   }
 
-  ngOnInit(): void {
-    // Optionally auto fetch? disabled to respect session
+  ngOnDestroy(): void {
+    this.moneynessSub?.unsubscribe();
+  }
+
+  onMoneynessChange(value: OptionMoneyness): void {
+    this.moneyness.set(value ?? '');
+    this.moneynessSub?.unsubscribe();
+    this.moneynessError.set(null);
+    this.chainPremium.set(null);
+
+    if (!value) return;
+
+    const sym = this.symbol || this.ctx.symbol();
+    const style = (this.tradingStyle || this.ctx.style()) as TradingStyle;
+    this.moneynessLoading.set(true);
+    this.moneynessSub = this.optionApi
+      .fetch({
+        symbol: sym,
+        style,
+        moneyness: value,
+        paAction: this.paAction ?? undefined,
+        refresh: true,
+      })
+      .subscribe({
+        next: (res) => {
+          this.moneynessLoading.set(false);
+          if (res.estRiskPerLot != null && res.estRiskPerLot > 0) {
+            this.estRiskPerLot.set(res.estRiskPerLot);
+          }
+          if (res.optionPremium != null) {
+            this.chainPremium.set(res.optionPremium);
+          }
+        },
+        error: (err) => {
+          this.moneynessLoading.set(false);
+          const body = err?.error;
+          const msg =
+            (typeof body === 'object' && body?.error) ||
+            (typeof body === 'string' ? body : null) ||
+            err?.message ||
+            'Option chain fetch failed';
+          this.moneynessError.set(msg);
+        },
+      });
   }
 
   shortSymbol(s?: string | null): string {

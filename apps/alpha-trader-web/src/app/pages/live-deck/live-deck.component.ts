@@ -3,11 +3,13 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  computed,
   effect,
   inject,
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { LoaderComponent } from '../../shared/loader/loader.component';
 import { Subscription } from 'rxjs';
@@ -36,8 +38,14 @@ import { StrategyPanelComponent } from '../../shared/strategy-panel/strategy-pan
 import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/signal-readout-help.component';
 import { ComponentsHelpComponent } from '../../shared/components-help/components-help.component';
 import { PositionSizingComponent } from '../../shared/position-sizing/position-sizing.component';
+import { OptionChainSignalPanelComponent } from '../../shared/option-chain-signal-panel/option-chain-signal-panel.component';
+import { OptionChainPollService } from '../../core/services/option-chain-poll.service';
+import { toOptionComponentGauges } from '../../core/models/option-chain.models';
 import { patchMultiTfSpotCandles } from '../../core/utils/live-candle-patch';
 import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timestamp';
+
+type SignalSubTab = 'priceAction' | 'optionChain';
+type ComponentsSubTab = 'priceAction' | 'optionChain';
 
 @Component({
   selector: 'app-live-deck',
@@ -45,6 +53,7 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
   imports: [
     CommonModule,
     FormsModule,
+    MatIconModule,
     MatProgressSpinnerModule,
     LoaderComponent,
     PaGaugeComponent,
@@ -61,6 +70,7 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
     SignalReadoutHelpComponent,
     ComponentsHelpComponent,
     PositionSizingComponent,
+    OptionChainSignalPanelComponent,
   ],
   template: `
     <section class="deck-page">
@@ -82,6 +92,44 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
           class="tab-panel"
           [class.active]="ctx.activeTab() === 'signal'"
         >
+          <nav class="signal-subtabs" aria-label="Signal views">
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="signalSubTab() === 'priceAction'"
+              (click)="signalSubTab.set('priceAction')"
+            >
+              Price action
+            </button>
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="signalSubTab() === 'optionChain'"
+              (click)="signalSubTab.set('optionChain')"
+            >
+              Option chain
+            </button>
+            @if (signalSubTab() === 'optionChain') {
+              <span class="signal-subtab-spacer"></span>
+              <span class="oc-poll-hint">{{ optionPollLabel() }}</span>
+              <button
+                type="button"
+                class="signal-refresh-btn"
+                [disabled]="optionPoll.loading()"
+                [attr.aria-label]="
+                  optionPoll.loading()
+                    ? 'Refreshing option chain'
+                    : 'Refresh option chain'
+                "
+                [title]="optionPoll.loading() ? 'Refreshing…' : 'Refresh now'"
+                (click)="optionPoll.refresh(true)"
+              >
+                <mat-icon [class.spinning]="optionPoll.loading()">refresh</mat-icon>
+              </button>
+            }
+          </nav>
+
+          @if (signalSubTab() === 'priceAction') {
           <app-signal-readout-help />
           @if (data.chartVetoed) {
             <p class="veto-score-notice" role="status">
@@ -137,6 +185,9 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
             [entryConviction]="data.conviction"
             [convictionBonuses]="data.convictionBonuses ?? []"
           />
+          } @else {
+            <app-option-chain-signal-panel />
+          }
         </section>
 
         <section
@@ -145,30 +196,86 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
         >
           <section class="component-panel">
             <app-components-help />
-            <div class="panel-head">
-              <span>Price action components</span>
+            <nav class="signal-subtabs" aria-label="Component views">
               <button
                 type="button"
-                class="drilldown-toggle"
-                [attr.aria-expanded]="drilldownOpen()"
-                (click)="drilldownOpen.set(!drilldownOpen())"
+                class="signal-subtab"
+                [class.active]="componentsSubTab() === 'priceAction'"
+                (click)="componentsSubTab.set('priceAction')"
               >
-                Breakdown
+                Price action
               </button>
-            </div>
-            <p class="component-scale-hint">
-              Bipolar scale: <strong>−1</strong> bearish ·
-              <strong>0</strong> flat · <strong>+1</strong> bullish.
-            </p>
-            <div class="component-list">
-              <app-bipolar-list
-                [components]="data.priceActionComponents ?? []"
-                variant="priceAction"
-              />
-            </div>
-            @if (drilldownOpen()) {
-              <div class="pa-drilldown">
-                <app-pa-drilldown [drilldown]="data.paDrilldown" />
+              <button
+                type="button"
+                class="signal-subtab"
+                [class.active]="componentsSubTab() === 'optionChain'"
+                (click)="componentsSubTab.set('optionChain')"
+              >
+                Option chain
+              </button>
+            </nav>
+            @if (componentsSubTab() === 'priceAction') {
+              <div class="panel-head">
+                <span>Price action components</span>
+                <button
+                  type="button"
+                  class="drilldown-toggle"
+                  [attr.aria-expanded]="drilldownOpen()"
+                  (click)="drilldownOpen.set(!drilldownOpen())"
+                >
+                  Breakdown
+                </button>
+              </div>
+              <p class="component-scale-hint">
+                Bipolar scale: <strong>−1</strong> bearish ·
+                <strong>0</strong> flat · <strong>+1</strong> bullish.
+              </p>
+              <div class="component-list">
+                <app-bipolar-list
+                  [components]="data.priceActionComponents ?? []"
+                  variant="priceAction"
+                />
+              </div>
+              @if (drilldownOpen()) {
+                <div class="pa-drilldown">
+                  <app-pa-drilldown [drilldown]="data.paDrilldown" />
+                </div>
+              }
+            } @else {
+              <div class="panel-head">
+                <span>Option chain components</span>
+                <button
+                  type="button"
+                  class="signal-refresh-btn panel-refresh-btn"
+                  [disabled]="optionPoll.loading()"
+                  [attr.aria-label]="
+                    optionPoll.loading()
+                      ? 'Refreshing option chain'
+                      : 'Refresh option chain'
+                  "
+                  [title]="optionPoll.loading() ? 'Refreshing…' : 'Refresh now'"
+                  (click)="optionPoll.refresh(true)"
+                >
+                  <mat-icon [class.spinning]="optionPoll.loading()">refresh</mat-icon>
+                </button>
+              </div>
+              @if (optionPoll.data(); as oc) {
+                <p class="signal-calc-stamp" role="status">
+                  Last updated:
+                  <time [attr.datetime]="oc.fetchedAt">
+                    {{ formatSignalCalculatedAt(oc.fetchedAt) }}
+                  </time>
+                </p>
+              }
+              <p class="component-scale-hint">
+                Bipolar scale: <strong>−1</strong> bearish ·
+                <strong>0</strong> flat · <strong>+1</strong> bullish.
+              </p>
+              <div class="component-list">
+                <app-bipolar-list
+                  [components]="optionComponents()"
+                  variant="option"
+                />
               </div>
             }
           </section>
@@ -214,7 +321,12 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
           class="tab-panel"
           [class.active]="ctx.activeTab() === 'sizing'"
         >
-          <app-position-sizing [symbol]="data.symbol" [lotSize]="data.lotSize" />
+          <app-position-sizing
+            [symbol]="data.symbol"
+            [lotSize]="data.lotSize"
+            [paAction]="data.action"
+            [tradingStyle]="ctx.style()"
+          />
         </section>
 
         <section
@@ -354,11 +466,76 @@ import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timesta
         font-weight: 600;
         cursor: pointer;
       }
+      .signal-subtabs {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .signal-subtab-spacer {
+        flex: 1;
+      }
+      .oc-poll-hint {
+        font-size: 0.68rem;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .signal-refresh-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: 1px solid rgba(167, 139, 250, 0.4);
+        background: rgba(167, 139, 250, 0.12);
+        color: #c4b5fd;
+        border-radius: 8px;
+        cursor: pointer;
+        padding: 0;
+        flex-shrink: 0;
+      }
+      .signal-refresh-btn mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+      }
+      .signal-refresh-btn:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .signal-refresh-btn mat-icon.spinning {
+        animation: signal-refresh-spin 0.8s linear infinite;
+      }
+      @keyframes signal-refresh-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .panel-refresh-btn {
+        text-transform: none;
+        letter-spacing: 0;
+      }
+      .signal-subtab {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .signal-subtab.active {
+        color: var(--option);
+        border-color: rgba(34, 211, 238, 0.4);
+        background: rgba(34, 211, 238, 0.1);
+      }
     `,
   ],
 })
 export class LiveDeckComponent implements OnInit, OnDestroy {
   readonly ctx = inject(DeckContextService);
+  readonly optionPoll = inject(OptionChainPollService);
   private readonly deckApi = inject(DeckApiService);
   private readonly stream = inject(DeckStreamService);
   private readonly notify = inject(NotificationService);
@@ -370,13 +547,46 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   readonly settings = signal<SettingsSnapshot | null>(null);
   readonly error = signal<string | null>(null);
   readonly drilldownOpen = signal(true);
+  readonly signalSubTab = signal<SignalSubTab>('priceAction');
+  readonly componentsSubTab = signal<ComponentsSubTab>('priceAction');
   protected readonly formatSignalCalculatedAt = formatSignalCalculatedAt;
+
+  readonly optionComponents = computed(() => {
+    const rows = this.optionPoll.data()?.componentRows ?? [];
+    return toOptionComponentGauges(rows);
+  });
 
   constructor() {
     effect(() => {
       const symbol = this.ctx.symbol();
       const style = this.ctx.style();
       this.reload(symbol, style);
+    });
+
+    effect(() => {
+      const tab = this.ctx.activeTab();
+      const signalTab = this.signalSubTab();
+      const compTab = this.componentsSubTab();
+      const symbol = this.ctx.symbol();
+      const style = this.ctx.style();
+      const pollMs = this.settings()?.optionChainPollMs ?? 300_000;
+      const paAction = this.tick()?.action;
+      const needsOption =
+        tab === 'signal' && signalTab === 'optionChain'
+          ? true
+          : tab === 'components' && compTab === 'optionChain';
+
+      if (needsOption) {
+        this.optionPoll.configure({
+          symbol,
+          style,
+          pollMs,
+          paAction,
+          enabled: true,
+        });
+      } else {
+        this.optionPoll.stop();
+      }
     });
   }
 
@@ -390,6 +600,14 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
+    this.optionPoll.stop();
+  }
+
+  optionPollLabel(): string {
+    const ms = this.settings()?.optionChainPollMs ?? 300_000;
+    if (ms <= 0) return 'Manual refresh';
+    if (ms < 60_000) return `Auto: ${Math.round(ms / 1000)}s`;
+    return `Auto: ${Math.round(ms / 60_000)} min`;
   }
 
   retry(): void {
@@ -428,6 +646,9 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   settingValue(s: SettingsSnapshot, field: string): string {
     if (field === 'tradingStyle') return s.tradingStyle;
     if (field === 'vetoMode') return s.vetoMode;
+    if (field === 'optionChainPollMs') {
+      return String(s.optionChainPollMs ?? 300_000);
+    }
     if (field === 'flowMode') return s.flowMode;
     return '';
   }

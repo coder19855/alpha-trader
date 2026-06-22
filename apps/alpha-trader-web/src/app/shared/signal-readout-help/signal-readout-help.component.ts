@@ -12,7 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
         <mat-expansion-panel-header class="signal-readout-header">
           <mat-panel-title class="signal-readout-title">
             <mat-icon aria-hidden="true">info_outline</mat-icon>
-            <span>How to read</span>
+            <span>How to read — price action</span>
           </mat-panel-title>
         </mat-expansion-panel-header>
 

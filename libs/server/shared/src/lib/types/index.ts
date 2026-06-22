@@ -10,4 +10,5 @@ export * from './adaptive-conviction.js';
 export * from './alert-intelligence.js';
 export * from './exact-strike-recommendation.js';
 export * from './greeks-strike-insight.js';
+export * from './option-chain-signal.js';
 export * from './notifications.js';

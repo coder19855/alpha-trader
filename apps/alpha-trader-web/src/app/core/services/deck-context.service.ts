@@ -38,7 +38,7 @@ export interface DeckTabDef {
 }
 
 export const LIVE_TABS: DeckTabDef[] = [
-  { id: 'signal', label: 'Signal', icon: 'insights' },
+  { id: 'signal', label: 'Signals', icon: 'insights' },
   { id: 'veto', label: 'Veto', icon: 'block' },
   { id: 'strategy', label: 'Strategy', icon: 'psychology' },
   { id: 'sizing', label: 'Sizing', icon: 'calculate' },
@@ -49,7 +49,7 @@ export const LIVE_TABS: DeckTabDef[] = [
 ];
 
 export const REPLAY_TABS: DeckTabDef[] = [
-  { id: 'signal', label: 'Signal', icon: 'insights' },
+  { id: 'signal', label: 'Signals', icon: 'insights' },
   { id: 'veto', label: 'Veto', icon: 'block' },
   { id: 'strategy', label: 'Strategy', icon: 'psychology' },
   { id: 'sizing', label: 'Sizing', icon: 'calculate' },

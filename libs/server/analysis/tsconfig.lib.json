@@ -28,6 +28,5 @@
     "jest.config.cts",
     "src/**/*.spec.ts",
     "src/**/*.test.ts",
-    "src/lib/plugins/support-resistance.ts"
   ]
 }
