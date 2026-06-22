@@ -17,8 +17,21 @@ export {
   normalizeAutoEntryPreference,
   loadAutoEntryPreference,
   saveAutoEntryPreference,
+  describeAutoEntryPreference,
   type AutoEntryPreferenceState,
+  type AutoEntrySignalMode,
 } from './lib/auto-entry-preference.js';
+export {
+  loadAutoEntrySession,
+  canAutoEntryToday,
+  recordAutoEntryPlaced,
+  recordAutoEntryDryRun,
+  recordAutoEntryTradeClosed,
+  noteAutoEntryPositionR,
+  consumeAutoEntryCloseR,
+  trackAutoEntryPositionPresence,
+  type AutoEntrySessionState,
+} from './lib/auto-entry-session.js';
 export {
   listTradeJournal,
   recordJournalOpen,

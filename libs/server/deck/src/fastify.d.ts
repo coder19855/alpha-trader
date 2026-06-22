@@ -27,6 +27,16 @@ declare module 'fastify' {
       getStats: () => Record<string, unknown>;
       syncSession: () => Promise<void>;
     };
+    momentumDecayPlugin: {
+      computeMomentumDecay: (...args: unknown[]) => unknown;
+      applyMomentumDecay: (...args: unknown[]) => unknown;
+      countDirectionalStructure: (...args: unknown[]) => unknown;
+      computeRecentCandleMomentum: (
+        candles: unknown[],
+        lookback?: number,
+      ) => number;
+    };
+    technicalAnalysisPlugin: Record<string, (...args: unknown[]) => unknown>;
   }
 }
 

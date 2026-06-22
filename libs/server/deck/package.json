@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@alpha-trader/server-analysis": "*",
+    "@alpha-trader/server-benchmark": "*",
     "@alpha-trader/server-market-data": "*",
     "@alpha-trader/server-position": "*",
     "@alpha-trader/server-preferences": "*",

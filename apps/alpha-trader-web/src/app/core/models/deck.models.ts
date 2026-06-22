@@ -199,6 +199,25 @@ export interface DeckLiveTick {
       exitPolicy?: string;
       positionPolicy?: string;
     };
+    autoEntry?: {
+      enabled: boolean;
+      dryRun?: boolean;
+      armedLive?: boolean;
+      status: string;
+      message: string;
+      dryRunsToday?: number;
+      signalMode?: string;
+      signalProfile?: string;
+      entryThreshold?: number;
+      lots?: number;
+      entriesToday?: number;
+      maxEntriesPerDay?: number;
+      greenDayLocked?: boolean;
+      confirmationCount?: number;
+      confirmationsRequired?: number;
+      pendingAction?: string | null;
+      lastExecutedAt?: string | null;
+    };
   };
   patternInsights?: Array<{
     timeframe: string;
@@ -292,14 +311,42 @@ export interface AutoExitSnapshot {
   positionPolicies: Array<{ id: string; label: string; hint: string }>;
 }
 
+export type AutoEntrySignalMode = 'engine' | 'single';
+
 export interface AutoEntrySnapshot {
   enabled: boolean;
+  dryRun: boolean;
+  armedLive: boolean;
+  armedLiveSessionDate?: string | null;
+  signalMode: AutoEntrySignalMode;
   signalProfile: string;
+  entryThreshold: number;
+  lots: number;
+  maxEntriesPerDay: number;
+  greenDayStop: boolean;
   signalPresetGroups: Array<{
     id: string;
     label: string;
     presets: Array<{ id: string; label: string; gates: string[] }>;
   }>;
+  session?: {
+    entriesToday: number;
+    dryRunsToday?: number;
+    maxEntriesPerDay: number;
+    greenDayLocked: boolean;
+    canEnter: boolean;
+    blockReason: string | null;
+  };
+  hints?: string[];
+  limits?: {
+    minLots: number;
+    maxLots: number;
+    minEntriesPerDay: number;
+    maxEntriesPerDay: number;
+    minEntryThreshold: number;
+    maxEntryThreshold: number;
+    greenDayMinR: number;
+  };
   warning?: string;
 }
 

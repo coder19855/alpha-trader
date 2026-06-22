@@ -14,11 +14,15 @@ import {
   buildAutoExitPolicyOptions,
   buildAutoExitPositionOptions,
   buildSettingsSnapshot,
+  canAutoEntryToday,
+  describeAutoEntryPreference,
   listTradeJournal,
+  loadAutoEntrySession,
   type AutoEntryPreferenceState,
   type AutoExitPreferenceState,
   type SettingsPatch,
 } from '@alpha-trader/server-preferences';
+import { BENCHMARK_GREEN_DAY_STOP_MIN_R } from '@alpha-trader/server-shared';
 import { isIndianMarketOpen, normalizeVetoMode } from '@alpha-trader/server-shared';
 
 function writeSse(reply: FastifyReply, payload: unknown): void {
@@ -231,11 +235,31 @@ export default async function deckRoutes(fastify: FastifyInstance) {
   fastify.get('/api/deck/auto-entry', async () => {
     const pref = fastify.preferences.getAutoEntry();
     const groups = buildSignalPresetGroupsResponse();
+    const session = await loadAutoEntrySession(fastify);
+    const gate = canAutoEntryToday(pref, session);
     return {
       ...pref,
       signalPresetGroups: groups,
+      session: {
+        entriesToday: session.entriesToday,
+        dryRunsToday: session.dryRunsToday,
+        maxEntriesPerDay: pref.maxEntriesPerDay,
+        greenDayLocked: session.greenDayLocked,
+        canEnter: gate.allowed,
+        blockReason: gate.reason ?? null,
+      },
+      hints: describeAutoEntryPreference(pref),
+      limits: {
+        minLots: 1,
+        maxLots: 20,
+        minEntriesPerDay: 1,
+        maxEntriesPerDay: 10,
+        minEntryThreshold: 40,
+        maxEntryThreshold: 85,
+        greenDayMinR: BENCHMARK_GREEN_DAY_STOP_MIN_R,
+      },
       warning:
-        'When enabled, the server may place MARKET buy orders on index options when the selected entry signal profile confirms. Review lot size and capital before arming.',
+        'When enabled, the server evaluates entry signals. Dry-run paper-trades without broker orders. Live MARKET buys require dry-run off and a separate live arm (resets each session day).',
     };
   });
 
@@ -246,7 +270,9 @@ export default async function deckRoutes(fastify: FastifyInstance) {
         g.presets.map((p) => p.id),
       ),
     );
+    allowed.delete('engine');
     if (
+      body.signalMode === 'single' &&
       body.signalProfile &&
       !allowed.has(String(body.signalProfile).trim())
     ) {
@@ -254,9 +280,29 @@ export default async function deckRoutes(fastify: FastifyInstance) {
     }
     try {
       const pref = await fastify.preferences.patchAutoEntry(body);
+      const session = await loadAutoEntrySession(fastify);
+      const gate = canAutoEntryToday(pref, session);
       return {
         ...pref,
         signalPresetGroups: buildSignalPresetGroupsResponse(),
+        session: {
+          entriesToday: session.entriesToday,
+          dryRunsToday: session.dryRunsToday,
+          maxEntriesPerDay: pref.maxEntriesPerDay,
+          greenDayLocked: session.greenDayLocked,
+          canEnter: gate.allowed,
+          blockReason: gate.reason ?? null,
+        },
+        hints: describeAutoEntryPreference(pref),
+        limits: {
+          minLots: 1,
+          maxLots: 20,
+          minEntriesPerDay: 1,
+          maxEntriesPerDay: 10,
+          minEntryThreshold: 40,
+          maxEntryThreshold: 85,
+          greenDayMinR: BENCHMARK_GREEN_DAY_STOP_MIN_R,
+        },
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

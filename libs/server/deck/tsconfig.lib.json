@@ -10,11 +10,24 @@
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"],
   "references": [
-    { "path": "../analysis/tsconfig.lib.json" },
-    { "path": "../market-data/tsconfig.lib.json" },
-    { "path": "../position/tsconfig.lib.json" },
-    { "path": "../preferences/tsconfig.lib.json" },
-    { "path": "../shared/tsconfig.lib.json" }
+    {
+      "path": "../shared/tsconfig.lib.json"
+    },
+    {
+      "path": "../preferences/tsconfig.lib.json"
+    },
+    {
+      "path": "../position/tsconfig.lib.json"
+    },
+    {
+      "path": "../market-data/tsconfig.lib.json"
+    },
+    {
+      "path": "../benchmark/tsconfig.lib.json"
+    },
+    {
+      "path": "../analysis/tsconfig.lib.json"
+    }
   ],
   "exclude": [
     "jest.config.ts",

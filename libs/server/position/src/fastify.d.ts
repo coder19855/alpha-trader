@@ -13,6 +13,9 @@ declare module 'fastify' {
       ObjectId: typeof ObjectId;
       db?: Db;
     };
+    fyersMarketStream?: {
+      getIndexLtp: (symbol: string) => number | null;
+    };
   }
 }
 

@@ -383,7 +383,10 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
           class="tab-panel"
           [class.active]="ctx.activeTab() === 'positions'"
         >
-          <app-auto-entry-panel />
+          <app-auto-entry-panel
+            [guardStatus]="data.managementContext?.autoEntry?.status"
+            [guardMessage]="data.managementContext?.autoEntry?.message"
+          />
           <app-auto-exit-panel
             [guardStatus]="data.managementContext?.autoExit?.status"
             [guardMessage]="data.managementContext?.autoExit?.message"

@@ -142,6 +142,27 @@ export interface AutoExitGuardStatus {
   lastExecutedAt: string | null;
 }
 
+export interface AutoEntryGuardStatus {
+  enabled: boolean;
+  dryRun: boolean;
+  armedLive: boolean;
+  signalMode: string;
+  signalProfile: string;
+  entryThreshold: number;
+  lots: number;
+  maxEntriesPerDay: number;
+  greenDayStop: boolean;
+  entriesToday: number;
+  dryRunsToday: number;
+  greenDayLocked: boolean;
+  confirmationCount: number;
+  confirmationsRequired: number;
+  pendingAction: string | null;
+  status: 'off' | 'watching' | 'pending' | 'executed' | 'blocked' | 'simulated';
+  message: string;
+  lastExecutedAt: string | null;
+}
+
 export interface PositionManagementContext {
   hasOpenPosition: boolean;
   heldDirection?: HeldDirection | null;
@@ -151,6 +172,7 @@ export interface PositionManagementContext {
   note?: string;
   health?: PositionHealth;
   autoExit?: AutoExitGuardStatus;
+  autoEntry?: AutoEntryGuardStatus;
 }
 import {
   RrLabel,

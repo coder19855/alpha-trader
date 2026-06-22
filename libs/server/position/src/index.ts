@@ -57,6 +57,23 @@ export {
 } from './lib/auto-exit-runner.js';
 
 export {
+  placeAutoEntryBuy,
+  simulateAutoEntryBuy,
+  resolveAtmOptionLeg,
+  type AutoEntryOrderResult,
+} from './lib/auto-entry-executor.js';
+
+export {
+  autoEntryStateKey,
+  getAutoEntryRuntimeState,
+  setAutoEntryRuntimeState,
+  resetAutoEntryRuntimeState,
+  type AutoEntryRuntimeState,
+} from './lib/auto-entry-state.js';
+
+export type { AutoEntryGuardStatus } from './lib/position-monitor.js';
+
+export {
   autoExitStateKey,
   getAutoExitRuntimeState,
   setAutoExitRuntimeState,

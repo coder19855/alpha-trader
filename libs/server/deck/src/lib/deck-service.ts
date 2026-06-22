@@ -29,6 +29,8 @@ import {
   isIndianMarketOpen,
   isVetoOff,
 } from '@alpha-trader/server-shared';
+import { attachAutoEntryGuard } from './auto-entry-runner.js';
+import { resolveAutoEntryPresetSignal } from './auto-entry-preset.js';
 import { buildDeckGauges, DeckGauges } from './deck-gauge.js';
 import {
   buildDeckEvents,
@@ -450,7 +452,7 @@ async function buildDeckManagementContextFromPositions(
   style: TradingStyle,
   indexSymbol: string,
   positions: OpenPositionMonitorContext[],
-  options?: { executeAutoExit?: boolean },
+  options?: { executeAutoExit?: boolean; executeAutoEntry?: boolean },
 ): Promise<PositionManagementContext> {
   const watched = positions.filter((p) => p.indexSymbol === indexSymbol);
   const ctx = buildOpenPositionContextFromPositions(watched);
@@ -460,7 +462,8 @@ async function buildDeckManagementContextFromPositions(
     isMixedDirections: ctx.isMixedDirections,
     count: ctx.count,
   };
-  const pref = fastify.preferences.getAutoExit();
+  const exitPref = fastify.preferences.getAutoExit();
+  const entryPref = fastify.preferences.getAutoEntry();
   const liveLastPrice = resolveLiveIndexPrice(
     fastify,
     indexSymbol,
@@ -492,8 +495,18 @@ async function buildDeckManagementContextFromPositions(
         indexSymbol,
         decision: decisionSlice,
         managementContext,
-        pref,
+        pref: exitPref,
         execute: false,
+      });
+      await attachAutoEntryGuard({
+        fastify,
+        indexSymbol,
+        decision: decisionSlice,
+        managementContext,
+        pref: entryPref,
+        style,
+        execute: false,
+        resolvePresetSignal: resolveAutoEntryPresetSignal,
       });
       return managementContext;
     }
@@ -525,9 +538,19 @@ async function buildDeckManagementContextFromPositions(
       indexSymbol,
       decision: decisionSlice,
       managementContext,
-      pref,
+      pref: exitPref,
       entrySpot,
       execute: options?.executeAutoExit === true,
+    });
+    await attachAutoEntryGuard({
+      fastify,
+      indexSymbol,
+      decision: decisionSlice,
+      managementContext,
+      pref: entryPref,
+      style,
+      execute: false,
+      resolvePresetSignal: resolveAutoEntryPresetSignal,
     });
     return managementContext;
   }
@@ -541,8 +564,18 @@ async function buildDeckManagementContextFromPositions(
     indexSymbol,
     decision: decisionSlice,
     managementContext: emptyContext,
-    pref,
+    pref: exitPref,
     execute: false,
+  });
+  await attachAutoEntryGuard({
+    fastify,
+    indexSymbol,
+    decision: decisionSlice,
+    managementContext: emptyContext,
+    pref: entryPref,
+    style,
+    execute: options?.executeAutoEntry === true,
+    resolvePresetSignal: resolveAutoEntryPresetSignal,
   });
   return emptyContext;
 }
@@ -552,7 +585,7 @@ async function buildPositionsBundle(
   indexSymbol: string,
   decision: DeckDecision,
   style: TradingStyle,
-  options?: { executeAutoExit?: boolean },
+  options?: { executeAutoExit?: boolean; executeAutoEntry?: boolean },
 ): Promise<{
   openPositions: DeckOpenPositionsPayload;
   managementContext: PositionManagementContext;
@@ -698,7 +731,10 @@ export async function buildDeckLiveStreamTick(
     indexSymbol,
     decision,
     style,
-    { executeAutoExit: isIndianMarketOpen() },
+    {
+      executeAutoExit: isIndianMarketOpen(),
+      executeAutoEntry: isIndianMarketOpen(),
+    },
   );
 
   return buildStreamTickParts(fastify, {
@@ -744,7 +780,10 @@ export async function buildDeckLivePayload(
       indexSymbol,
       decision,
       style,
-      { executeAutoExit: isIndianMarketOpen() },
+      {
+      executeAutoExit: isIndianMarketOpen(),
+      executeAutoEntry: isIndianMarketOpen(),
+    },
     );
     const tick = buildStreamTickParts(fastify, {
       symbol: params.symbol.trim(),
@@ -844,6 +883,51 @@ export async function buildDeckPositionsLtpPatch(
   };
 }
 
+export async function runDeckAutoEntryPoll(
+  fastify: FastifyInstance,
+  params: {
+    symbol: string;
+    tradingStyle?: string;
+    preloadedPositions?: OpenPositionMonitorContext[];
+  },
+): Promise<void> {
+  if (!fastify.preferences.getAutoEntry().enabled) return;
+
+  const style = parseTradingStyle(params.tradingStyle);
+  const indexSymbol = params.symbol.trim();
+  if (
+    (fastify.deckStreamHub?.getSubscriberCount({
+      symbol: indexSymbol,
+      tradingStyle: String(style),
+    }) ?? 0) > 0
+  ) {
+    return;
+  }
+
+  const vetoMode = fastify.preferences.getSettings().vetoMode;
+  const decision = await buildDeckDecision(
+    fastify,
+    indexSymbol,
+    style,
+    vetoMode,
+  );
+  const allIndexSymbols = FYERS_OPTION_INDEX_SYMBOLS.map((row) => row.symbol);
+  const positions =
+    params.preloadedPositions ??
+    (await fetchOpenIndexOptionPositions(fastify, allIndexSymbols));
+  await buildDeckManagementContextFromPositions(
+    fastify,
+    decision,
+    style,
+    indexSymbol,
+    positions,
+    {
+      executeAutoExit: false,
+      executeAutoEntry: isIndianMarketOpen(),
+    },
+  );
+}
+
 export async function runDeckAutoExitPoll(
   fastify: FastifyInstance,
   params: {
@@ -882,7 +966,10 @@ export async function runDeckAutoExitPoll(
     style,
     indexSymbol,
     positions,
-    { executeAutoExit: isIndianMarketOpen() },
+    {
+      executeAutoExit: isIndianMarketOpen(),
+      executeAutoEntry: isIndianMarketOpen(),
+    },
   );
 }
 
@@ -904,7 +991,10 @@ export async function buildDeckPositionsUpdate(
     indexSymbol,
     decision,
     style,
-    { executeAutoExit: isIndianMarketOpen() },
+    {
+      executeAutoExit: isIndianMarketOpen(),
+      executeAutoEntry: isIndianMarketOpen(),
+    },
   );
   return {
     type: 'positions',

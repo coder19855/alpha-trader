@@ -60,6 +60,12 @@ import { NotificationService } from '../../core/services/notification.service';
         @if (positionPolicyHint()) {
           <p class="auto-exit-policy-hint">{{ positionPolicyHint() }}</p>
         }
+        <p class="auto-exit-policy-hint partial-lot-hint">
+          <strong>1-lot positions:</strong> partial scale-out and position ladders are skipped —
+          the server keeps the full lot until a full exit signal (stop/trail/flip). With
+          <strong>2 lots</strong>, a 50% partial sells 1 lot and leaves 1 runner; 33% ladder tiers
+          also book 1 lot each when triggered.
+        </p>
       }
       <p class="auto-exit-live-status muted">
         {{ liveStatus() }}

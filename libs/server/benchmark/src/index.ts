@@ -24,7 +24,12 @@ export {
   buildBenchmarkExcelBuffer,
 } from './lib/benchmark-export.js';
 export { runBenchmark } from './lib/benchmark-runner.js';
-export { buildSignalPresetGroupsResponse } from './lib/signal-profile.js';
+export {
+  buildSignalPresetGroupsResponse,
+  evaluateSignalProfile,
+  profileNeedsChartPatterns,
+  resolveSignalProfile,
+} from './lib/signal-profile.js';
 export type {
   BenchmarkReport,
   BenchmarkParams,

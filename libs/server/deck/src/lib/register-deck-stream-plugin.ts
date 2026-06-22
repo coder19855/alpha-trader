@@ -9,7 +9,7 @@ import {
   TradingStyle,
 } from '@alpha-trader/server-shared';
 import { DeckStreamHub } from './deck-stream-hub.js';
-import { runDeckAutoExitPoll } from './deck-service.js';
+import { runDeckAutoEntryPoll, runDeckAutoExitPoll } from './deck-service.js';
 
 function parseWatchSymbols(): string[] {
   const raw =
@@ -40,14 +40,16 @@ const deckStreamPlugin = fp(
         process.env.TELEGRAM_POLL_INTERVAL_MS ??
         TELEGRAM_NOTIFICATION_DEFAULTS.POLL_INTERVAL_MS,
     );
-    let autoExitPollInFlight = false;
-    let autoExitPollTimer: NodeJS.Timeout | null = null;
+    let guardPollInFlight = false;
+    let guardPollTimer: NodeJS.Timeout | null = null;
 
-    const runAutoExitPollCycle = async (): Promise<void> => {
-      if (autoExitPollInFlight || !isIndianMarketOpen()) return;
-      if (!fastify.preferences.getAutoExit().enabled) return;
+    const runGuardPollCycle = async (): Promise<void> => {
+      if (guardPollInFlight || !isIndianMarketOpen()) return;
+      const autoExitOn = fastify.preferences.getAutoExit().enabled;
+      const autoEntryOn = fastify.preferences.getAutoEntry().enabled;
+      if (!autoExitOn && !autoEntryOn) return;
 
-      autoExitPollInFlight = true;
+      guardPollInFlight = true;
       try {
         const tokenOk = await fastify.ensureFyersSession();
         if (!tokenOk) return;
@@ -57,26 +59,35 @@ const deckStreamPlugin = fp(
           watchedSymbols,
         );
         for (const symbol of watchedSymbols) {
-          await runDeckAutoExitPoll(fastify, {
-            symbol,
-            tradingStyle: String(pollTradingStyle),
-            preloadedPositions: positions,
-          });
+          if (autoExitOn) {
+            await runDeckAutoExitPoll(fastify, {
+              symbol,
+              tradingStyle: String(pollTradingStyle),
+              preloadedPositions: positions,
+            });
+          }
+          if (autoEntryOn) {
+            await runDeckAutoEntryPoll(fastify, {
+              symbol,
+              tradingStyle: String(pollTradingStyle),
+              preloadedPositions: positions,
+            });
+          }
         }
       } catch (err) {
-        fastify.log.warn({ err }, 'Auto-exit poll failed');
+        fastify.log.warn({ err }, 'Auto guard poll failed');
       } finally {
-        autoExitPollInFlight = false;
+        guardPollInFlight = false;
       }
     };
 
-    autoExitPollTimer = setInterval(() => {
-      void runAutoExitPollCycle();
+    guardPollTimer = setInterval(() => {
+      void runGuardPollCycle();
     }, pollIntervalMs);
-    autoExitPollTimer.unref?.();
+    guardPollTimer.unref?.();
 
     fastify.addHook('onClose', async () => {
-      if (autoExitPollTimer) clearInterval(autoExitPollTimer);
+      if (guardPollTimer) clearInterval(guardPollTimer);
       unsubscribe();
       hub.shutdown();
     });

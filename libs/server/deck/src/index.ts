@@ -4,6 +4,7 @@ export {
   buildDeckLiveFastPayload,
   buildDeckLiveStreamTick,
   runDeckAutoExitPoll,
+  runDeckAutoEntryPoll,
   type DeckLivePayload,
   type DeckLiveStreamTick,
   type DeckPositionsLtpPatch,
