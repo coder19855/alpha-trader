@@ -11,8 +11,9 @@ export function optionChainCacheKey(
   symbol: string,
   style: string,
   moneyness?: string,
+  side?: string,
 ): string {
-  return `${symbol}|${style}|${moneyness ?? 'none'}`;
+  return `${symbol}|${style}|${moneyness ?? 'none'}|${side ?? 'CE'}`;
 }
 
 export function getCachedOptionChain(

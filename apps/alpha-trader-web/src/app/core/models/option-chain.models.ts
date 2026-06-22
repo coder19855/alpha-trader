@@ -1,7 +1,8 @@
 import { DeckComponentGauge } from './deck.models';
 
 export type OptionPaAlignment = 'confirm' | 'veto' | 'neutral' | 'skipped';
-export type OptionMoneyness = 'ATM' | 'OTM' | 'ITM' | '';
+export type OptionMoneyness = 'ATM' | 'OTM' | 'ITM';
+export type OptionSide = 'CE' | 'PE';
 
 export interface OptionChainGuardLevel {
   strike: number;
@@ -71,9 +72,14 @@ export interface OptionChainSignalPayload {
   paAlignment: OptionPaAlignment;
   paAlignmentDetail: string;
   moneyness?: string;
+  optionSide?: OptionSide;
   estRiskPerLot?: number | null;
   optionPremium?: number | null;
+  optionStrike?: number | null;
   optionDelta?: number | null;
+  optionGamma?: number | null;
+  optionTheta?: number | null;
+  optionVega?: number | null;
 }
 
 export function toOptionComponentGauges(

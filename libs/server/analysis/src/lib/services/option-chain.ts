@@ -42,6 +42,11 @@ function normalizeMoneyness(value: unknown): GreeksMoneyness | undefined {
   return undefined;
 }
 
+function normalizeOptionSide(value: unknown): 'CE' | 'PE' {
+  const raw = String(value ?? '').trim().toUpperCase();
+  return raw === 'PE' ? 'PE' : 'CE';
+}
+
 function resolveLotSize(symbol: string): number {
   const meta = FYERS_OPTION_INDEX_SYMBOLS.find((r) => r.symbol === symbol);
   return meta?.lotSize ?? 65;
@@ -56,12 +61,14 @@ export default async function optionChainRoute(
       style?: string;
       refresh?: string;
       moneyness?: string;
+      side?: string;
       paAction?: string;
     };
   }>('/api/option-chain', async (request, reply) => {
     const symbol = String(request.query.symbol ?? 'NSE:NIFTY50-INDEX').trim();
     const tradingStyle = normalizeTradingStyle(request.query.style);
     const moneyness = normalizeMoneyness(request.query.moneyness);
+    const optionSide = normalizeOptionSide(request.query.side);
     const paAction = request.query.paAction?.trim();
     const forceRefresh =
       request.query.refresh === 'true' || request.query.refresh === '1';
@@ -85,7 +92,12 @@ export default async function optionChainRoute(
     const pollMs = normalizeOptionChainPollMs(settings.optionChainPollMs);
     const cacheTtlMs = pollMs > 0 ? pollMs : 60_000;
 
-    const cacheKey = optionChainCacheKey(symbol, tradingStyle, moneyness);
+    const cacheKey = optionChainCacheKey(
+      symbol,
+      tradingStyle,
+      moneyness,
+      optionSide,
+    );
     if (!forceRefresh) {
       const cached = getCachedOptionChain(cacheKey);
       if (cached) {
@@ -160,6 +172,7 @@ export default async function optionChainRoute(
         tradingStyle,
         supportResistance: sr,
         moneyness,
+        optionSide: moneyness ? optionSide : undefined,
         utils: fastify.utilsPlugin,
       });
 
@@ -218,9 +231,14 @@ export default async function optionChainRoute(
         paAlignment: alignment.alignment,
         paAlignmentDetail: alignment.detail,
         moneyness,
+        optionSide: moneyness ? optionSide : undefined,
         estRiskPerLot,
         optionPremium: computed.optionPremium,
+        optionStrike: computed.optionStrike,
         optionDelta: computed.optionDelta,
+        optionGamma: computed.optionGamma,
+        optionTheta: computed.optionTheta,
+        optionVega: computed.optionVega,
       };
 
       setCachedOptionChain(cacheKey, payload, cacheTtlMs);

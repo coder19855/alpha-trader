@@ -75,7 +75,12 @@ export interface OptionChainSignalResponse {
   paAlignment: OptionPaAlignment;
   paAlignmentDetail: string;
   moneyness?: GreeksMoneyness;
+  optionSide?: 'CE' | 'PE';
   estRiskPerLot?: number | null;
   optionPremium?: number | null;
+  optionStrike?: number | null;
   optionDelta?: number | null;
+  optionGamma?: number | null;
+  optionTheta?: number | null;
+  optionVega?: number | null;
 }

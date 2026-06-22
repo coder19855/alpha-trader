@@ -6,13 +6,60 @@ import { DeckApiService } from '../../core/services/deck-api.service';
 import { DeckContextService } from '../../core/services/deck-context.service';
 import { OptionChainApiService } from '../../core/services/option-chain-api.service';
 import { TradingStyle } from '../../core/models/deck.models';
-import { OptionMoneyness } from '../../core/models/option-chain.models';
+import { OptionMoneyness, OptionSide } from '../../core/models/option-chain.models';
 
 interface RiskRow {
   level: string;
   pnl: number;
   capitalAfter: number;
-  onRisk: string;
+  move: string;
+}
+
+/** Index points for target P&L using delta + gamma (ΔP ≈ δ·ΔS + ½γ·ΔS²). */
+function solveIndexMoveForTargetPnl(
+  targetPnlPerLot: number,
+  lotSize: number,
+  delta: number | null,
+  gamma: number | null,
+): number | null {
+  if (!lotSize || lotSize <= 0 || targetPnlPerLot === 0) return 0;
+  if (delta == null || !Number.isFinite(delta) || Math.abs(delta) < 1e-6) {
+    return null;
+  }
+
+  const premiumChange = targetPnlPerLot / lotSize;
+  const g = gamma ?? 0;
+
+  if (Math.abs(g) < 1e-9) {
+    return premiumChange / delta;
+  }
+
+  const disc = delta * delta + 2 * g * premiumChange;
+  if (disc < 0) return null;
+
+  const sqrtDisc = Math.sqrt(disc);
+  const rootA = (-delta + sqrtDisc) / g;
+  const rootB = (-delta - sqrtDisc) / g;
+
+  const candidates = [rootA, rootB].filter((r) => Number.isFinite(r));
+  if (!candidates.length) return null;
+
+  const sameSign = (a: number, b: number) =>
+    (a >= 0 && b >= 0) || (a <= 0 && b <= 0);
+
+  const preferred = candidates.find((r) => sameSign(r, premiumChange));
+  if (preferred != null) return preferred;
+
+  return candidates.reduce((best, r) =>
+    Math.abs(r) < Math.abs(best) ? r : best,
+  );
+}
+
+function formatIndexMove(pts: number | null): string {
+  if (pts == null) return '—';
+  if (Math.abs(pts) < 0.05) return '0 pts';
+  const rounded = Math.abs(pts) >= 10 ? Math.round(pts) : +pts.toFixed(1);
+  return `${rounded > 0 ? '+' : ''}${rounded} pts`;
 }
 
 @Component({
@@ -92,22 +139,47 @@ interface RiskRow {
         </div>
 
         <div class="sizing-field">
-          <label>Strike moneyness (optional)</label>
+          <label>Strike moneyness</label>
           <select
             class="sizing-input"
             [ngModel]="moneyness()"
             (ngModelChange)="onMoneynessChange($event)"
           >
-            <option value="">None — manual risk</option>
             <option value="ATM">ATM</option>
             <option value="OTM">OTM</option>
             <option value="ITM">ITM</option>
           </select>
-          <small class="hint">
-            Fetches option chain only when selected. Uses live premium for R:R.
-          </small>
-          @if (moneynessLoading()) {
-            <small class="hint">Fetching chain…</small>
+        </div>
+
+        <div class="sizing-field">
+          <label>Option type</label>
+          <select
+            class="sizing-input"
+            [ngModel]="optionSide()"
+            (ngModelChange)="onOptionSideChange($event)"
+          >
+            <option value="CE">CE (Call)</option>
+            <option value="PE">PE (Put)</option>
+          </select>
+        </div>
+
+        <div class="sizing-field">
+          <label>Premium (live)</label>
+          @if (chainPremium() != null) {
+            <div class="computed premium">₹ {{ chainPremium() | number:'1.2-2' }}</div>
+            @if (chainStrike()) {
+              <small class="hint">
+                {{ optionSide() }} {{ chainStrike() | number:'1.0-0' }}
+                · Δ {{ chainDelta() | number:'1.3-3' }}
+                @if (chainGamma() != null) {
+                  · Γ {{ chainGamma() | number:'1.4-4' }}
+                }
+              </small>
+            }
+          } @else if (moneynessLoading()) {
+            <div class="computed muted">Loading…</div>
+          } @else {
+            <div class="computed muted">—</div>
           }
           @if (moneynessError()) {
             <small class="err">{{ moneynessError() }}</small>
@@ -123,27 +195,20 @@ interface RiskRow {
             (ngModelChange)="updateEstRisk($event)"
             step="50"
           />
-          <small class="hint">
-            @if (chainPremium()) {
-              Premium ₹{{ chainPremium() | number:'1.0-0' }} × lot
-              {{ effectiveLotSize() }} → est. risk.
-            } @else {
-              Premium risk or margin per lot (editable).
-            }
-          </small>
+          <small class="hint">Premium + delta-based risk for {{ suggestedLots() || 1 }} lot(s).</small>
         </div>
 
         <div class="sizing-field">
           <label>Suggested Lots</label>
           <div class="computed lots">{{ suggestedLots() }}</div>
-          <small class="hint">Based on risked capital ÷ est. per lot</small>
+          <small class="hint">Risked capital ÷ est. per lot</small>
         </div>
       </div>
 
       <div class="table-wrap">
         <div class="panel-head small">
           <span>Projected P&amp;L (by R-multiple)</span>
-          <span class="note">0R = breakeven on risked amount. Assumes 1R risk = risked capital.</span>
+          <span class="note">Move = index pts from spot (δ + ½γ). 0R = breakeven on risked amount.</span>
         </div>
         <table class="risk-table">
           <thead>
@@ -151,7 +216,7 @@ interface RiskRow {
               <th>Level</th>
               <th>P&amp;L (₹)</th>
               <th>Capital After (₹)</th>
-              <th>Return on Risk</th>
+              <th>Move</th>
             </tr>
           </thead>
           <tbody>
@@ -160,17 +225,12 @@ interface RiskRow {
                 <td class="level">{{ row.level }}</td>
                 <td class="pnl">{{ row.pnl | number:'1.0-0' }}</td>
                 <td class="cap">{{ row.capitalAfter | number:'1.0-0' }}</td>
-                <td class="ret">{{ row.onRisk }}</td>
+                <td class="move">{{ row.move }}</td>
               </tr>
             }
           </tbody>
         </table>
       </div>
-
-      <p class="sizing-note">
-        This is a simplified calculator. Real options sizing should account for premium paid, margin,
-        Greeks, and your broker's lot rules. Use with the current signal's stops/targets for 1R definition.
-      </p>
     </section>
   `,
   styles: [`
@@ -184,6 +244,8 @@ interface RiskRow {
     .sizing-input { width:100%; padding:6px 8px; border-radius:6px; border:1px solid var(--border); background:#11151c; color:#e8ecf1; font-size:0.85rem; }
     .computed { font-size:1.1rem; font-weight:700; padding:4px 0; }
     .computed.lots { color: var(--option); }
+    .computed.premium { color: #22d3ee; }
+    .computed.muted { color: var(--muted); font-size: 0.95rem; }
     .balance-row { display:flex; gap:8px; align-items:center; }
     .fetch-btn { padding:4px 10px; font-size:0.7rem; border-radius:6px; border:1px solid rgba(34,211,238,.4); background:rgba(34,211,238,.1); color:#22d3ee; cursor:pointer; }
     .fetch-btn:disabled { opacity:.6; }
@@ -199,11 +261,11 @@ interface RiskRow {
     .risk-table tr.zero td { background: rgba(255,255,255,0.03); font-weight:600; }
     .risk-table tr.loss .pnl { color:#f87171; }
     .risk-table tr.gain .pnl { color:#4ade80; }
-    .level { font-family: ui-monospace, monospace; }
-    .sizing-note { font-size:0.68rem; color:var(--muted); margin-top:12px; font-style:italic; }
+    .level, .move { font-family: ui-monospace, monospace; }
     .err { color:#f87171; font-size:0.7rem; }
     .hint { color:var(--muted); font-size:0.68rem; }
     .table-wrap { margin-top: 8px; }
+    .note { font-weight: 400; font-size: 0.68rem; }
   `]
 })
 export class PositionSizingComponent implements OnInit, OnDestroy {
@@ -219,10 +281,14 @@ export class PositionSizingComponent implements OnInit, OnDestroy {
   readonly capital = signal(500000);
   readonly riskPct = signal(1);
   readonly estRiskPerLot = signal(1200);
-  readonly moneyness = signal<OptionMoneyness>('');
+  readonly moneyness = signal<OptionMoneyness>('ATM');
+  readonly optionSide = signal<OptionSide>('CE');
   readonly moneynessLoading = signal(false);
   readonly moneynessError = signal<string | null>(null);
   readonly chainPremium = signal<number | null>(null);
+  readonly chainStrike = signal<number | null>(null);
+  readonly chainDelta = signal<number | null>(null);
+  readonly chainGamma = signal<number | null>(null);
   readonly fundsLoading = signal(false);
   readonly fundsError = signal<string | null>(null);
   readonly fundsTitle = signal<string>('');
@@ -256,23 +322,35 @@ export class PositionSizingComponent implements OnInit, OnDestroy {
   readonly riskTable = computed<RiskRow[]>(() => {
     const risked = this.riskCapital();
     const bal = this.capital();
+    const lots = this.suggestedLots();
+    const lotSize = this.effectiveLotSize();
+    const delta = this.chainDelta();
+    const gamma = this.chainGamma();
+    const lotCount = lots > 0 ? lots : 1;
+
     const rows: RiskRow[] = [];
     for (let i = -5; i <= 5; i++) {
       const pnl = Math.round(i * risked);
       const after = bal + pnl;
-      const onRisk = i === 0 ? '0%' : `${i > 0 ? '+' : ''}${i * 100}%`;
+      const targetPnlPerLot = (i * risked) / lotCount;
+      const movePts = solveIndexMoveForTargetPnl(
+        targetPnlPerLot,
+        lotSize,
+        delta,
+        gamma,
+      );
       rows.push({
         level: `${i}R`,
         pnl,
         capitalAfter: after,
-        onRisk,
+        move: delta != null ? formatIndexMove(movePts) : '—',
       });
     }
     return rows;
   });
 
   ngOnInit(): void {
-    // defaults only — funds fetched on demand
+    this.fetchOptionLeg();
   }
 
   ngOnDestroy(): void {
@@ -280,12 +358,22 @@ export class PositionSizingComponent implements OnInit, OnDestroy {
   }
 
   onMoneynessChange(value: OptionMoneyness): void {
-    this.moneyness.set(value ?? '');
+    this.moneyness.set(value);
+    this.fetchOptionLeg();
+  }
+
+  onOptionSideChange(value: OptionSide): void {
+    this.optionSide.set(value);
+    this.fetchOptionLeg();
+  }
+
+  private fetchOptionLeg(): void {
     this.moneynessSub?.unsubscribe();
     this.moneynessError.set(null);
     this.chainPremium.set(null);
-
-    if (!value) return;
+    this.chainStrike.set(null);
+    this.chainDelta.set(null);
+    this.chainGamma.set(null);
 
     const sym = this.symbol || this.ctx.symbol();
     const style = (this.tradingStyle || this.ctx.style()) as TradingStyle;
@@ -294,7 +382,8 @@ export class PositionSizingComponent implements OnInit, OnDestroy {
       .fetch({
         symbol: sym,
         style,
-        moneyness: value,
+        moneyness: this.moneyness(),
+        side: this.optionSide(),
         paAction: this.paAction ?? undefined,
         refresh: true,
       })
@@ -306,6 +395,15 @@ export class PositionSizingComponent implements OnInit, OnDestroy {
           }
           if (res.optionPremium != null) {
             this.chainPremium.set(res.optionPremium);
+          }
+          if (res.optionStrike != null) {
+            this.chainStrike.set(res.optionStrike);
+          }
+          if (res.optionDelta != null) {
+            this.chainDelta.set(res.optionDelta);
+          }
+          if (res.optionGamma != null) {
+            this.chainGamma.set(res.optionGamma);
           }
         },
         error: (err) => {

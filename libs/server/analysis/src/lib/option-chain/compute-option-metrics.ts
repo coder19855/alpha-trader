@@ -21,6 +21,7 @@ export interface OptionMetricsComputeInput {
   };
   utils: Record<string, (...args: any[]) => any>;
   moneyness?: GreeksMoneyness;
+  optionSide?: 'CE' | 'PE';
 }
 
 export interface ComputedOptionMetrics {
@@ -73,7 +74,12 @@ export interface ComputedOptionMetrics {
     ivSkew: number | null;
   };
   optionPremium: number | null;
+  optionStrike: number | null;
   optionDelta: number | null;
+  optionGamma: number | null;
+  optionTheta: number | null;
+  optionVega: number | null;
+  optionSide: 'CE' | 'PE' | null;
 }
 
 function legSnapshot(row: FyersAPI.OptionChainData | null | undefined) {
@@ -167,11 +173,14 @@ function pickStrikeByMoneyness(
     );
   }
 
-  const offset = moneyness === 'OTM' ? step : -step;
   const target =
     side === 'CE'
-      ? atm + (moneyness === 'OTM' ? offset : offset)
-      : atm - (moneyness === 'OTM' ? offset : offset);
+      ? moneyness === 'OTM'
+        ? atm + step
+        : atm - step
+      : moneyness === 'OTM'
+        ? atm - step
+        : atm + step;
 
   return rows.reduce((a, b) =>
     Math.abs(b.strike_price - target) < Math.abs(a.strike_price - target)
@@ -266,7 +275,8 @@ function scoreTrend(near: FyersAPI.OptionChainData[]): number {
 export function computeOptionMetricsFromChain(
   input: OptionMetricsComputeInput,
 ): ComputedOptionMetrics {
-  const { chain, spotLtp, indiaVix, tradingStyle, utils, moneyness } = input;
+  const { chain, spotLtp, indiaVix, tradingStyle, utils, moneyness, optionSide } =
+    input;
   const atmStrike = findAtmStrike(chain, spotLtp);
   const near = rowsNearStrike(chain, atmStrike);
   const atmCall = near.find(
@@ -406,14 +416,23 @@ export function computeOptionMetricsFromChain(
     }));
 
   let optionPremium: number | null = null;
+  let optionStrike: number | null = null;
   let optionDelta: number | null = null;
+  let optionGamma: number | null = null;
+  let optionTheta: number | null = null;
+  let optionVega: number | null = null;
+  let selectedSide: 'CE' | 'PE' | null = null;
   if (moneyness) {
-    const ref =
-      pickStrikeByMoneyness(chain, spotLtp, atmStrike, moneyness, 'CE') ??
-      pickStrikeByMoneyness(chain, spotLtp, atmStrike, moneyness, 'PE');
+    const side = optionSide ?? 'CE';
+    const ref = pickStrikeByMoneyness(chain, spotLtp, atmStrike, moneyness, side);
     if (ref) {
+      selectedSide = side;
+      optionStrike = ref.strike_price;
       optionPremium = ref.ltp ?? null;
       optionDelta = ref.greeks?.delta ?? null;
+      optionGamma = ref.greeks?.gamma ?? null;
+      optionTheta = ref.greeks?.theta ?? null;
+      optionVega = ref.greeks?.vega ?? null;
     }
   }
 
@@ -446,8 +465,56 @@ export function computeOptionMetricsFromChain(
       ivSkew,
     },
     optionPremium,
+    optionStrike,
     optionDelta,
+    optionGamma,
+    optionTheta,
+    optionVega,
+    optionSide: selectedSide,
   };
+}
+
+/**
+ * Index points the underlying must move (from spot) for the option leg to reach
+ * `targetPnlPerLot`, using delta + gamma (Taylor expansion of premium vs spot).
+ */
+export function solveIndexMoveForTargetPnl(
+  targetPnlPerLot: number,
+  lotSize: number,
+  delta: number | null,
+  gamma: number | null,
+): number | null {
+  if (!lotSize || lotSize <= 0 || targetPnlPerLot === 0) return 0;
+  if (delta == null || !Number.isFinite(delta) || Math.abs(delta) < 1e-6) {
+    return null;
+  }
+
+  const premiumChange = targetPnlPerLot / lotSize;
+  const g = gamma ?? 0;
+
+  if (Math.abs(g) < 1e-9) {
+    return premiumChange / delta;
+  }
+
+  const disc = delta * delta + 2 * g * premiumChange;
+  if (disc < 0) return null;
+
+  const sqrtDisc = Math.sqrt(disc);
+  const rootA = (-delta + sqrtDisc) / g;
+  const rootB = (-delta - sqrtDisc) / g;
+
+  const candidates = [rootA, rootB].filter((r) => Number.isFinite(r));
+  if (!candidates.length) return null;
+
+  const sameSign = (a: number, b: number) =>
+    (a >= 0 && b >= 0) || (a <= 0 && b <= 0);
+
+  const preferred = candidates.find((r) => sameSign(r, premiumChange));
+  if (preferred != null) return preferred;
+
+  return candidates.reduce((best, r) =>
+    Math.abs(r) < Math.abs(best) ? r : best,
+  );
 }
 
 export function estimateRiskPerLot(
