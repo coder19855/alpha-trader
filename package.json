@@ -8,6 +8,9 @@
     "build:web": "nx build alpha-trader-web",
     "serve": "nx serve @alpha-trader/alpha-trader-server",
     "serve:web": "nx serve alpha-trader-web",
+    "serve:web:prod": "node scripts/serve-frontend.mjs",
+    "start:api:prod": "node apps/alpha-trader-server/dist/main.js",
+    "deploy:restart": "bash scripts/deploy/restart-services.sh",
     "test": "nx run-many -t test -p @alpha-trader/server-shared,@alpha-trader/server-market-data,@alpha-trader/server-position,@alpha-trader/server-preferences,@alpha-trader/server-deck,@alpha-trader/server-benchmark,@alpha-trader/alpha-trader-server"
   },
   "private": true,

@@ -121,7 +121,11 @@ function scoreRegime(input: MarketRegimeInput): {
   return { rawKind, direction };
 }
 
-function arrowFor(direction: MarketRegimeDirection): '↑' | '↓' | '↔' {
+function arrowFor(
+  kind: MarketRegimeKind,
+  direction: MarketRegimeDirection,
+): '↑' | '↓' | '↔' {
+  if (kind === 'sideways' || kind === 'transitional') return '↔';
   if (direction === 'up') return '↑';
   if (direction === 'down') return '↓';
   return '↔';
@@ -242,7 +246,7 @@ export function resolveDeckMarketRegime(
   return {
     kind: stable.kind,
     direction: stable.direction,
-    arrow: arrowFor(stable.direction),
+    arrow: arrowFor(stable.kind, stable.direction),
     label: labelFor(stable.kind, stable.direction),
     hint: buildDeckRegimeHint({
       regimeKind: stable.kind,

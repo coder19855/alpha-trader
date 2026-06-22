@@ -1,0 +1,19 @@
+[Unit]
+Description=Alpha Trader API (Fastify)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/alpha-trader
+EnvironmentFile=-/opt/alpha-trader/.env
+Environment=HOST=0.0.0.0
+Environment=PORT=3000
+Environment=NODE_ENV=production
+Environment=SERVE_WEB_APP=true
+ExecStart=/usr/bin/node /opt/alpha-trader/apps/alpha-trader-server/dist/main.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

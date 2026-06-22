@@ -1,0 +1,18 @@
+[Unit]
+Description=Alpha Trader Web (Angular static + API proxy)
+After=network.target alpha-trader-api.service
+Requires=alpha-trader-api.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/alpha-trader
+Environment=HOST=0.0.0.0
+Environment=PORT=4000
+Environment=API_PROXY_TARGET=http://127.0.0.1:3000
+ExecStart=/usr/bin/node /opt/alpha-trader/scripts/serve-frontend.mjs
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

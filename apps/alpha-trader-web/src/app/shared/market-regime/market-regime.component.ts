@@ -16,7 +16,7 @@ import { DeckMarketRegime } from '../../core/models/deck.models';
         role="status"
         aria-live="polite"
       >
-        <span class="market-regime-arrow" aria-hidden="true">{{ regime!.arrow }}</span>
+        <span class="market-regime-arrow" aria-hidden="true">{{ displayArrow() }}</span>
         <span class="market-regime-text">
           <span class="market-regime-label">{{ regime!.label }}</span>
           @if (regime!.confirming && regime!.rawKind !== regime!.kind) {
@@ -38,5 +38,12 @@ export class MarketRegimeComponent {
     if (regime.kind === 'transitional') return 'transitional';
     if (regime.direction === 'down') return 'trending-down';
     return 'trending-up';
+  }
+
+  displayArrow(): string {
+    const regime = this.regime;
+    if (!regime) return '';
+    if (regime.kind === 'sideways' || regime.kind === 'transitional') return '↔';
+    return regime.arrow;
   }
 }
