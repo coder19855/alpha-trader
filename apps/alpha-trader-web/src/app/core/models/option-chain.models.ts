@@ -10,6 +10,8 @@ export interface OptionChainGuardLevel {
   oi: number;
   oiChange: number;
   ltp: number;
+  ltpChange: number;
+  ltpChangePct: number;
   iv: number | null;
   strength: number;
 }

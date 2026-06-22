@@ -44,6 +44,8 @@ export interface ComputedOptionMetrics {
     oi: number;
     oiChange: number;
     ltp: number;
+    ltpChange: number;
+    ltpChangePct: number;
     iv: number | null;
     strength: number;
   }>;
@@ -411,6 +413,8 @@ export function computeOptionMetricsFromChain(
       oi: r.oi || 0,
       oiChange: r.oich || 0,
       ltp: r.ltp || 0,
+      ltpChange: r.ltpch ?? 0,
+      ltpChangePct: r.ltpchp ?? 0,
       iv: r.greeks?.iv ?? null,
       strength: Math.min(1, (r.oi || 0) / maxOi),
     }));

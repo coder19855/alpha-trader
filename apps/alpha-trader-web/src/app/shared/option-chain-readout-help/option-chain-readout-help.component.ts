@@ -171,13 +171,14 @@ import { MatIconModule } from '@angular/material/icon';
             <div class="oc-readout-item">
               <dt>Strike walls &amp; ladder</dt>
               <dd>
-                Highlights heavy OI strikes near spot. <strong>Call wall</strong> = resistance
-                (writers defend); <strong>Put wall</strong> = support. Click a wall to filter
-                the ladder to CE or PE only. Bar length = OI vs max nearby; colour = OI build
-                (cyan) or unwind (orange).
+                Highlights heavy OI strikes near spot. <strong>Call resistance</strong> /
+                <strong>Put support</strong> walls filter the ladder. <strong>Call</strong> (sky)
+                and <strong>Put</strong> (lavender) pills are contract labels only — not
+                bullish/bearish colours. OI Δ cyan = writers adding; orange = unwinding. Tap
+                the flow icon for a writer-side summary (premium, OI, spot impact).
                 <span class="oc-readout-ex">
-                  e.g. thick CE wall at <strong>24,600</strong> with spot at 24,550 — expect
-                  friction on upside until that OI is absorbed or rolled.
+                  e.g. OTM call OI building at <strong>24,600</strong> with spot 24,550 — writers
+                  defending upside; put OI unwind below spot can thin downside support.
                 </span>
               </dd>
             </div>
