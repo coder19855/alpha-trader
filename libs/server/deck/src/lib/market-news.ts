@@ -52,6 +52,13 @@ function parseRss(xml: string, query: string): MarketNewsPayload {
     });
   }
 
+  items.sort((a, b) => {
+    const aTime = a.publishedAt ? new Date(a.publishedAt).getTime() : -Infinity;
+    const bTime = b.publishedAt ? new Date(b.publishedAt).getTime() : -Infinity;
+    if (aTime !== bTime) return bTime - aTime;
+    return a.title.localeCompare(b.title);
+  });
+
   return {
     items,
     fetchedAt: new Date().toISOString(),
