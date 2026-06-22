@@ -73,6 +73,23 @@ import { OptionGuardDashboardComponent } from '../option-guard-dashboard/option-
   `,
   styles: [
     `
+      :host {
+        --oc-call: #38bdf8;
+        --oc-call-soft: rgba(56, 189, 248, 0.14);
+        --oc-call-border: rgba(56, 189, 248, 0.38);
+        --oc-put: #c4b5fd;
+        --oc-put-soft: rgba(196, 181, 253, 0.14);
+        --oc-put-border: rgba(196, 181, 253, 0.38);
+        display: block;
+      }
+      :host ::ng-deep .gauge-zone.ce {
+        background: linear-gradient(270deg, var(--oc-call-soft), transparent);
+        color: var(--oc-call);
+      }
+      :host ::ng-deep .gauge-zone.pe {
+        background: linear-gradient(90deg, var(--oc-put-soft), transparent);
+        color: var(--oc-put);
+      }
       .oc-error {
         color: #f87171;
         font-size: 0.78rem;

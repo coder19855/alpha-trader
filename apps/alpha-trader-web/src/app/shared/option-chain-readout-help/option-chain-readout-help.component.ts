@@ -112,7 +112,8 @@ import { MatIconModule } from '@angular/material/icon';
             <div class="oc-readout-item">
               <dt>OI balance</dt>
               <dd>
-                Total open-interest split: green = calls, red = puts. <strong>PCR</strong> in the
+                Total open-interest split: <strong>sky = calls</strong>, <strong>lavender =
+                puts</strong> (contract type, not direction). <strong>PCR</strong> in the
                 header is put OI ÷ call OI for the whole chain.
                 <span class="oc-readout-ex">
                   e.g. PCR <strong>1.35</strong> (more put OI) often means hedging / defensive

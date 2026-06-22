@@ -31,8 +31,8 @@ import {
             ></div>
           </div>
           <div class="oi-labels">
-            <span class="ce">CE {{ oc.guard.callOiTotal | number }}</span>
-            <span class="pe">PE {{ oc.guard.putOiTotal | number }}</span>
+            <span class="call-tag">Call {{ oc.guard.callOiTotal | number }}</span>
+            <span class="put-tag">Put {{ oc.guard.putOiTotal | number }}</span>
           </div>
         </article>
 
@@ -87,9 +87,9 @@ import {
           </header>
           <div class="greeks-cards">
             @for (leg of greekLegs(greeks); track leg.side) {
-              <article class="greek-card" [class.ce]="leg.side === 'CE'" [class.pe]="leg.side === 'PE'">
+              <article class="greek-card" [class.call]="leg.side === 'CE'" [class.put]="leg.side === 'PE'">
                 <div class="greek-card-head">
-                  <span class="side">{{ leg.side }}</span>
+                  <span class="side">{{ leg.side === 'CE' ? 'Call' : 'Put' }}</span>
                   <span class="premium">₹{{ leg.ltp | number: '1.1-1' }}</span>
                 </div>
                 @if (leg.snapshot) {
@@ -156,10 +156,10 @@ import {
         background: rgba(255, 255, 255, 0.06);
       }
       .oi-seg.calls {
-        background: linear-gradient(90deg, #166534, #4ade80);
+        background: linear-gradient(90deg, rgba(56, 189, 248, 0.35), var(--oc-call, #38bdf8));
       }
       .oi-seg.puts {
-        background: linear-gradient(90deg, #f87171, #991b1b);
+        background: linear-gradient(90deg, var(--oc-put, #c4b5fd), rgba(196, 181, 253, 0.35));
       }
       .oi-labels {
         display: flex;
@@ -167,8 +167,8 @@ import {
         margin-top: 6px;
         font-size: 0.65rem;
       }
-      .oi-labels .ce { color: #4ade80; }
-      .oi-labels .pe { color: #f87171; }
+      .oi-labels .call-tag { color: var(--oc-call, #38bdf8); font-weight: 600; }
+      .oi-labels .put-tag { color: var(--oc-put, #c4b5fd); font-weight: 600; }
       .skew-row {
         display: flex;
         justify-content: space-between;
@@ -270,8 +270,8 @@ import {
         border: 1px solid var(--border);
         background: rgba(0, 0, 0, 0.2);
       }
-      .greek-card.ce { border-color: rgba(74, 222, 128, 0.3); }
-      .greek-card.pe { border-color: rgba(248, 113, 113, 0.3); }
+      .greek-card.call { border-color: var(--oc-call-border, rgba(56, 189, 248, 0.38)); }
+      .greek-card.put { border-color: var(--oc-put-border, rgba(196, 181, 253, 0.38)); }
       .greek-card-head {
         display: flex;
         justify-content: space-between;
@@ -281,8 +281,8 @@ import {
         font-weight: 800;
         font-size: 0.8rem;
       }
-      .greek-card.ce .side { color: #4ade80; }
-      .greek-card.pe .side { color: #f87171; }
+      .greek-card.call .side { color: var(--oc-call, #38bdf8); }
+      .greek-card.put .side { color: var(--oc-put, #c4b5fd); }
       .premium {
         font-size: 0.72rem;
         color: var(--muted);

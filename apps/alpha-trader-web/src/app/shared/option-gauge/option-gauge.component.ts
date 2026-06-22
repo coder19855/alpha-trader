@@ -11,8 +11,8 @@ import { DeckGaugeReading } from '../../core/models/deck.models';
         <span class="gauge-readout">{{ formatReadout(reading) }}</span>
       </div>
       <div class="gauge-track option">
-        <div class="gauge-zone pe">PE</div>
-        <div class="gauge-zone ce">CE</div>
+        <div class="gauge-zone pe">Put</div>
+        <div class="gauge-zone ce">Call</div>
         <div class="gauge-needle" [style.left.%]="needleLeft(reading)"></div>
       </div>
       <div class="gauge-scale"><span>-1</span><span>0</span><span>+1</span></div>
