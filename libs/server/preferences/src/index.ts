@@ -14,6 +14,22 @@ export {
   type AutoExitPreferenceState,
 } from './lib/auto-exit-preference.js';
 export {
+  normalizeAutoEntryPreference,
+  loadAutoEntryPreference,
+  saveAutoEntryPreference,
+  type AutoEntryPreferenceState,
+} from './lib/auto-entry-preference.js';
+export {
+  listTradeJournal,
+  recordJournalOpen,
+  recordJournalClose,
+  patchJournalOptionTrigger,
+  syncTradeJournalFromPositions,
+  TRADE_JOURNAL_COLLECTION,
+  type TradeJournalEntry,
+  type TradeJournalUpsertInput,
+} from './lib/trade-journal.js';
+export {
   buildAutoExitPolicyOptions,
   buildAutoExitPositionOptions,
   buildExitModeHints,

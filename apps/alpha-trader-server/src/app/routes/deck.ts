@@ -7,11 +7,15 @@ import {
   buildDeckReplayPayload,
   buildDeckReplayTradesPayload,
   createDeckStreamSubscriber,
+  fetchMarketNews,
 } from '@alpha-trader/server-deck';
+import { buildSignalPresetGroupsResponse } from '@alpha-trader/server-benchmark';
 import {
   buildAutoExitPolicyOptions,
   buildAutoExitPositionOptions,
   buildSettingsSnapshot,
+  listTradeJournal,
+  type AutoEntryPreferenceState,
   type AutoExitPreferenceState,
   type SettingsPatch,
 } from '@alpha-trader/server-preferences';
@@ -222,6 +226,77 @@ export default async function deckRoutes(fastify: FastifyInstance) {
       warning:
         'When enabled, the server may place MARKET sell orders to square off watched index option legs when benchmark exit rules confirm.',
     };
+  });
+
+  fastify.get('/api/deck/auto-entry', async () => {
+    const pref = fastify.preferences.getAutoEntry();
+    const groups = buildSignalPresetGroupsResponse();
+    return {
+      ...pref,
+      signalPresetGroups: groups,
+      warning:
+        'When enabled, the server may place MARKET buy orders on index options when the selected entry signal profile confirms. Review lot size and capital before arming.',
+    };
+  });
+
+  fastify.patch('/api/deck/auto-entry', async (request, reply) => {
+    const body = (request.body ?? {}) as Partial<AutoEntryPreferenceState>;
+    const allowed = new Set(
+      buildSignalPresetGroupsResponse().flatMap((g) =>
+        g.presets.map((p) => p.id),
+      ),
+    );
+    if (
+      body.signalProfile &&
+      !allowed.has(String(body.signalProfile).trim())
+    ) {
+      return reply.code(400).send({ error: 'Unknown signal profile' });
+    }
+    try {
+      const pref = await fastify.preferences.patchAutoEntry(body);
+      return {
+        ...pref,
+        signalPresetGroups: buildSignalPresetGroupsResponse(),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      fastify.log.warn({ err }, 'deck auto-entry patch failed');
+      return reply.code(502).send({ error: message });
+    }
+  });
+
+  fastify.get('/api/deck/news', async (request, reply) => {
+    const { symbol, refresh } = request.query as {
+      symbol?: string;
+      refresh?: string;
+    };
+    if (!symbol?.trim()) {
+      return reply.code(400).send({ error: 'symbol is required' });
+    }
+    try {
+      return await fetchMarketNews(symbol.trim(), refresh === 'true');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      fastify.log.warn({ err }, 'deck news fetch failed');
+      return reply.code(502).send({ error: message });
+    }
+  });
+
+  fastify.get('/api/deck/journal', async (request, reply) => {
+    const { symbol, limit } = request.query as {
+      symbol?: string;
+      limit?: string;
+    };
+    try {
+      return await listTradeJournal(fastify, {
+        symbol: symbol?.trim(),
+        limit: limit ? Number.parseInt(limit, 10) : undefined,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      fastify.log.warn({ err }, 'deck journal fetch failed');
+      return reply.code(502).send({ error: message });
+    }
   });
 
   fastify.patch('/api/deck/auto-exit', async (request, reply) => {

@@ -20,6 +20,8 @@ import { VetoBreakupComponent } from '../../shared/veto-breakup/veto-breakup.com
 import { VetoStripComponent } from '../../shared/veto-strip/veto-strip.component';
 import { StrategyPanelComponent } from '../../shared/strategy-panel/strategy-panel.component';
 import { PositionsListComponent } from '../../shared/positions-list/positions-list.component';
+import { MarketNewsPanelComponent } from '../../shared/market-news-panel/market-news-panel.component';
+import { TradeJournalListComponent } from '../../shared/trade-journal-list/trade-journal-list.component';
 import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/signal-readout-help.component';
 import { ComponentsHelpComponent } from '../../shared/components-help/components-help.component';
 import { PositionSizingComponent } from '../../shared/position-sizing/position-sizing.component';
@@ -42,6 +44,8 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
     VetoStripComponent,
     StrategyPanelComponent,
     PositionsListComponent,
+    MarketNewsPanelComponent,
+    TradeJournalListComponent,
     SignalReadoutHelpComponent,
     ComponentsHelpComponent,
     PositionSizingComponent,
@@ -235,9 +239,29 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
 
         <section
           class="tab-panel"
+          [class.active]="ctx.activeTab() === 'news'"
+        >
+          <app-market-news-panel
+            [symbol]="ctx.symbol()"
+            [tabActive]="ctx.activeTab() === 'news'"
+          />
+        </section>
+
+        <section
+          class="tab-panel"
           [class.active]="ctx.activeTab() === 'events'"
         >
           <app-event-list [events]="data.events.slice(-20).reverse()" />
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'journal'"
+        >
+          <app-trade-journal-list
+            [symbol]="ctx.symbol()"
+            [tabActive]="ctx.activeTab() === 'journal'"
+          />
         </section>
 
         <section

@@ -25,3 +25,8 @@ export {
   type DeckReplayPayload,
   type DeckReplayTradesPayload,
 } from './lib/deck-replay.js';
+export {
+  fetchMarketNews,
+  type MarketNewsItem,
+  type MarketNewsPayload,
+} from './lib/market-news.js';

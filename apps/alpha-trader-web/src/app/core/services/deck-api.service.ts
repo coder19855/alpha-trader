@@ -2,10 +2,13 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  AutoEntrySnapshot,
   AutoExitSnapshot,
   DeckLiveTick,
   DeckReplayPayload,
+  MarketNewsPayload,
   SettingsSnapshot,
+  TradeJournalEntry,
   TradingStyle,
   WebSession,
 } from '../models/deck.models';
@@ -52,6 +55,28 @@ export class DeckApiService {
 
   patchAutoExit(patch: Partial<AutoExitSnapshot>) {
     return this.http.patch<AutoExitSnapshot>('/api/deck/auto-exit', patch);
+  }
+
+  getAutoEntry() {
+    return this.http.get<AutoEntrySnapshot>('/api/deck/auto-entry');
+  }
+
+  patchAutoEntry(patch: Partial<AutoEntrySnapshot>) {
+    return this.http.patch<AutoEntrySnapshot>('/api/deck/auto-entry', patch);
+  }
+
+  getNews(symbol: string, refresh = false) {
+    const params = new URLSearchParams({ symbol });
+    if (refresh) params.set('refresh', 'true');
+    return this.http.get<MarketNewsPayload>(`/api/deck/news?${params}`);
+  }
+
+  getJournal(symbol?: string, limit = 50) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (symbol) params.set('symbol', symbol);
+    return this.http.get<{ entries: TradeJournalEntry[]; fetchedAt: string }>(
+      `/api/deck/journal?${params}`,
+    );
   }
 
   getFunds() {

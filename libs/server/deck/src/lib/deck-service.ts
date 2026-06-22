@@ -48,6 +48,7 @@ import {
 } from './deck-strategy.js';
 import { resolveDeckAlignmentCount } from './deck-tf-alignment.js';
 import { resolveDeckMarketRegime, type DeckMarketRegime } from './market-regime.js';
+import { syncTradeJournalFromPositions } from '@alpha-trader/server-preferences';
 import {
   buildDeckOpenPositions,
   DeckOpenPositionsPayload,
@@ -568,6 +569,33 @@ async function buildPositionsBundle(
       options,
     ),
   ]);
+
+  const paTrigger = [
+    decision.action,
+    decision.humanSummary || decision.recommendation,
+  ]
+    .filter(Boolean)
+    .join(' — ');
+  const optionBias = decision.optionFlow?.bias;
+  const optionTrigger =
+    optionBias && optionBias !== 'NEUTRAL'
+      ? `Option flow ${optionBias}${decision.optionConviction ? ` (${Math.round(decision.optionConviction)}%)` : ''}`
+      : undefined;
+
+  void syncTradeJournalFromPositions(fastify, {
+    symbol: indexSymbol,
+    tradingStyle: style,
+    entries: openPositions.entries.map((e) => ({
+      symbol: e.symbol,
+      direction: e.direction,
+      indexLabel: e.indexLabel,
+    })),
+    paTrigger,
+    optionTrigger,
+  }).catch((err) => {
+    fastify.log.warn({ err }, 'trade journal sync failed');
+  });
+
   return { openPositions, managementContext };
 }
 

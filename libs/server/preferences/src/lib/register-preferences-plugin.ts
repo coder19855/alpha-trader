@@ -8,6 +8,12 @@ import {
   saveAutoExitPreference,
 } from './auto-exit-preference.js';
 import {
+  AutoEntryPreferenceState,
+  loadAutoEntryPreference,
+  normalizeAutoEntryPreference,
+  saveAutoEntryPreference,
+} from './auto-entry-preference.js';
+import {
   OPTION_CHAIN_POLL_DEFAULT_MS,
   TradingStyle,
 } from '@alpha-trader/server-shared';
@@ -21,12 +27,16 @@ import {
 export interface PreferencesService {
   getSettings(): StoredSettings;
   getAutoExit(): AutoExitPreferenceState;
+  getAutoEntry(): AutoEntryPreferenceState;
   canPersist(): boolean;
   refresh(): Promise<void>;
   patchSettings(patch: SettingsPatch): Promise<StoredSettings>;
   patchAutoExit(
     patch: Partial<AutoExitPreferenceState>,
   ): Promise<AutoExitPreferenceState>;
+  patchAutoEntry(
+    patch: Partial<AutoEntryPreferenceState>,
+  ): Promise<AutoEntryPreferenceState>;
 }
 
 const preferencesPlugin = fp(
@@ -37,14 +47,17 @@ const preferencesPlugin = fp(
       optionChainPollMs: OPTION_CHAIN_POLL_DEFAULT_MS,
     };
     let autoExit = normalizeAutoExitPreference(null);
+    let autoEntry = normalizeAutoEntryPreference(null);
 
     const service: PreferencesService = {
       getSettings: () => settings,
       getAutoExit: () => autoExit,
+      getAutoEntry: () => autoEntry,
       canPersist: () => Boolean(fastify.mongo?.db),
       refresh: async () => {
         settings = await loadSettings(fastify, settings);
         autoExit = await loadAutoExitPreference(fastify, autoExit);
+        autoEntry = await loadAutoEntryPreference(fastify, autoEntry);
       },
       patchSettings: async (patch) => {
         settings = await saveSettings(fastify, patch, settings);
@@ -53,6 +66,10 @@ const preferencesPlugin = fp(
       patchAutoExit: async (patch) => {
         autoExit = await saveAutoExitPreference(fastify, patch, autoExit);
         return autoExit;
+      },
+      patchAutoEntry: async (patch) => {
+        autoEntry = await saveAutoEntryPreference(fastify, patch, autoEntry);
+        return autoEntry;
       },
     };
 

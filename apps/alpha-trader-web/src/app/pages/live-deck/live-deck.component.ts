@@ -30,7 +30,10 @@ import { PaDrilldownComponent } from '../../shared/pa-drilldown/pa-drilldown.com
 import { PaGaugeComponent } from '../../shared/pa-gauge/pa-gauge.component';
 import { PositionsListComponent } from '../../shared/positions-list/positions-list.component';
 import { AutoExitPanelComponent } from '../../shared/auto-exit-panel/auto-exit-panel.component';
+import { AutoEntryPanelComponent } from '../../shared/auto-entry-panel/auto-entry-panel.component';
 import { EventListComponent } from '../../shared/event-list/event-list.component';
+import { MarketNewsPanelComponent } from '../../shared/market-news-panel/market-news-panel.component';
+import { TradeJournalListComponent } from '../../shared/trade-journal-list/trade-journal-list.component';
 import { MarketRegimeComponent } from '../../shared/market-regime/market-regime.component';
 import { VetoBreakupComponent } from '../../shared/veto-breakup/veto-breakup.component';
 import { VetoStripComponent } from '../../shared/veto-strip/veto-strip.component';
@@ -66,6 +69,9 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
     MarketRegimeComponent,
     VetoStripComponent,
     AutoExitPanelComponent,
+    AutoEntryPanelComponent,
+    MarketNewsPanelComponent,
+    TradeJournalListComponent,
     StrategyPanelComponent,
     SignalReadoutHelpComponent,
     ComponentsHelpComponent,
@@ -348,6 +354,16 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
 
         <section
           class="tab-panel"
+          [class.active]="ctx.activeTab() === 'news'"
+        >
+          <app-market-news-panel
+            [symbol]="ctx.symbol()"
+            [tabActive]="ctx.activeTab() === 'news'"
+          />
+        </section>
+
+        <section
+          class="tab-panel"
           [class.active]="ctx.activeTab() === 'events'"
         >
           <app-event-list [events]="(data.events ?? []).slice(-20).reverse()" />
@@ -355,8 +371,19 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
 
         <section
           class="tab-panel"
+          [class.active]="ctx.activeTab() === 'journal'"
+        >
+          <app-trade-journal-list
+            [symbol]="ctx.symbol()"
+            [tabActive]="ctx.activeTab() === 'journal'"
+          />
+        </section>
+
+        <section
+          class="tab-panel"
           [class.active]="ctx.activeTab() === 'positions'"
         >
+          <app-auto-entry-panel />
           <app-auto-exit-panel
             [guardStatus]="data.managementContext?.autoExit?.status"
             [guardMessage]="data.managementContext?.autoExit?.message"

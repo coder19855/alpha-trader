@@ -182,8 +182,8 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
             <span>OI Guard</span>
             <p class="guard-legend">
               <span class="call-tag">Call</span> / <span class="put-tag">Put</span> = contract
-              type only. Bar = OI size; cyan/orange = OI build/unwind. Flow text combines
-              premium + OI — tap icon for writer summary.
+              type. <strong>Price OI Buildup</strong> = OI bar (size) + price bar (premium Δ).
+              Flow icon combines both — tap for writer summary.
             </p>
           </div>
         </div>
@@ -240,12 +240,10 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
           <div class="ladder-head" aria-hidden="true">
             <span>Type</span>
             <span>Strike</span>
-            <span>Prem</span>
-            <span>Prem Δ</span>
-            <span>OI bar</span>
-            <span>OI</span>
-            <span>OI Δ</span>
-            <span>Flow</span>
+            <span class="compact-col">Prem / Δ</span>
+            <span class="buildup-head">Price OI Buildup</span>
+            <span class="compact-col">OI / Δ</span>
+            <span class="flow-head">Flow</span>
           </div>
           <div class="guard-ladder" role="list">
             @for (row of filteredLevels(); track row.strike + row.type) {
@@ -258,30 +256,44 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
                   {{ row.type === 'CE' ? 'Call' : 'Put' }}
                 </span>
                 <span class="strike">{{ row.strike }}</span>
-                <span class="prem">{{ row.ltp | number: '1.1-1' }}</span>
-                <span
-                  class="prem-ch"
-                  [class.up]="row.ltpChange > 0"
-                  [class.down]="row.ltpChange < 0"
-                >
-                  {{ formatPremChange(row) }}
-                </span>
-                <div class="oi-bar-wrap">
-                  <div
-                    class="oi-bar"
-                    [style.width.%]="row.strength * 100"
+                <div class="compact-col prem-stack">
+                  <span class="prem">{{ row.ltp | number: '1.1-1' }}</span>
+                  <span
+                    class="prem-ch"
+                    [class.up]="row.ltpChange > 0"
+                    [class.down]="row.ltpChange < 0"
+                  >
+                    {{ formatPremChange(row) }}
+                  </span>
+                </div>
+                <div class="buildup-cell">
+                  <div class="oi-bar-wrap" title="OI size">
+                    <div
+                      class="oi-bar"
+                      [style.width.%]="row.strength * 100"
+                      [class.build]="row.oiChange > 0"
+                      [class.unwind]="row.oiChange < 0"
+                    ></div>
+                  </div>
+                  <div class="price-bar-wrap" title="Premium change">
+                    <div
+                      class="price-bar"
+                      [style.width.%]="priceBarWidth(row)"
+                      [class.up]="row.ltpChange > 0"
+                      [class.down]="row.ltpChange < 0"
+                    ></div>
+                  </div>
+                </div>
+                <div class="compact-col oi-stack">
+                  <span class="oi">{{ row.oi | number }}</span>
+                  <span
+                    class="oi-ch"
                     [class.build]="row.oiChange > 0"
                     [class.unwind]="row.oiChange < 0"
-                  ></div>
+                  >
+                    {{ row.oiChange > 0 ? '+' : '' }}{{ row.oiChange | number }}
+                  </span>
                 </div>
-                <span class="oi">{{ row.oi | number }}</span>
-                <span
-                  class="oi-ch"
-                  [class.build]="row.oiChange > 0"
-                  [class.unwind]="row.oiChange < 0"
-                >
-                  {{ row.oiChange > 0 ? '+' : '' }}{{ row.oiChange | number }}
-                </span>
                 <div class="flow-cell">
                   <span class="flow-label">{{ insightFor(row, g).shortLabel }}</span>
                   <button
@@ -433,10 +445,10 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       .ladder-head,
       .ladder-row {
         display: grid;
-        grid-template-columns: 40px 44px 40px 52px 1fr 52px 48px minmax(100px, 1.1fr);
+        grid-template-columns: 40px 44px 72px minmax(88px, 1fr) 72px minmax(108px, 1.1fr);
         gap: 6px;
         align-items: center;
-        min-width: 420px;
+        min-width: 380px;
       }
       .ladder-head {
         font-size: 0.58rem;
@@ -447,6 +459,40 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         margin-bottom: 4px;
       }
+      .ladder-head .flow-head,
+      .ladder-head .buildup-head {
+        text-align: right;
+      }
+      .compact-col {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .prem-stack .prem,
+      .oi-stack .oi {
+        font-weight: 600;
+      }
+      .buildup-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+      }
+      .price-bar-wrap {
+        height: 6px;
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .price-bar {
+        height: 100%;
+        border-radius: 3px;
+        min-width: 2px;
+        background: #a78bfa;
+      }
+      .price-bar.up { background: #4ade80; }
+      .price-bar.down { background: #f87171; }
       .guard-ladder { display: flex; flex-direction: column; gap: 4px; }
       .ladder-row { font-size: 0.68rem; padding: 4px 0; }
       .ladder-row.highlight {
@@ -493,8 +539,16 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        gap: 4px;
+        gap: 6px;
         min-width: 0;
+      }
+      @media (max-width: 520px) {
+        .ladder-head,
+        .ladder-row {
+          grid-template-columns: 36px 40px 64px 1fr 64px 96px;
+          min-width: 320px;
+        }
+        .flow-label { display: none; }
       }
       .flow-label {
         font-size: 0.58rem;
@@ -662,6 +716,11 @@ export class OptionGuardDashboardComponent {
 
   insightFor(row: OptionChainGuardLevel, g: OptionChainGuardData): RowInsight {
     return rowInsight(row, g.spotLtp);
+  }
+
+  priceBarWidth(row: OptionChainGuardLevel): number {
+    const pct = Math.abs(row.ltpChangePct ?? 0);
+    return Math.min(100, Math.max(8, pct * 4));
   }
 
   formatPremChange(row: OptionChainGuardLevel): string {

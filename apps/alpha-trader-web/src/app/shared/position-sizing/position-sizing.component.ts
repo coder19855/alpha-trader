@@ -7,59 +7,19 @@ import { DeckContextService } from '../../core/services/deck-context.service';
 import { OptionChainApiService } from '../../core/services/option-chain-api.service';
 import { TradingStyle } from '../../core/models/deck.models';
 import { OptionMoneyness, OptionSide } from '../../core/models/option-chain.models';
+import {
+  formatIndexMove,
+  optionPnlAtMove,
+  signedOptionDelta,
+  solveIndexMoveForTargetPnl,
+} from './position-sizing-math';
 
 interface RiskRow {
   level: string;
   pnl: number;
+  optionPnl: number | null;
   capitalAfter: number;
   move: string;
-}
-
-/** Index points for target P&L using delta + gamma (ΔP ≈ δ·ΔS + ½γ·ΔS²). */
-function solveIndexMoveForTargetPnl(
-  targetPnlPerLot: number,
-  lotSize: number,
-  delta: number | null,
-  gamma: number | null,
-): number | null {
-  if (!lotSize || lotSize <= 0 || targetPnlPerLot === 0) return 0;
-  if (delta == null || !Number.isFinite(delta) || Math.abs(delta) < 1e-6) {
-    return null;
-  }
-
-  const premiumChange = targetPnlPerLot / lotSize;
-  const g = gamma ?? 0;
-
-  if (Math.abs(g) < 1e-9) {
-    return premiumChange / delta;
-  }
-
-  const disc = delta * delta + 2 * g * premiumChange;
-  if (disc < 0) return null;
-
-  const sqrtDisc = Math.sqrt(disc);
-  const rootA = (-delta + sqrtDisc) / g;
-  const rootB = (-delta - sqrtDisc) / g;
-
-  const candidates = [rootA, rootB].filter((r) => Number.isFinite(r));
-  if (!candidates.length) return null;
-
-  const sameSign = (a: number, b: number) =>
-    (a >= 0 && b >= 0) || (a <= 0 && b <= 0);
-
-  const preferred = candidates.find((r) => sameSign(r, premiumChange));
-  if (preferred != null) return preferred;
-
-  return candidates.reduce((best, r) =>
-    Math.abs(r) < Math.abs(best) ? r : best,
-  );
-}
-
-function formatIndexMove(pts: number | null): string {
-  if (pts == null) return '—';
-  if (Math.abs(pts) < 0.05) return '0 pts';
-  const rounded = Math.abs(pts) >= 10 ? Math.round(pts) : +pts.toFixed(1);
-  return `${rounded > 0 ? '+' : ''}${rounded} pts`;
 }
 
 @Component({
@@ -222,13 +182,14 @@ function formatIndexMove(pts: number | null): string {
       <div class="table-wrap">
         <div class="panel-head small">
           <span>Projected P&amp;L (by R-multiple)</span>
-          <span class="note">Move = index pts from spot (δ + ½γ). 0R = breakeven on risked amount.</span>
+          <span class="note">Move uses δ+½γ for {{ suggestedLots() || 1 }} lot(s). Loss rows show adverse spot move.</span>
         </div>
         <table class="risk-table">
           <thead>
             <tr>
               <th>Level</th>
-              <th>P&amp;L (₹)</th>
+              <th>Risk P&amp;L (₹)</th>
+              <th>Option P&amp;L (₹)</th>
               <th>Capital After (₹)</th>
               <th>Move</th>
             </tr>
@@ -238,6 +199,9 @@ function formatIndexMove(pts: number | null): string {
               <tr [class.zero]="row.level === '0R'" [class.loss]="row.pnl < 0" [class.gain]="row.pnl > 0">
                 <td class="level">{{ row.level }}</td>
                 <td class="pnl">{{ row.pnl | number:'1.0-0' }}</td>
+                <td class="opt-pnl" [class.loss]="(row.optionPnl ?? 0) < 0" [class.gain]="(row.optionPnl ?? 0) > 0">
+                  {{ row.optionPnl != null ? (row.optionPnl | number:'1.0-0') : '—' }}
+                </td>
                 <td class="cap">{{ row.capitalAfter | number:'1.0-0' }}</td>
                 <td class="move">{{ row.move }}</td>
               </tr>
@@ -273,8 +237,8 @@ function formatIndexMove(pts: number | null): string {
     .risk-table th, .risk-table td { padding:6px 8px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.08); }
     .risk-table th { color:var(--muted); font-weight:600; font-size:0.68rem; text-transform:uppercase; }
     .risk-table tr.zero td { background: rgba(255,255,255,0.03); font-weight:600; }
-    .risk-table tr.loss .pnl { color:#f87171; }
-    .risk-table tr.gain .pnl { color:#4ade80; }
+    .risk-table tr.loss .pnl, .risk-table .opt-pnl.loss { color:#f87171; }
+    .risk-table tr.gain .pnl, .risk-table .opt-pnl.gain { color:#4ade80; }
     .level, .move { font-family: ui-monospace, monospace; }
     .err { color:#f87171; font-size:0.7rem; }
     .hint { color:var(--muted); font-size:0.68rem; }
@@ -344,24 +308,35 @@ export class PositionSizingComponent implements OnInit, OnDestroy {
     const lotSize = this.effectiveLotSize();
     const delta = this.chainDelta();
     const gamma = this.chainGamma();
+    const side = this.optionSide();
     const lotCount = lots > 0 ? lots : 1;
+    const signedDelta = signedOptionDelta(delta, side);
 
     const rows: RiskRow[] = [];
     for (let i = -5; i <= 5; i++) {
       const pnl = Math.round(i * risked);
       const after = bal + pnl;
-      const targetPnlPerLot = (i * risked) / lotCount;
+      const targetPnlTotal = i * risked;
       const movePts = solveIndexMoveForTargetPnl(
-        targetPnlPerLot,
+        targetPnlTotal,
         lotSize,
+        lotCount,
         delta,
         gamma,
+        side,
       );
+      const optionPnl =
+        signedDelta != null && movePts != null
+          ? Math.round(
+              optionPnlAtMove(movePts, lotSize, lotCount, signedDelta, gamma),
+            )
+          : null;
       rows.push({
         level: `${i}R`,
         pnl,
+        optionPnl,
         capitalAfter: after,
-        move: delta != null ? formatIndexMove(movePts) : '—',
+        move: signedDelta != null ? formatIndexMove(movePts, side) : '—',
       });
     }
     return rows;

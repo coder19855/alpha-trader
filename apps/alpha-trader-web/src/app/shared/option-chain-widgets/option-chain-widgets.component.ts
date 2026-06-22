@@ -1,34 +1,118 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, computed, signal } from '@angular/core';
+import { MatIconModule } from '@angular/material/icon';
 import {
   OptionChainAtmGreeks,
   OptionChainSignalPayload,
 } from '../../core/models/option-chain.models';
 
+type WidgetTopic = 'oiBalance' | 'volatility' | 'maxPain' | 'atmGreeks';
+
+interface WidgetInfoContent {
+  title: string;
+  summary: string;
+  sections: Array<{ heading: string; body: string }>;
+}
+
+const WIDGET_INFO: Record<WidgetTopic, WidgetInfoContent> = {
+  oiBalance: {
+    title: 'OI balance',
+    summary: 'How call vs put open interest is distributed across the chain.',
+    sections: [
+      {
+        heading: 'What it shows',
+        body: 'The bar splits total OI into call (sky blue) and put (lavender) share. PCR in the header is put OI ÷ call OI — values above 1 mean more put OI than call OI.',
+      },
+      {
+        heading: 'How to read it',
+        body: 'Heavy call OI above spot often acts as resistance (writers expect price to stay below). Heavy put OI below spot can act as support. Balance shifts intraday as writers add or unwind.',
+      },
+      {
+        heading: 'Caveat',
+        body: 'OI alone does not show who is long vs short — we infer writer activity from OI build/unwind combined with premium change in OI Guard.',
+      },
+    ],
+  },
+  volatility: {
+    title: 'Volatility',
+    summary: 'IV skew and India VIX — fear and directional bias in option pricing.',
+    sections: [
+      {
+        heading: 'IV skew',
+        body: 'Compares ATM put IV vs call IV. Positive skew (red) means puts are richer — markets pay more for downside protection (bearish hedging). Negative skew (green) means calls are richer — bullish demand.',
+      },
+      {
+        heading: 'India VIX',
+        body: 'Broad market fear gauge. Under 12 = calm, 12–16 = normal, 16–20 = elevated, above 20 = high fear. Rising VIX usually expands option premiums; falling VIX compresses them.',
+      },
+      {
+        heading: 'Trading note',
+        body: 'Skew + VIX together: elevated VIX with put skew often favors cautious bullish entries or wider stops; low VIX with call skew can mean complacent upside positioning.',
+      },
+    ],
+  },
+  maxPain: {
+    title: 'Max pain',
+    summary: 'Strike where option writers would face minimum payout if spot settles there.',
+    sections: [
+      {
+        heading: 'Definition',
+        body: 'Max pain is computed from open interest at each strike — the strike that minimizes total intrinsic value paid to option buyers at expiry (or as a magnetic reference intraday).',
+      },
+      {
+        heading: 'Distance from spot',
+        body: 'Spot well above max pain (red) can pull spot down toward pain into close. Spot below (green) can pull up. Within ~20 pts = pinning zone where price may chop around the strike.',
+      },
+      {
+        heading: 'Intraday use',
+        body: 'Not a hard target — use with OI walls and PA structure. Strong trend days can ignore max pain; range days often respect it more.',
+      },
+    ],
+  },
+  atmGreeks: {
+    title: 'ATM Greeks',
+    summary: 'Sensitivity of ATM call and put premiums to spot, time, and volatility.',
+    sections: [
+      {
+        heading: 'Delta (Δ)',
+        body: 'Premium change per 1-point spot move. ATM call Δ ≈ 0.5, put ≈ −0.5. Used in position sizing Move column.',
+      },
+      {
+        heading: 'Gamma (Γ)',
+        body: 'How fast delta changes as spot moves. High gamma near ATM makes P&L accelerate on large moves (curved payoff).',
+      },
+      {
+        heading: 'Theta (Θ)',
+        body: 'Daily time decay — how much premium bleeds per day if spot is flat. Intraday longs fight theta after entry.',
+      },
+      {
+        heading: 'Vega (ν) & IV',
+        body: 'Sensitivity to implied volatility. Long options gain from IV expansion (VIX up) and lose from IV crush.',
+      },
+    ],
+  },
+};
+
 @Component({
   selector: 'app-option-chain-widgets',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, MatIconModule],
   template: `
     @if (payload(); as oc) {
       <section class="widgets-grid">
-        <!-- OI balance -->
         <article class="widget oi-balance">
           <header class="widget-head">
-            <span>OI balance</span>
+            <span class="widget-title">
+              OI balance
+              <button type="button" class="info-btn" (click)="openInfo('oiBalance')" aria-label="About OI balance">
+                <mat-icon>info_outline</mat-icon>
+              </button>
+            </span>
             <span class="widget-sub">PCR {{ oc.guard.pcr | number: '1.2-2' }}</span>
           </header>
           <div class="oi-bar-track">
-            <div
-              class="oi-seg calls"
-              [style.width.%]="callOiShare()"
-              title="Call OI"
-            ></div>
-            <div
-              class="oi-seg puts"
-              [style.width.%]="putOiShare()"
-              title="Put OI"
-            ></div>
+            <div class="oi-seg calls" [style.width.%]="callOiShare()" title="Call OI"></div>
+            <div class="oi-seg puts" [style.width.%]="putOiShare()" title="Put OI"></div>
           </div>
           <div class="oi-labels">
             <span class="call-tag">Call {{ oc.guard.callOiTotal | number }}</span>
@@ -36,9 +120,15 @@ import {
           </div>
         </article>
 
-        <!-- IV skew + VIX -->
         <article class="widget skew-vix">
-          <header class="widget-head"><span>Volatility</span></header>
+          <header class="widget-head">
+            <span class="widget-title">
+              Volatility
+              <button type="button" class="info-btn" (click)="openInfo('volatility')" aria-label="About volatility">
+                <mat-icon>info_outline</mat-icon>
+              </button>
+            </span>
+          </header>
           <div class="skew-row">
             <span class="skew-label">IV skew</span>
             <span
@@ -64,9 +154,15 @@ import {
           </div>
         </article>
 
-        <!-- Max pain distance -->
         <article class="widget pain-widget">
-          <header class="widget-head"><span>Max pain</span></header>
+          <header class="widget-head">
+            <span class="widget-title">
+              Max pain
+              <button type="button" class="info-btn" (click)="openInfo('maxPain')" aria-label="About max pain">
+                <mat-icon>info_outline</mat-icon>
+              </button>
+            </span>
+          </header>
           <div class="pain-visual">
             <span class="pain-strike">{{ oc.guard.maxPain }}</span>
             <span class="pain-dist" [class.above]="painDist() > 0" [class.below]="painDist() < 0">
@@ -82,7 +178,12 @@ import {
       @if (oc.atmGreeks; as greeks) {
         <section class="greeks-panel">
           <header class="greeks-head">
-            <span>ATM Greeks</span>
+            <span class="widget-title">
+              ATM Greeks
+              <button type="button" class="info-btn" (click)="openInfo('atmGreeks')" aria-label="About ATM Greeks">
+                <mat-icon>info_outline</mat-icon>
+              </button>
+            </span>
             <span class="greeks-strike">Strike {{ greeks.atmStrike }}</span>
           </header>
           <div class="greeks-cards">
@@ -98,11 +199,7 @@ import {
                       <div class="greek-row">
                         <span class="greek-key">{{ row.key }}</span>
                         <div class="greek-bar-wrap">
-                          <div
-                            class="greek-bar"
-                            [style.width.%]="row.bar"
-                            [class.neg]="row.value < 0"
-                          ></div>
+                          <div class="greek-bar" [style.width.%]="row.bar" [class.neg]="row.value < 0"></div>
                         </div>
                         <span class="greek-val">{{ row.display }}</span>
                       </div>
@@ -118,6 +215,29 @@ import {
             }
           </div>
         </section>
+      }
+
+      @if (infoTopic(); as topic) {
+        <div class="detail-backdrop" (click)="closeInfo()" role="presentation"></div>
+        <aside class="detail-panel" role="dialog" [attr.aria-labelledby]="'widget-info-' + topic">
+          <header class="detail-head">
+            <div>
+              <h3 [id]="'widget-info-' + topic">{{ infoContent(topic).title }}</h3>
+              <p class="detail-sub">{{ infoContent(topic).summary }}</p>
+            </div>
+            <button type="button" class="detail-close" (click)="closeInfo()" aria-label="Close">
+              <mat-icon>close</mat-icon>
+            </button>
+          </header>
+          <div class="detail-body">
+            @for (section of infoContent(topic).sections; track section.heading) {
+              <section class="detail-section">
+                <h4>{{ section.heading }}</h4>
+                <p>{{ section.body }}</p>
+              </section>
+            }
+          </div>
+        </aside>
       }
     }
   `,
@@ -143,6 +263,24 @@ import {
         font-weight: 700;
         margin-bottom: 8px;
       }
+      .widget-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .info-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        vertical-align: middle;
+      }
+      .info-btn mat-icon { font-size: 14px; width: 14px; height: 14px; }
+      .info-btn:hover { color: #22d3ee; }
       .widget-sub {
         font-size: 0.62rem;
         color: var(--muted);
@@ -200,43 +338,21 @@ import {
         background: #a78bfa;
         border-radius: 4px;
       }
-      .skew-fill.left {
-        right: 50%;
-        background: #4ade80;
-      }
-      .skew-fill:not(.left) {
-        left: 50%;
-        background: #f87171;
-      }
+      .skew-fill.left { right: 50%; background: #4ade80; }
+      .skew-fill:not(.left) { left: 50%; background: #f87171; }
       .vix-chip {
         display: flex;
         align-items: center;
         gap: 8px;
         font-size: 0.68rem;
       }
-      .vix-val {
-        font-weight: 700;
-        font-size: 0.9rem;
-      }
-      .vix-hint {
-        color: var(--muted);
-        margin-left: auto;
-      }
-      .pain-strike {
-        font-size: 1.2rem;
-        font-weight: 700;
-      }
-      .pain-dist {
-        font-size: 0.68rem;
-        color: var(--muted);
-      }
+      .vix-val { font-weight: 700; font-size: 0.9rem; }
+      .vix-hint { color: var(--muted); margin-left: auto; }
+      .pain-strike { font-size: 1.2rem; font-weight: 700; }
+      .pain-dist { font-size: 0.68rem; color: var(--muted); }
       .pain-dist.above { color: #f87171; }
       .pain-dist.below { color: #4ade80; }
-      .pain-hint {
-        margin: 6px 0 0;
-        font-size: 0.62rem;
-        color: var(--muted);
-      }
+      .pain-hint { margin: 6px 0 0; font-size: 0.62rem; color: var(--muted); }
       .greeks-panel {
         margin: 12px 0;
         padding: 12px;
@@ -251,11 +367,7 @@ import {
         font-weight: 700;
         margin-bottom: 10px;
       }
-      .greeks-strike {
-        font-size: 0.65rem;
-        color: var(--muted);
-        font-weight: 500;
-      }
+      .greeks-strike { font-size: 0.65rem; color: var(--muted); font-weight: 500; }
       .greeks-cards {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -277,21 +389,11 @@ import {
         justify-content: space-between;
         margin-bottom: 8px;
       }
-      .greek-card-head .side {
-        font-weight: 800;
-        font-size: 0.8rem;
-      }
+      .greek-card-head .side { font-weight: 800; font-size: 0.8rem; }
       .greek-card.call .side { color: var(--oc-call, #38bdf8); }
       .greek-card.put .side { color: var(--oc-put, #c4b5fd); }
-      .premium {
-        font-size: 0.72rem;
-        color: var(--muted);
-      }
-      .greek-grid {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-      }
+      .premium { font-size: 0.72rem; color: var(--muted); }
+      .greek-grid { display: flex; flex-direction: column; gap: 5px; }
       .greek-row {
         display: grid;
         grid-template-columns: 36px 1fr 44px;
@@ -299,10 +401,7 @@ import {
         align-items: center;
         font-size: 0.65rem;
       }
-      .greek-key {
-        color: var(--muted);
-        font-weight: 600;
-      }
+      .greek-key { color: var(--muted); font-weight: 600; }
       .greek-bar-wrap {
         height: 6px;
         background: rgba(255, 255, 255, 0.06);
@@ -321,27 +420,80 @@ import {
         font-family: ui-monospace, monospace;
         font-size: 0.62rem;
       }
-      .oi-ch {
-        margin: 8px 0 0;
-        font-size: 0.62rem;
-        color: var(--muted);
-      }
+      .oi-ch { margin: 8px 0 0; font-size: 0.62rem; color: var(--muted); }
       .oi-ch.build { color: #22d3ee; }
       .oi-ch.unwind { color: #fb923c; }
-      .greek-missing {
-        font-size: 0.68rem;
+      .greek-missing { font-size: 0.68rem; color: var(--muted); margin: 0; }
+      .detail-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 1200;
+      }
+      .detail-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(380px, 92vw);
+        z-index: 1201;
+        background: #11151c;
+        border-left: 1px solid var(--border);
+        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+        display: flex;
+        flex-direction: column;
+        animation: slide-in 0.2s ease-out;
+      }
+      @keyframes slide-in {
+        from { transform: translateX(100%); }
+        to { transform: translateX(0); }
+      }
+      .detail-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 14px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .detail-head h3 { margin: 0; font-size: 1rem; }
+      .detail-sub {
+        margin: 4px 0 0;
+        font-size: 0.72rem;
+        color: #22d3ee;
+        font-weight: 600;
+      }
+      .detail-close {
+        background: transparent;
+        border: none;
         color: var(--muted);
-        margin: 0;
+        cursor: pointer;
+        padding: 4px;
+      }
+      .detail-body { padding: 12px 14px 20px; overflow-y: auto; flex: 1; }
+      .detail-section h4 {
+        margin: 0 0 6px;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+      .detail-section p {
+        margin: 0 0 12px;
+        font-size: 0.78rem;
+        line-height: 1.45;
       }
     `,
   ],
 })
 export class OptionChainWidgetsComponent {
   readonly payload = signal<OptionChainSignalPayload | null>(null);
+  readonly infoTopic = signal<WidgetTopic | null>(null);
 
   @Input({ required: true })
   set data(value: OptionChainSignalPayload | null | undefined) {
     this.payload.set(value ?? null);
+    this.infoTopic.set(null);
   }
 
   readonly callOiShare = computed(() => {
@@ -407,5 +559,17 @@ export class OptionChainWidgetsComponent {
       display: Number.isFinite(r.value) ? r.value.toFixed(r.key === 'IV' ? 1 : 3) : '—',
       bar: Math.min(100, Math.max(4, (Math.abs(r.value) / r.scale) * 100)),
     }));
+  }
+
+  infoContent(topic: WidgetTopic): WidgetInfoContent {
+    return WIDGET_INFO[topic];
+  }
+
+  openInfo(topic: WidgetTopic): void {
+    this.infoTopic.set(topic);
+  }
+
+  closeInfo(): void {
+    this.infoTopic.set(null);
   }
 }

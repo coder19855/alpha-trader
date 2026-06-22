@@ -9,7 +9,9 @@ export const DECK_TAB_IDS: DeckTab[] = [
   'strategy',
   'sizing',
   'charts',
+  'news',
   'events',
+  'journal',
   'positions',
   'settings',
 ];

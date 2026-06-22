@@ -27,7 +27,9 @@ export type DeckTab =
   | 'strategy'
   | 'sizing'
   | 'charts'
+  | 'news'
   | 'events'
+  | 'journal'
   | 'positions'
   | 'settings';
 
@@ -43,7 +45,9 @@ export const LIVE_TABS: DeckTabDef[] = [
   { id: 'strategy', label: 'Strategy', icon: 'psychology' },
   { id: 'sizing', label: 'Sizing', icon: 'calculate' },
   { id: 'charts', label: 'Chart', icon: 'show_chart' },
+  { id: 'news', label: 'News', icon: 'newspaper' },
   { id: 'events', label: 'Events', icon: 'notifications' },
+  { id: 'journal', label: 'Journal', icon: 'menu_book' },
   { id: 'positions', label: 'Positions', icon: 'account_balance_wallet' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
@@ -54,7 +58,9 @@ export const REPLAY_TABS: DeckTabDef[] = [
   { id: 'strategy', label: 'Strategy', icon: 'psychology' },
   { id: 'sizing', label: 'Sizing', icon: 'calculate' },
   { id: 'charts', label: 'Chart', icon: 'show_chart' },
+  { id: 'news', label: 'News', icon: 'newspaper' },
   { id: 'events', label: 'Events', icon: 'notifications' },
+  { id: 'journal', label: 'Journal', icon: 'menu_book' },
   { id: 'positions', label: 'Positions', icon: 'account_balance_wallet' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ];

@@ -291,3 +291,45 @@ export interface AutoExitSnapshot {
   exitPolicies: Array<{ id: string; label: string; hint: string }>;
   positionPolicies: Array<{ id: string; label: string; hint: string }>;
 }
+
+export interface AutoEntrySnapshot {
+  enabled: boolean;
+  signalProfile: string;
+  signalPresetGroups: Array<{
+    id: string;
+    label: string;
+    presets: Array<{ id: string; label: string; gates: string[] }>;
+  }>;
+  warning?: string;
+}
+
+export interface MarketNewsItem {
+  id: string;
+  title: string;
+  link: string;
+  source?: string;
+  publishedAt?: string;
+}
+
+export interface MarketNewsPayload {
+  items: MarketNewsItem[];
+  fetchedAt: string;
+  query: string;
+}
+
+export interface TradeJournalEntry {
+  id: string;
+  symbol: string;
+  tradingStyle: string;
+  side: 'CE' | 'PE' | 'UNKNOWN';
+  symbolLabel?: string;
+  entryAt: string;
+  exitAt?: string | null;
+  status: 'open' | 'closed';
+  paTrigger?: string | null;
+  optionTrigger?: string | null;
+  optionTriggerPending?: boolean;
+  entryNote?: string | null;
+  exitNote?: string | null;
+  positionId?: string | null;
+}
