@@ -13,6 +13,8 @@ export const DeckUiActions = createActionGroup({
       symbol?: string;
       symbolLabel?: string;
       price?: number | null;
+      dayChange?: number | null;
+      dayChangePct?: number | null;
       style?: string;
       connected?: boolean;
       live?: boolean;

@@ -146,6 +146,9 @@ export interface DeckLiveTick {
   marketRegime?: DeckMarketRegime;
   entryThreshold: number;
   lastPrice: number;
+  /** Session change vs previous close (Fyers ch / chp). */
+  dayChange?: number;
+  dayChangePct?: number;
   chartVetoed?: boolean;
   vetoReason?: string;
   gauges: DeckGauges;

@@ -70,6 +70,20 @@ function formatIndexMove(pts: number | null): string {
     <section class="sizing-panel">
       <div class="panel-head">
         <span>Position Sizing</span>
+        <div class="head-actions">
+          @if (chainFetchedAt()) {
+            <small class="hint fetched-at">Updated {{ formatFetchedAt(chainFetchedAt()) }}</small>
+          }
+          <button
+            type="button"
+            class="fetch-btn reload-btn"
+            (click)="reloadOptionChain()"
+            [disabled]="moneynessLoading()"
+            title="Refresh option chain"
+          >
+            {{ moneynessLoading() ? 'Refreshing…' : '↻ Reload chain' }}
+          </button>
+        </div>
       </div>
 
       <div class="sizing-row">
@@ -266,6 +280,9 @@ function formatIndexMove(pts: number | null): string {
     .hint { color:var(--muted); font-size:0.68rem; }
     .table-wrap { margin-top: 8px; }
     .note { font-weight: 400; font-size: 0.68rem; }
+    .head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .fetched-at { white-space: nowrap; }
+    .reload-btn { flex-shrink: 0; }
   `]
 })
 export class PositionSizingComponent implements OnInit, OnDestroy {
@@ -289,6 +306,7 @@ export class PositionSizingComponent implements OnInit, OnDestroy {
   readonly chainStrike = signal<number | null>(null);
   readonly chainDelta = signal<number | null>(null);
   readonly chainGamma = signal<number | null>(null);
+  readonly chainFetchedAt = signal<string | null>(null);
   readonly fundsLoading = signal(false);
   readonly fundsError = signal<string | null>(null);
   readonly fundsTitle = signal<string>('');
@@ -367,6 +385,27 @@ export class PositionSizingComponent implements OnInit, OnDestroy {
     this.fetchOptionLeg();
   }
 
+  reloadOptionChain(): void {
+    this.fetchOptionLeg();
+  }
+
+  formatFetchedAt(iso: string | null): string {
+    if (!iso) return '—';
+    const at = new Date(iso);
+    if (Number.isNaN(at.getTime())) return '—';
+    const ageSec = Math.max(0, Math.round((Date.now() - at.getTime()) / 1000));
+    const time = at.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Kolkata',
+    });
+    if (ageSec < 60) return `${time} IST (${ageSec}s ago)`;
+    const ageMin = Math.floor(ageSec / 60);
+    return `${time} IST (${ageMin}m ago)`;
+  }
+
   private fetchOptionLeg(): void {
     this.moneynessSub?.unsubscribe();
     this.moneynessError.set(null);
@@ -390,6 +429,7 @@ export class PositionSizingComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (res) => {
           this.moneynessLoading.set(false);
+          this.chainFetchedAt.set(res.fetchedAt ?? new Date().toISOString());
           if (res.estRiskPerLot != null && res.estRiskPerLot > 0) {
             this.estRiskPerLot.set(res.estRiskPerLot);
           }

@@ -442,10 +442,21 @@ export class ReplayDeckComponent implements OnInit {
         next: (data) => {
           this.payload.set(data);
           this.scrubIndex.set(Math.max(0, data.replayPoints.length - 1));
+          const points = data.replayPoints ?? [];
+          const first = points[0];
+          const lastSpot = points.at(-1)?.spot ?? null;
+          const dayChange =
+            first?.spot != null && lastSpot != null ? lastSpot - first.spot : null;
+          const dayChangePct =
+            first?.spot != null && lastSpot != null && first.spot > 0
+              ? ((lastSpot - first.spot) / first.spot) * 100
+              : null;
           this.ctx.updateTracker({
             symbol: data.symbol,
             symbolLabel: data.symbolLabel,
-            price: data.replayPoints.at(-1)?.spot ?? null,
+            price: lastSpot,
+            dayChange,
+            dayChangePct,
             style: data.tradingStyle,
             connected: true,
             live: false,

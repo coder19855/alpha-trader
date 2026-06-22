@@ -91,6 +91,9 @@ export interface DeckLiveStreamTick {
   marketRegime?: DeckMarketRegime;
   entryThreshold: number;
   lastPrice: number;
+  /** Session change vs previous close (Fyers ch / chp). */
+  dayChange: number;
+  dayChangePct: number;
   chartVetoed: boolean;
   gauges: DeckGauges;
   lanes: {
@@ -144,6 +147,8 @@ export interface DeckPositionsLtpPatch {
   type: 'ltp';
   asOf: string;
   lastPrice: number | null;
+  dayChange?: number;
+  dayChangePct?: number;
   openPositions: DeckOpenPositionsPayload;
   openPositionsLtpOnly: true;
   managementContext?: PositionManagementContext;
@@ -178,13 +183,34 @@ function shortSymbol(symbol: string): string {
   return part.replace('-INDEX', '');
 }
 
+function resolveLiveIndexQuote(
+  fastify: FastifyInstance,
+  indexSymbol: string,
+  fallback: number,
+): { ltp: number; dayChange: number; dayChangePct: number } {
+  const quote = fastify.fyersMarketStream?.getQuote?.(indexSymbol) as
+    | { ltp?: number; ch?: number; chp?: number }
+    | null
+    | undefined;
+  if (quote && Number.isFinite(quote.ltp) && (quote.ltp ?? 0) > 0) {
+    return {
+      ltp: quote.ltp!,
+      dayChange: Number(quote.ch ?? 0),
+      dayChangePct: Number(quote.chp ?? 0),
+    };
+  }
+
+  const streamed = fastify.fyersMarketStream?.getIndexLtp(indexSymbol);
+  const ltp = streamed ?? fallback;
+  return { ltp, dayChange: 0, dayChangePct: 0 };
+}
+
 function resolveLiveIndexPrice(
   fastify: FastifyInstance,
   indexSymbol: string,
   fallback: number,
 ): number {
-  const streamed = fastify.fyersMarketStream?.getIndexLtp(indexSymbol);
-  return streamed ?? fallback;
+  return resolveLiveIndexQuote(fastify, indexSymbol, fallback).ltp;
 }
 
 function mergeSpotSeriesWithStream(
@@ -354,11 +380,12 @@ function buildStreamTickParts(
   });
   const laneMeta = buildLaneMeta(params.decision, gauges);
   const indexSymbol = params.decision.symbol || params.symbol;
-  const liveLastPrice = resolveLiveIndexPrice(
+  const liveQuote = resolveLiveIndexQuote(
     fastify,
     indexSymbol,
     params.decision.lastPrice,
   );
+  const liveLastPrice = liveQuote.ltp;
   const spotSeries =
     fastify.fyersMarketStream?.getSpotSeries(indexSymbol) ?? [];
   const aligned = resolveDeckAlignmentCount(params.decision);
@@ -391,6 +418,8 @@ function buildStreamTickParts(
       params.decision.convictionThresholds?.enter ??
       getStyleScoringConfig(params.style).convictionThreshold.enter,
     lastPrice: liveLastPrice,
+    dayChange: liveQuote.dayChange,
+    dayChangePct: liveQuote.dayChangePct,
     chartVetoed: Boolean(params.decision.priceAction.overallSignal?.vetoReason),
     gauges,
     lanes: laneMeta.lanes,
@@ -763,6 +792,7 @@ export async function buildDeckPositionsLtpPatch(
 ): Promise<DeckPositionsLtpPatch> {
   const indexSymbol = params.symbol.trim();
   const refreshed = refreshDeckOpenPositionsLtp(fastify, openPositions);
+  const liveQuote = resolveLiveIndexQuote(fastify, indexSymbol, 0);
   const liveLastPrice =
     fastify.fyersMarketStream?.getIndexLtp(indexSymbol) ?? null;
   const patchedManagementContext =
@@ -778,6 +808,8 @@ export async function buildDeckPositionsLtpPatch(
     type: 'ltp',
     asOf: new Date().toISOString(),
     lastPrice: liveLastPrice,
+    dayChange: liveQuote.dayChange,
+    dayChangePct: liveQuote.dayChangePct,
     openPositions: refreshed,
     openPositionsLtpOnly: true,
     managementContext: patchedManagementContext,

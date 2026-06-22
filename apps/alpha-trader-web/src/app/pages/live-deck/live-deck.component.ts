@@ -833,6 +833,16 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       this.deckAlerts.evaluate(prev, next);
       return next;
     });
+    if (patch.lastPrice != null && Number.isFinite(patch.lastPrice)) {
+      this.ctx.updateTracker({
+        price: patch.lastPrice,
+        dayChange: patch.dayChange ?? null,
+        dayChangePct: patch.dayChangePct ?? null,
+        connected: true,
+        live: true,
+        asOf: patch.asOf,
+      });
+    }
   }
 
   private applyTick(data: DeckLiveTick): void {
@@ -854,6 +864,8 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       symbol: next.symbol,
       symbolLabel: next.symbolLabel,
       price: next.lastPrice,
+      dayChange: next.dayChange ?? null,
+      dayChangePct: next.dayChangePct ?? null,
       style: next.tradingStyle ?? this.ctx.style(),
       connected: true,
       live: true,

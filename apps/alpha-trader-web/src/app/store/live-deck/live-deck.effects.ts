@@ -123,6 +123,8 @@ export class LiveDeckEffects {
           symbol: tick.symbol,
           symbolLabel: tick.symbolLabel,
           price: tick.lastPrice,
+          dayChange: tick.dayChange ?? null,
+          dayChangePct: tick.dayChangePct ?? null,
           style: tick.tradingStyle,
           connected: true,
           live: true,

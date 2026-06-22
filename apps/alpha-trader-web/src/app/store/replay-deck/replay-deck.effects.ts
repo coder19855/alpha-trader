@@ -43,11 +43,22 @@ export class ReplayDeckEffects {
     this.actions$.pipe(
       ofType(ReplayDeckActions.loadSuccess),
       map(({ payload }) => {
-        const last = payload.replayPoints?.at(-1);
+        const points = payload.replayPoints ?? [];
+        const last = points.at(-1);
+        const first = points[0];
+        const lastSpot = last?.spot ?? null;
+        const dayChange =
+          first?.spot != null && lastSpot != null ? lastSpot - first.spot : null;
+        const dayChangePct =
+          first?.spot != null && lastSpot != null && first.spot > 0
+            ? ((lastSpot - first.spot) / first.spot) * 100
+            : null;
         return DeckUiActions.trackerUpdated({
           symbol: payload.symbol,
           symbolLabel: payload.symbolLabel,
-          price: last?.spot ?? null,
+          price: lastSpot,
+          dayChange,
+          dayChangePct,
           style: payload.tradingStyle,
           connected: true,
           live: false,

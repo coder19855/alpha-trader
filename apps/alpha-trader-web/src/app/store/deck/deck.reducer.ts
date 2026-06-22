@@ -65,6 +65,9 @@ export const deckUiReducer = createReducer(
     tracker: {
       ...state.tracker,
       symbolLabel: shortLabel(symbol),
+      lastPrice: null,
+      priceChange: '—',
+      priceChangeClass: 'muted' as const,
     },
   })),
   on(DeckUiActions.styleChanged, (state, { style }) => ({
@@ -96,19 +99,26 @@ export const deckUiReducer = createReducer(
     if (params.live !== undefined) tracker.liveBadge = params.live;
 
     if (params.price != null && !Number.isNaN(Number(params.price))) {
-      const price = Number(params.price);
-      const prev = tracker.lastPrice;
-      if (prev != null) {
-        const delta = price - prev;
-        const pct = prev ? (delta / prev) * 100 : 0;
-        const sign = delta >= 0 ? '+' : '';
-        tracker.priceChange = `${sign}${delta.toFixed(2)} (${sign}${pct.toFixed(2)}%)`;
-        tracker.priceChangeClass = delta > 0 ? 'up' : delta < 0 ? 'down' : 'muted';
-      } else {
-        tracker.priceChange = params.style || '—';
-        tracker.priceChangeClass = 'muted';
-      }
-      tracker.lastPrice = price;
+      tracker.lastPrice = Number(params.price);
+    }
+
+    const dayDelta =
+      params.dayChange != null && !Number.isNaN(Number(params.dayChange))
+        ? Number(params.dayChange)
+        : null;
+    const dayPct =
+      params.dayChangePct != null && !Number.isNaN(Number(params.dayChangePct))
+        ? Number(params.dayChangePct)
+        : null;
+
+    if (dayDelta != null && dayPct != null) {
+      const sign = dayDelta >= 0 ? '+' : '';
+      tracker.priceChange = `${sign}${dayDelta.toFixed(2)} (${sign}${dayPct.toFixed(2)}%)`;
+      tracker.priceChangeClass =
+        dayDelta > 0 ? 'up' : dayDelta < 0 ? 'down' : 'muted';
+    } else if (params.price != null && tracker.lastPrice != null) {
+      tracker.priceChange = '—';
+      tracker.priceChangeClass = 'muted';
     }
 
     return { ...state, symbol, style, tracker };
