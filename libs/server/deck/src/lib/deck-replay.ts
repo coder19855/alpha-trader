@@ -74,6 +74,10 @@ export interface DeckReplayPayload {
   sessionDate: string;
   entryThreshold: number;
   gauges: ReturnType<typeof buildDeckGauges>;
+  weightedBaseConviction?: number;
+  convictionBonuses?: Array<{ label: string; points: number }>;
+  paConvictionBonuses?: Array<{ label: string; points: number }>;
+  paBaseConviction?: number;
   replayPoints: DeckReplayPoint[];
   spotSeries: Array<{ t: number; v: number }>;
   spotCandles: DeckCandlePoint[];
@@ -191,6 +195,7 @@ async function buildReplayDecision(
     tradeGuidance: buildTradeGuidanceForPa(paDecision.conviction, style, action),
     recommendedStrategies: buildPaRecommendedStrategies(action, paDecision.conviction),
     weightedBaseConviction: paDecision.weightedBaseConviction,
+    convictionBonuses: paDecision.convictionBonuses,
     priceConviction: paDecision.priceConviction,
     priceConvictionBeforeDecay: paDecision.priceConvictionBeforeDecay,
     lastPrice: priceData.lastPrice,
@@ -298,6 +303,10 @@ export async function buildDeckReplayPayload(
     sessionDate: date,
     entryThreshold,
     gauges,
+    weightedBaseConviction: decision.weightedBaseConviction,
+    convictionBonuses: decision.convictionBonuses,
+    paConvictionBonuses: decision.convictionBonuses,
+    paBaseConviction: decision.weightedBaseConviction,
     replayPoints,
     spotSeries,
     spotCandles: multiCandles.c5.length

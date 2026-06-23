@@ -134,9 +134,12 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
             "
             [hideCombinedLane]="true"
             [weightedBaseConviction]="
-              scrubbed()?.conviction ?? data.entryThreshold
+              data.paBaseConviction ?? data.weightedBaseConviction ?? scrubbed()?.conviction ?? data.entryThreshold
             "
             [entryConviction]="scrubbed()?.conviction ?? 0"
+            [convictionBonuses]="data.convictionBonuses ?? []"
+            [paConvictionBonuses]="data.paConvictionBonuses ?? []"
+            [paBaseConviction]="data.paBaseConviction"
           />
         </section>
 

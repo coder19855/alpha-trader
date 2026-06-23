@@ -286,6 +286,10 @@ export interface DeckReplayPayload {
   sessionDate: string;
   entryThreshold: number;
   gauges: DeckGauges;
+  weightedBaseConviction?: number;
+  convictionBonuses?: ConvictionBonus[];
+  paConvictionBonuses?: ConvictionBonus[];
+  paBaseConviction?: number;
   replayPoints: DeckReplayPoint[];
   spotSeries: Array<{ t: number; v: number }>;
   spotCandles: Array<{ t: number; o: number; h: number; l: number; c: number }>;
