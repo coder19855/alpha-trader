@@ -17,6 +17,9 @@ import {
   REGIME_FILTERS,
   TA_CONFIDENCE,
   TREND_CONTEXT_SCORING,
+  VETO_PENALTY_BASE,
+  VetoPenaltyLedger,
+  scaleVetoPenalty,
 } from '@alpha-trader/server-shared';
 import { MOMENTUM_DECAY } from '@alpha-trader/server-shared';
 import {
@@ -704,13 +707,19 @@ export default fp(
         params.entryVetoMode ??
         (params.skipEntryVeto ? 'off' : 'strict');
       const vetoOff = entryVetoMode === 'off';
-      const vetoRelaxed = entryVetoMode === 'relaxed';
       const regime = REGIME_FILTERS;
       const veto = ENTRY_VETO;
       const enhance = CONFLUENCE_ENHANCEMENTS;
       let entryVetoReason: string | undefined;
-      const noteVeto = (reason: string) => {
+      let hardBlocked = false;
+      const penalties = new VetoPenaltyLedger(entryVetoMode);
+      const hardBlock = (reason: string) => {
+        if (vetoOff) return;
+        hardBlocked = true;
         if (!entryVetoReason) entryVetoReason = reason;
+      };
+      const penalize = (label: string, base: number) => {
+        penalties.apply(label, base);
       };
 
       const primaryTf =
@@ -743,32 +752,47 @@ export default fp(
         (isBullishPrimary && (structures.ms1h === 1 || scores.score1h > 0.1)) ||
         (isBearishPrimary && (structures.ms1h === -1 || scores.score1h < -0.1));
 
-      // Style-specific confluence gates + effective strength
-      let allowTrade = false;
+      // Style-specific confluence bonuses; weak gates become penalties (not hard blocks).
       let confluenceBoost = 0;
+      const hasDirection = isBullishPrimary || isBearishPrimary;
 
       if (tradingStyle === TradingStyle.Scalper) {
-        // Scalper can take aggressive 5m moves even if 1h is neutral, but wants 15m not strongly against
         const fifteenMinAgainst =
           (isBullishPrimary && scores.score15m < -0.35) ||
           (isBearishPrimary && scores.score15m > 0.35);
-        allowTrade = !fifteenMinAgainst && (Math.abs(primaryScore) > 0.12 || primary.breakout !== 0);
+        if (fifteenMinAgainst) {
+          penalize('15m opposes scalper direction', VETO_PENALTY_BASE.SCALPER_15M_OPPOSES);
+        }
+        if (Math.abs(primaryScore) <= 0.12 && primary.breakout === 0) {
+          penalize('Weak primary score for scalper', VETO_PENALTY_BASE.SCALPER_WEAK_PRIMARY);
+        }
         confluenceBoost = aligned >= 2 ? 25 : aligned === 1 ? 12 : 0;
         if (higherTFAligned) confluenceBoost += 10;
       } else if (tradingStyle === TradingStyle.Intraday) {
-        // Intraday wants decent alignment (at least 2 TFs or strong 1h support)
         const minAligned = higherTFAligned ? 1 : 2;
-        allowTrade = aligned >= minAligned && Math.abs(primaryScore) > 0.22;
+        if (aligned < minAligned) {
+          penalize('Low TF alignment for intraday', VETO_PENALTY_BASE.INTRADAY_LOW_ALIGNMENT);
+        }
+        if (Math.abs(primaryScore) <= 0.22) {
+          penalize('Weak primary conviction', VETO_PENALTY_BASE.INTRADAY_WEAK_PRIMARY);
+        }
         confluenceBoost = aligned * 12 + (higherTFAligned ? 18 : 0);
       } else {
-        // POSITIONAL: strict. Require 1h structure/score leadership + 15m support
         const oneHourStrong =
           (isBullishPrimary && (structures.ms1h === 1 || scores.score1h >= 0.25)) ||
           (isBearishPrimary && (structures.ms1h === -1 || scores.score1h <= -0.25));
         const fifteenSupport =
           (isBullishPrimary && scores.score15m > -0.15) ||
           (isBearishPrimary && scores.score15m < 0.15);
-        allowTrade = oneHourStrong && fifteenSupport && Math.abs(primaryScore) > 0.28;
+        if (!oneHourStrong) {
+          penalize('Weak 1h leadership for positional', VETO_PENALTY_BASE.POSITIONAL_WEAK_1H);
+        }
+        if (!fifteenSupport) {
+          penalize('15m does not support positional bias', VETO_PENALTY_BASE.POSITIONAL_WEAK_15M);
+        }
+        if (Math.abs(primaryScore) <= 0.28) {
+          penalize('Weak primary conviction', VETO_PENALTY_BASE.POSITIONAL_WEAK_PRIMARY);
+        }
         confluenceBoost = (oneHourStrong ? 30 : 0) + (fifteenSupport ? 15 : -15) + aligned * 8;
       }
 
@@ -785,30 +809,28 @@ export default fp(
             ? momentum?.adx15m
             : momentum?.adx1h;
 
-      // Step 2: chop — weak ADX + weak conviction → no trend trade
+      // Step 2: chop — weak ADX + weak conviction
       if (
-        allowTrade &&
+        hasDirection &&
         primaryAdx !== undefined &&
         primaryAdx < regime.CHOP_ADX_THRESHOLD &&
         Math.abs(primaryScore) < regime.CHOP_MAX_ABS_SCORE
       ) {
-        allowTrade = false;
-        noteVeto('Chop regime: weak ADX and low conviction on primary TF');
+        penalize('Chop regime: weak ADX and low conviction', VETO_PENALTY_BASE.CHOP_REGIME);
       }
 
-      // Step 2: compression — tight range → need stronger score for trend entry
+      // Step 2: compression — tight range
       if (
-        allowTrade &&
+        hasDirection &&
         momentum?.atrCompression !== undefined &&
         momentum.atrCompression > 0 &&
         Math.abs(primaryScore) < regime.COMPRESSION_MIN_ABS_SCORE
       ) {
-        allowTrade = false;
-        noteVeto('Range compression: score too weak for trend entry');
+        penalize('Range compression: score too weak', VETO_PENALTY_BASE.RANGE_COMPRESSION);
       }
 
       // Step 2.2: Volman Build-up Squeeze Check for breakout trades
-      if (allowTrade && primary.breakout !== 0 && !vetoOff) {
+      if (hasDirection && primary.breakout !== 0 && !vetoOff) {
         const support = primary.support;
         const resistance = primary.resistance;
         const hasValidSr =
@@ -817,8 +839,10 @@ export default fp(
           resistance > support;
 
         if (!hasValidSr) {
-          allowTrade = false;
-          noteVeto('Breakout entry rejected: support/resistance unavailable');
+          penalize(
+            'Breakout: support/resistance unavailable',
+            VETO_PENALTY_BASE.BREAKOUT_NO_SR,
+          );
         } else if (primary.candles && momentum?.primaryAtr) {
           const buildup = detectBuildUp(
             primary.candles,
@@ -831,41 +855,35 @@ export default fp(
             (primary.breakout === -1 && !buildup.buildupSup);
 
           if (lacksBuildup) {
-            if (vetoRelaxed) {
-              confluenceBoost -= 15;
-            } else {
-              allowTrade = false;
-              noteVeto(
-                'Breakout entry rejected: lack of Volman build-up (compaction)',
-              );
-            }
+            penalize(
+              'Breakout: lack of Volman build-up',
+              VETO_PENALTY_BASE.BREAKOUT_NO_BUILDUP,
+            );
           }
-        } else if (vetoRelaxed) {
-          confluenceBoost -= 15;
         } else {
-          allowTrade = false;
-          noteVeto(
-            'Breakout entry rejected: insufficient data for Volman build-up check',
+          penalize(
+            'Breakout: insufficient build-up data',
+            VETO_PENALTY_BASE.BREAKOUT_NO_DATA,
           );
         }
       }
 
       // Step 2.3: Al Brooks Reversal Climax Check
-      if (allowTrade && primary.candles && momentum?.primaryAtr && !vetoOff) {
+      if (hasDirection && primary.candles && momentum?.primaryAtr && !vetoOff) {
         const climax = detectReversalClimax(primary.candles, momentum.primaryAtr);
-        const enteringInClimaxDirection = (isBullishPrimary && climax.climaxBull) || (isBearishPrimary && climax.climaxBear);
+        const enteringInClimaxDirection =
+          (isBullishPrimary && climax.climaxBull) ||
+          (isBearishPrimary && climax.climaxBear);
         if (enteringInClimaxDirection) {
-          if (vetoRelaxed) {
-            confluenceBoost -= 10;
-          } else {
-            allowTrade = false;
-            noteVeto('Extreme trend climax / exhaustion detected on primary TF');
-          }
+          penalize(
+            'Extreme trend climax / exhaustion',
+            VETO_PENALTY_BASE.REVERSAL_CLIMAX,
+          );
         }
       }
 
-      // Step 1: intraday — block CE when 5m opposes unless 15m momentum is strong
-      if (tradingStyle === TradingStyle.Intraday && allowTrade) {
+      // Step 1: intraday structural penalties
+      if (tradingStyle === TradingStyle.Intraday && hasDirection) {
         const mom15 = momentum?.recentMomentum15m ?? 0;
 
         if (
@@ -873,8 +891,7 @@ export default fp(
           scores.score5m < -regime.OPPOSE_5M_THRESHOLD &&
           mom15 <= regime.STRONG_15M_MOMENTUM
         ) {
-          allowTrade = false;
-          noteVeto('5m opposes CE and 15m momentum is not strong enough');
+          penalize('5m opposes CE without 15m momentum', VETO_PENALTY_BASE.OPPOSE_5M);
         }
 
         if (
@@ -882,18 +899,18 @@ export default fp(
           scores.score5m > regime.OPPOSE_5M_THRESHOLD &&
           mom15 >= -regime.STRONG_15M_MOMENTUM
         ) {
-          allowTrade = false;
-          noteVeto('5m opposes PE and 15m momentum is not strong enough');
+          penalize('5m opposes PE without 15m momentum', VETO_PENALTY_BASE.OPPOSE_5M);
         }
 
-        // LH/LL on primary TF should not fire CE unless momentum confirms
         if (
           isBullishPrimary &&
           primaryMs === -1 &&
           mom15 <= regime.STRONG_15M_MOMENTUM
         ) {
-          allowTrade = false;
-          noteVeto('Bearish market structure on primary TF without 15m confirmation');
+          penalize(
+            'Bearish structure on primary without 15m confirm',
+            VETO_PENALTY_BASE.PRIMARY_STRUCTURE_OPPOSES,
+          );
         }
 
         if (
@@ -901,25 +918,25 @@ export default fp(
           primaryMs === 1 &&
           mom15 >= -regime.STRONG_15M_MOMENTUM
         ) {
-          allowTrade = false;
-          noteVeto('Bullish market structure on primary TF without 15m confirmation');
-        }
-
-        // Step 2.5: stacked opposing 15m structure + negative momentum
-        if (allowTrade) {
-          const opposingCount = countStackedOpposingSignals(
-            isBullishPrimary,
-            momentum?.structureElements,
-            mom15,
+          penalize(
+            'Bullish structure on primary without 15m confirm',
+            VETO_PENALTY_BASE.PRIMARY_STRUCTURE_OPPOSES,
           );
-          if (opposingCount >= veto.OPPOSED_STRUCTURE_MIN_SIGNALS) {
-            allowTrade = false;
-            noteVeto('Stacked opposing 15m structure with conflicting momentum');
-          }
         }
 
-        // Step 3.2: CE veto when weak 15m ADX meets bearish 15m order block
-        if (allowTrade && isBullishPrimary) {
+        const opposingCount = countStackedOpposingSignals(
+          isBullishPrimary,
+          momentum?.structureElements,
+          mom15,
+        );
+        if (opposingCount >= veto.OPPOSED_STRUCTURE_MIN_SIGNALS) {
+          penalize(
+            'Stacked opposing 15m structure',
+            VETO_PENALTY_BASE.STACKED_OPPOSING_15M,
+          );
+        }
+
+        if (isBullishPrimary) {
           const { hasOpposingOb } = getOpposing15mStructure(
             true,
             momentum?.structureElements,
@@ -929,52 +946,45 @@ export default fp(
             momentum.adx15m < veto.INTRADAY_CE_OB_ADX_MAX &&
             hasOpposingOb
           ) {
-            allowTrade = false;
-            noteVeto('CE blocked: 15m ADX < 15 with opposing order block');
+            penalize('CE: weak 15m ADX with opposing OB', VETO_PENALTY_BASE.CE_WEAK_ADX_OB);
           }
         }
 
-        // Step 3: soft ADX chop — weak trend strength only when conviction is also weak
         if (
-          allowTrade &&
           momentum?.adx15m !== undefined &&
           momentum.adx15m < veto.INTRADAY_WEAK_ADX_MAX &&
           Math.abs(primaryScore) < veto.INTRADAY_WEAK_ADX_MIN_ABS_SCORE
         ) {
-          allowTrade = false;
-          noteVeto('Soft ADX chop: 15m ADX very weak with low primary score');
+          penalize('Soft ADX chop', VETO_PENALTY_BASE.SOFT_ADX_CHOP);
         }
 
-        // Step 2.5/3: intraday CE needs 1h alignment unless 15m is very strong
-        if (
-          allowTrade &&
-          isBullishPrimary &&
-          scores.score1h < veto.INTRADAY_1H_CE_BLOCK_BELOW
-        ) {
-          allowTrade = false;
-          noteVeto('CE blocked: 1h score clearly bearish');
-        } else if (allowTrade && isBullishPrimary && scores.score1h < 0) {
+        if (isBullishPrimary && scores.score1h < veto.INTRADAY_1H_CE_BLOCK_BELOW) {
+          penalize('CE: 1h clearly bearish', VETO_PENALTY_BASE.CE_1H_CLEARLY_BEARISH);
+        } else if (isBullishPrimary && scores.score1h < 0) {
           if (
             scores.score15m <= veto.INTRADAY_1H_CE_MIN_SCORE15 ||
             mom15 <= veto.INTRADAY_1H_CE_MIN_MOM15
           ) {
-            allowTrade = false;
-            noteVeto('CE blocked: mildly bearish 1h without strong 15m override');
+            penalize(
+              'CE: mildly bearish 1h without 15m override',
+              VETO_PENALTY_BASE.CE_1H_MILD_BEARISH,
+            );
           }
         }
 
-        if (allowTrade && isBearishPrimary && scores.score1h > 0) {
+        if (isBearishPrimary && scores.score1h > 0) {
           if (
             scores.score15m >= -veto.INTRADAY_1H_CE_MIN_SCORE15 ||
             mom15 >= -veto.INTRADAY_1H_CE_MIN_MOM15
           ) {
-            allowTrade = false;
-            noteVeto('PE blocked: mildly bullish 1h without strong 15m override');
+            penalize(
+              'PE: mildly bullish 1h without 15m override',
+              VETO_PENALTY_BASE.PE_1H_MILD_BULLISH,
+            );
           }
         }
 
-        // Step 3: PE into support bounce — block fade near support with bullish pressure
-        if (allowTrade && isBearishPrimary) {
+        if (isBearishPrimary) {
           const nearSupport =
             primary.support > 0 &&
             primary.lastPrice > 0 &&
@@ -986,43 +996,38 @@ export default fp(
             .some((e) => e.type === 'bullish');
 
           if (nearSupport && (mom15 > 0 || bullishObNear)) {
-            allowTrade = false;
-            noteVeto('PE blocked: price near support with bullish pressure');
+            penalize('PE near support with bullish pressure', VETO_PENALTY_BASE.PE_NEAR_SUPPORT);
           }
         }
 
-        // Step 4: opposing candlestick on primary TF
         const cs =
           momentum?.candlestickPrimary ?? momentum?.candlestick15m;
-        if (allowTrade && cs && isBullishPrimary && cs.direction === 'bearish') {
-          allowTrade = false;
-          noteVeto(`CE blocked: bearish ${cs.pattern.replace(/_/g, ' ')} on primary TF`);
+        if (cs && isBullishPrimary && cs.direction === 'bearish') {
+          penalize(
+            `Bearish ${cs.pattern.replace(/_/g, ' ')} on primary`,
+            VETO_PENALTY_BASE.OPPOSING_CANDLESTICK,
+          );
         }
-        if (allowTrade && cs && isBearishPrimary && cs.direction === 'bullish') {
-          allowTrade = false;
-          noteVeto(`PE blocked: bullish ${cs.pattern.replace(/_/g, ' ')} on primary TF`);
+        if (cs && isBearishPrimary && cs.direction === 'bullish') {
+          penalize(
+            `Bullish ${cs.pattern.replace(/_/g, ' ')} on primary`,
+            VETO_PENALTY_BASE.OPPOSING_CANDLESTICK,
+          );
         }
 
         if (
-          allowTrade &&
           isBullishPrimary &&
           cs?.pattern === 'doji' &&
           scores.score15m < veto.INTRADAY_CE_DOJI_MIN_SCORE15
         ) {
-          allowTrade = false;
-          noteVeto('CE blocked: doji on primary TF with weak 15m conviction');
+          penalize('Doji on primary with weak 15m', VETO_PENALTY_BASE.DOJI_WEAK_15M);
         }
 
-        // Step 5: volatility regime — skip dead/compressed markets
-        if (allowTrade && enhance.ENABLED_FOR_INTRADAY && momentum?.volatilityRegime) {
-          if (momentum.volatilityRegime.isDeadMarket) {
-            allowTrade = false;
-            noteVeto('Dead market: low ATR percentile with session compression');
-          }
+        if (enhance.ENABLED_FOR_INTRADAY && momentum?.volatilityRegime?.isDeadMarket) {
+          hardBlock('Dead market: low ATR percentile with session compression');
         }
 
-        // Step 5: trend quality gate
-        if (allowTrade && enhance.ENABLED_FOR_INTRADAY && momentum?.trendQuality) {
+        if (enhance.ENABLED_FOR_INTRADAY && momentum?.trendQuality) {
           const tq = momentum.trendQuality;
           const minQuality =
             momentum.sessionBias?.phase === 'midday'
@@ -1031,60 +1036,58 @@ export default fp(
           const dirQuality = isBullishPrimary ? tq.bullish : tq.bearish;
 
           if (dirQuality < minQuality) {
-            allowTrade = false;
-            noteVeto(
-              `Weak trend quality (${dirQuality.toFixed(2)} < ${minQuality}) for ${isBullishPrimary ? 'CE' : 'PE'}`,
+            penalize(
+              `Weak trend quality (${dirQuality.toFixed(2)} < ${minQuality})`,
+              VETO_PENALTY_BASE.WEAK_TREND_QUALITY,
             );
           }
         }
 
-        // Step 5: opposing major chart pattern (confirmed only; forming patterns inform score)
         const cp = momentum?.chartPatternPrimary;
-        if (allowTrade && cp && cp.pattern !== 'none' && cp.status !== 'forming') {
+        if (cp && cp.pattern !== 'none' && cp.status !== 'forming') {
           if (isBullishPrimary && cp.direction === 'bearish') {
-            allowTrade = false;
-            noteVeto(`CE blocked: bearish chart pattern (${cp.pattern.replace(/_/g, ' ')})`);
+            penalize(
+              `Bearish chart pattern (${cp.pattern.replace(/_/g, ' ')})`,
+              VETO_PENALTY_BASE.OPPOSING_CHART_PATTERN,
+            );
           }
           if (isBearishPrimary && cp.direction === 'bullish') {
-            allowTrade = false;
-            noteVeto(`PE blocked: bullish chart pattern (${cp.pattern.replace(/_/g, ' ')})`);
+            penalize(
+              `Bullish chart pattern (${cp.pattern.replace(/_/g, ' ')})`,
+              VETO_PENALTY_BASE.OPPOSING_CHART_PATTERN,
+            );
           }
         }
 
-        // Step 5: session bias — midday needs stronger primary conviction
         if (
-          allowTrade &&
           enhance.ENABLED_FOR_INTRADAY &&
           momentum?.sessionBias?.phase === 'midday' &&
           Math.abs(primaryScore) < 0.28 * (momentum.sessionBias.confluenceMultiplier ?? 1)
         ) {
-          allowTrade = false;
-          noteVeto('Midday chop: primary score too weak for trend entry');
+          penalize('Midday chop: weak primary score', VETO_PENALTY_BASE.MIDDAY_CHOP);
         }
       }
+
+      if (
+        !vetoOff &&
+        tradingStyle !== TradingStyle.Scalper &&
+        hasDirection &&
+        ((isBullishPrimary && scores.score1h < -0.4) ||
+          (isBearishPrimary && scores.score1h > 0.4))
+      ) {
+        penalize('1h score strongly opposes direction', VETO_PENALTY_BASE.STRONG_1H_OPPOSES);
+      }
+
+      confluenceBoost -= penalties.totalPoints;
 
       let action: 'CE-BUY' | 'PE-BUY' | 'NO-TRADE' = 'NO-TRADE';
 
       if (vetoOff) {
         if (isBullishPrimary) action = 'CE-BUY';
         else if (isBearishPrimary) action = 'PE-BUY';
-      } else {
-        if (allowTrade && isBullishPrimary) action = 'CE-BUY';
-        if (allowTrade && isBearishPrimary) action = 'PE-BUY';
-
-        // If 1h is strongly against for intraday/positional, veto
-        if (
-          tradingStyle !== TradingStyle.Scalper &&
-          ((isBullishPrimary && scores.score1h < -0.4) ||
-            (isBearishPrimary && scores.score1h > 0.4))
-        ) {
-          action = 'NO-TRADE';
-          noteVeto('1h score strongly opposes trade direction');
-        }
-      }
-
-      if (action === 'NO-TRADE' && !entryVetoReason && !allowTrade) {
-        noteVeto('Insufficient confluence or conviction for entry');
+      } else if (!hardBlocked && hasDirection) {
+        if (isBullishPrimary) action = 'CE-BUY';
+        else if (isBearishPrimary) action = 'PE-BUY';
       }
 
       let entry = action === 'NO-TRADE' ? 0 : primary.lastPrice;
@@ -1119,17 +1122,16 @@ export default fp(
         TA_CONFIDENCE.MAX,
         Math.round(Math.abs(primaryScore) * 55 + 25),
       );
-      let finalConfidence = Math.min(
-        TA_CONFIDENCE.MAX,
-        Math.max(
-          TA_CONFIDENCE.MIN_ACTIONABLE,
-          Math.round(
-            baseConfidence +
-              confluenceBoost -
-              (action === 'NO-TRADE' ? TA_CONFIDENCE.NO_TRADE_PENALTY : 0),
-          ),
-        ),
-      );
+      let finalConfidence =
+        action === 'NO-TRADE'
+          ? 0
+          : Math.min(
+              TA_CONFIDENCE.MAX,
+              Math.max(
+                TA_CONFIDENCE.MIN_ACTIONABLE,
+                Math.round(baseConfidence + confluenceBoost),
+              ),
+            );
 
       if (
         action !== 'NO-TRADE' &&
@@ -1231,35 +1233,50 @@ export default fp(
           decay.decayPercent >= veto.OPPOSED_STRUCTURE_DECAY_VETO + 0.05;
 
         if (!vetoOff) {
-          if (
-            !vetoRelaxed &&
-            finalConfidence < MIN_CONFIDENCE_AFTER_DECAY[tradingStyle]
-          ) {
+          if (decay.decayPercent >= veto.HARD_DECAY_VETO) {
             vetoedByDecay = true;
             action = 'NO-TRADE';
             finalConfidence = 0;
-            noteVeto(
-              `Confidence after decay (${finalConfidence}) below minimum ${MIN_CONFIDENCE_AFTER_DECAY[tradingStyle]}`,
-            );
-          } else if (decay.decayPercent >= veto.HARD_DECAY_VETO) {
-            vetoedByDecay = true;
-            action = 'NO-TRADE';
-            finalConfidence = 0;
-            noteVeto(
+            hardBlock(
               `Hard decay veto: ${Math.round(decay.decayPercent * 100)}% decay`,
             );
-          } else if (
-            !vetoRelaxed &&
-            opposingStructure.hasAny &&
-            decay.decayPercent >= veto.OPPOSED_STRUCTURE_DECAY_VETO &&
-            multiFactorDecay
-          ) {
-            vetoedByDecay = true;
-            action = 'NO-TRADE';
-            finalConfidence = 0;
-            noteVeto(
-              `Opposing 15m structure with multi-factor decay (${Math.round(decay.decayPercent * 100)}%)`,
-            );
+          } else {
+            if (finalConfidence < MIN_CONFIDENCE_AFTER_DECAY[tradingStyle]) {
+              const pts = scaleVetoPenalty(
+                entryVetoMode,
+                VETO_PENALTY_BASE.SOFT_DECAY_BELOW_MIN,
+              );
+              if (pts > 0) {
+                penalties.entries.push({
+                  label: 'Below min confidence after decay',
+                  points: pts,
+                });
+                finalConfidence = Math.max(
+                  TA_CONFIDENCE.MIN_ACTIONABLE,
+                  finalConfidence - pts,
+                );
+              }
+            }
+            if (
+              opposingStructure.hasAny &&
+              decay.decayPercent >= veto.OPPOSED_STRUCTURE_DECAY_VETO &&
+              multiFactorDecay
+            ) {
+              const pts = scaleVetoPenalty(
+                entryVetoMode,
+                VETO_PENALTY_BASE.OPPOSED_STRUCTURE_DECAY,
+              );
+              if (pts > 0) {
+                penalties.entries.push({
+                  label: `Opposing 15m structure with decay (${Math.round(decay.decayPercent * 100)}%)`,
+                  points: pts,
+                });
+                finalConfidence = Math.max(
+                  TA_CONFIDENCE.MIN_ACTIONABLE,
+                  finalConfidence - pts,
+                );
+              }
+            }
           }
         } else {
           finalConfidence = Math.max(
@@ -1349,6 +1366,7 @@ export default fp(
         vetoedByDecay,
         minConfidenceAfterDecay: MIN_CONFIDENCE_AFTER_DECAY[tradingStyle],
         entryVetoReason,
+        entryPenalties: penalties.entries.length ? penalties.entries : undefined,
       };
     };
 

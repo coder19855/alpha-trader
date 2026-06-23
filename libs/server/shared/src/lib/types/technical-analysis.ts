@@ -210,6 +210,8 @@ export interface PriceActionResponse {
     strength: SignalStrength;
     vetoReason?: string;
     structuralAction?: TradeAction;
+    confidenceBeforeDecay?: number;
+    entryPenalties?: Array<{ label: string; points: number }>;
   };
   candlestick?: {
     primary: CandlestickPatternId;

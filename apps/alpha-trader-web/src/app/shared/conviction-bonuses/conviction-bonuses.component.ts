@@ -6,10 +6,10 @@ import { ConvictionBonus } from '../../core/models/deck.models';
   standalone: true,
   template: `
     @if (bonuses.length) {
-      <div class="conviction-bonuses" aria-label="Entry conviction bonuses">
+      <div class="conviction-bonuses" [attr.aria-label]="sectionTitle">
         <div class="bonus-head">
-          <span>Entry bonuses</span>
-          <span>{{ baseConviction }}% base → {{ entryConviction }}% entry</span>
+          <span>{{ sectionTitle }}</span>
+          <span>{{ baseConviction }}% base → {{ entryConviction }}% PA</span>
         </div>
         <div class="bonus-list">
           @for (bonus of bonuses; track bonus.label) {
@@ -27,6 +27,7 @@ import { ConvictionBonus } from '../../core/models/deck.models';
   `,
 })
 export class ConvictionBonusesComponent {
+  @Input() sectionTitle = 'Entry bonuses';
   @Input() bonuses: ConvictionBonus[] = [];
   @Input() baseConviction = 0;
   @Input() entryConviction = 0;

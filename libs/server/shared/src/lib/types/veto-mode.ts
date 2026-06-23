@@ -38,7 +38,7 @@ export function isVetoOff(mode: VetoMode): boolean {
   return mode === 'off';
 }
 
-/** Decay / post-entry vetoes that relaxed mode still skips. */
+/** @deprecated Penalties replace soft decay blocks; use isHardVetoReason for true blocks. */
 export function isSoftDecayVetoReason(reason?: string): boolean {
   if (!reason) return false;
   return (

@@ -481,6 +481,7 @@ export function buildPriceActionSnapshot(
       strength: confluentSignal.strength,
       vetoReason: confluentSignal.entryVetoReason,
       structuralAction: confluentSignal.structuralAction,
+      entryPenalties: confluentSignal.entryPenalties,
     },
     candlestick: {
       primary: candlestickPrimary.pattern,

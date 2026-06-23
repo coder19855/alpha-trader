@@ -163,8 +163,8 @@ export function buildDeckRegimeHint(params: {
     params.vetoMode === 'off'
       ? 'veto off'
       : params.vetoMode === 'relaxed'
-        ? 'relaxed veto'
-        : 'strict veto';
+        ? 'relaxed penalties'
+        : 'strict penalties';
 
   const tapeLabel =
     params.regimeKind === 'trending'

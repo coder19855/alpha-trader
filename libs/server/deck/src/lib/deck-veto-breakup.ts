@@ -1,8 +1,8 @@
 import {
   FlowMode,
+  isHardVetoReason,
   isOptionOnlyFlow,
   isPaOnlyFlow,
-  isSoftDecayVetoReason,
   isVetoOff,
   VetoMode,
 } from '@alpha-trader/server-shared';
@@ -35,6 +35,7 @@ export interface DeckVetoBreakupInput {
     structuralAction?: string;
     vetoReason?: string;
     confidenceBeforeDecay?: number;
+    entryPenalties?: Array<{ label: string; points: number }>;
   };
   momentumDecay?: {
     decayPercent: number;
@@ -57,8 +58,7 @@ function vetoStateForReason(
 ): DeckVetoBreakupState {
   if (!reason) return 'ok';
   if (isVetoOff(vetoMode)) return 'skipped';
-  if (vetoMode === 'relaxed' && isSoftDecayVetoReason(reason)) return 'skipped';
-  if (/hard decay|below minimum|blocked:/i.test(reason)) return 'block';
+  if (isHardVetoReason(reason)) return 'block';
   return 'warn';
 }
 
@@ -66,42 +66,71 @@ export function buildDeckVetoBreakup(input: DeckVetoBreakupInput): DeckVetoBreak
   const items: DeckVetoBreakupItem[] = [];
   const vetoOff = isVetoOff(input.vetoMode);
   const relaxed = input.vetoMode === 'relaxed';
+  const penalties = input.paSignal.entryPenalties ?? [];
+  const penaltyTotal = penalties.reduce((sum, row) => sum + row.points, 0);
 
   pushItem(items, {
     id: 'mode',
     label: 'Veto mode',
     state: vetoOff ? 'skipped' : relaxed ? 'warn' : 'ok',
     detail: vetoOff
-      ? 'All chart vetoes bypassed (research)'
+      ? 'No structural penalties — threshold only (research)'
       : relaxed
-        ? 'Relaxed — hard decay only; soft gates eased'
-        : 'Strict — full chart + decay gates',
+        ? 'Relaxed — 0.45× penalties; hard decay + dead market still block'
+        : 'Strict — full penalties; hard decay + dead market block',
   });
 
   const vetoReason = input.paSignal.vetoReason;
   const chartState = vetoStateForReason(vetoReason, input.vetoMode);
   pushItem(items, {
     id: 'chart',
-    label: 'Chart entry gate',
+    label: 'Chart hard gate',
     state: vetoReason ? chartState : 'ok',
     detail: vetoReason
       ? vetoReason
       : input.paSignal.action === 'NO-TRADE'
-        ? 'No directional chart entry'
+        ? 'No directional chart read'
         : `Chart allows ${input.paSignal.action}`,
   });
+
+  if (penalties.length > 0) {
+    pushItem(items, {
+      id: 'penalties-total',
+      label: 'Structural penalties',
+      state: vetoOff ? 'skipped' : penaltyTotal >= 30 ? 'warn' : 'warn',
+      meter: Math.min(100, penaltyTotal * 2),
+      detail: `−${penaltyTotal} confidence from ${penalties.length} gate(s)`,
+    });
+    for (const [idx, row] of penalties.entries()) {
+      pushItem(items, {
+        id: `penalty-${idx}`,
+        label: 'Penalty',
+        state: vetoOff ? 'skipped' : 'warn',
+        detail: `${row.label} (−${row.points})`,
+        meter: Math.min(100, row.points * 3),
+      });
+    }
+  } else if (!vetoOff) {
+    pushItem(items, {
+      id: 'penalties-total',
+      label: 'Structural penalties',
+      state: 'ok',
+      detail: 'No structural penalties applied',
+    });
+  }
 
   const structural = input.paSignal.structuralAction;
   if (
     structural &&
     structural !== 'NO-TRADE' &&
-    input.paSignal.action === 'NO-TRADE'
+    input.paSignal.action === 'NO-TRADE' &&
+    isHardVetoReason(vetoReason)
   ) {
     pushItem(items, {
       id: 'structural',
       label: 'Structural direction',
-      state: vetoOff ? 'skipped' : chartState === 'skipped' ? 'warn' : 'block',
-      detail: `Structure suggests ${structural} but chart read is NO-TRADE`,
+      state: vetoOff ? 'skipped' : 'block',
+      detail: `Structure suggests ${structural} but hard gate forced NO-TRADE`,
     });
   }
 
@@ -109,11 +138,10 @@ export function buildDeckVetoBreakup(input: DeckVetoBreakupInput): DeckVetoBreak
   if (decayPct > 0 || input.vetoedByDecay) {
     const hardBlock =
       input.vetoedByDecay ||
-      (input.momentumDecay?.decayPercent ?? 0) >= 0.35;
+      (input.momentumDecay?.decayPercent ?? 0) >= 0.3;
     let decayState: DeckVetoBreakupState = 'warn';
     if (vetoOff) decayState = 'skipped';
     else if (hardBlock) decayState = 'block';
-    else if (relaxed) decayState = 'skipped';
 
     const before =
       input.priceConvictionBeforeDecay ??
@@ -145,36 +173,22 @@ export function buildDeckVetoBreakup(input: DeckVetoBreakupInput): DeckVetoBreak
     });
   }
 
-  if (
-    input.minConfidenceAfterDecay != null &&
-    input.paSignal.confidence === 0 &&
-    decayPct > 0
-  ) {
-    pushItem(items, {
-      id: 'min-confidence',
-      label: 'Min confidence floor',
-      state: vetoOff || relaxed ? 'skipped' : 'block',
-      detail: `PA confidence ${input.paSignal.confidence}% below floor ${input.minConfidenceAfterDecay}%`,
-      meter: 100,
-    });
-  }
-
   const conflict = String(input.conflictLevel ?? 'NONE').toUpperCase();
   if (conflict === 'HIGH') {
     pushItem(items, {
       id: 'conflict',
       label: 'Option vs PA conflict',
-      state: vetoOff || relaxed ? 'warn' : 'block',
+      state: vetoOff ? 'skipped' : 'warn',
       meter: 85,
-      detail: 'Option flow strongly disagrees with price action',
+      detail: 'Option flow strongly disagrees — conviction penalty applied',
     });
   } else if (conflict === 'MEDIUM') {
     pushItem(items, {
       id: 'conflict',
       label: 'Option vs PA conflict',
-      state: 'warn',
+      state: vetoOff ? 'skipped' : 'warn',
       meter: 55,
-      detail: 'Mild disagreement between option flow and price action',
+      detail: 'Mild disagreement — lighter conviction penalty',
     });
   } else {
     pushItem(items, {
@@ -189,7 +203,7 @@ export function buildDeckVetoBreakup(input: DeckVetoBreakupInput): DeckVetoBreak
   pushItem(items, {
     id: 'alignment',
     label: 'TF alignment',
-    state: aligned >= 2 ? 'ok' : aligned === 1 ? 'warn' : 'block',
+    state: aligned >= 2 ? 'ok' : aligned === 1 ? 'warn' : 'warn',
     meter: Math.round((aligned / 3) * 100),
     detail: `${aligned}/3 timeframes aligned with primary`,
   });
@@ -217,12 +231,17 @@ export function buildDeckVetoBreakup(input: DeckVetoBreakupInput): DeckVetoBreak
     detail: thresholdDetail,
   });
 
-  if (input.action === 'NO-TRADE' && !vetoReason && decayPct === 0) {
+  if (
+    input.action === 'NO-TRADE' &&
+    !vetoReason &&
+    decayPct === 0 &&
+    input.conviction < input.enterThreshold
+  ) {
     pushItem(items, {
       id: 'outcome',
       label: 'Decision',
       state: 'warn',
-      detail: 'Low confluence — engine stays flat despite partial option/PA reads',
+      detail: 'Conviction below enter threshold after penalties',
     });
   }
 

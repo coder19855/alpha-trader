@@ -14,7 +14,12 @@ import {
   isPaOnlyFlow,
   isSingleSourceFlow,
 } from '@alpha-trader/server-shared';
-import { isVetoOff, VetoMode } from '@alpha-trader/server-shared';
+import {
+  isVetoOff,
+  scaleVetoPenalty,
+  VETO_PENALTY_BASE,
+  VetoMode,
+} from '@alpha-trader/server-shared';
 import {
   ChaseDecayResult,
   evaluateChaseDecay,
@@ -311,14 +316,13 @@ export default fp(
       } else if (vetoOff) {
         alignment = 1;
         pushBonus('Veto-off conflict ease', -8);
-      } else if (vetoRelaxed) {
-        alignment = 0;
-        conflictLevel = 'MEDIUM';
-        pushBonus('PA vs option conflict (relaxed)', -16);
       } else {
         alignment = 0;
-        conflictLevel = 'HIGH';
-        pushBonus('PA vs option conflict', -28);
+        conflictLevel = vetoRelaxed ? 'MEDIUM' : 'HIGH';
+        pushBonus(
+          vetoRelaxed ? 'PA vs option conflict (relaxed)' : 'PA vs option conflict',
+          -scaleVetoPenalty(vetoMode, 28),
+        );
       }
 
       if (!optionOnlyFlow) {
@@ -326,7 +330,10 @@ export default fp(
           alignment += 1;
           pushBonus('Multi-timeframe alignment', 10);
         } else if (aligned === 0) {
-          pushBonus('No TF alignment', -15);
+          pushBonus(
+            'No TF alignment',
+            -scaleVetoPenalty(vetoMode, VETO_PENALTY_BASE.BLEND_NO_TF_ALIGNMENT),
+          );
         }
         if (higherTFConfirm) pushBonus('Higher TF confirms', 8);
       }
@@ -397,9 +404,19 @@ export default fp(
                   (option.components.greeks ?? 0) > 0.5)));
 
       const structuralGatesOk =
-        (vetoOff || vetoRelaxed || conflictLevel !== 'HIGH') &&
-        (optionOnlyFlow ? optionDirection !== 'neutral' : alignedCount > 0) &&
-        !optionStronglyAgainst;
+        tradeDirection !== 'neutral' &&
+        (optionOnlyFlow ? optionDirection !== 'neutral' : true);
+
+      if (
+        !vetoOff &&
+        style !== TradingStyle.Scalper &&
+        optionStronglyAgainst
+      ) {
+        pushBonus(
+          'Option strongly against PA',
+          -scaleVetoPenalty(vetoMode, VETO_PENALTY_BASE.BLEND_OPTION_STRONGLY_AGAINST),
+        );
+      }
 
       const symbol = price.symbol;
       const history = symbol ? getDecisionHistory(symbol) : undefined;
@@ -440,7 +457,7 @@ export default fp(
         structuralGatesOk
       ) {
         action = tradeDirection === 'bullish' ? 'CE-BUY' : 'PE-BUY';
-      } else if (conflictLevel === 'HIGH' || alignedCount === 0) {
+      } else {
         const hasNeutralOpportunity =
           (ivRegime.includes('Crushed') ||
             ivRegime.includes('Low IV') ||
@@ -462,10 +479,6 @@ export default fp(
         } else {
           action = 'NO-TRADE';
         }
-      }
-
-      if (style !== TradingStyle.Scalper && optionStronglyAgainst) {
-        action = 'NO-TRADE';
       }
 
       if (chaseEntryBlocked && action !== 'NEUTRAL') {

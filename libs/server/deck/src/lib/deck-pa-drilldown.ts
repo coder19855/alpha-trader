@@ -317,8 +317,26 @@ export function buildPaDrilldown(input: PaDrilldownBuildInput): PaDrilldown {
       });
     }
     if (sig.vetoReason) {
-      gateRows.push({ label: 'Veto reason', value: sig.vetoReason, tone: 'warn' });
-    } else if (sig.action === 'NO-TRADE') {
+      gateRows.push({ label: 'Hard gate', value: sig.vetoReason, tone: 'warn' });
+    }
+    const entryPenalties = (sig as { entryPenalties?: Array<{ label: string; points: number }> })
+      .entryPenalties;
+    if (entryPenalties?.length) {
+      const total = entryPenalties.reduce((sum, row) => sum + row.points, 0);
+      gateRows.push({
+        label: 'Penalties',
+        value: `−${total} (${entryPenalties.length} gate${entryPenalties.length === 1 ? '' : 's'})`,
+        tone: 'warn',
+      });
+      for (const row of entryPenalties.slice(0, 4)) {
+        gateRows.push({
+          label: row.label,
+          value: `−${row.points}`,
+          tone: 'neutral',
+        });
+      }
+    }
+    if (!sig.vetoReason && sig.action === 'NO-TRADE') {
       gateRows.push({
         label: 'Veto reason',
         value: 'No directional chart entry',

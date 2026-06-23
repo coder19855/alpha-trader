@@ -50,9 +50,10 @@ import { ConvictionBonusesComponent } from '../conviction-bonuses/conviction-bon
         </div>
       }
       <app-conviction-bonuses
-        [bonuses]="convictionBonuses"
-        [baseConviction]="weightedBaseConviction"
-        [entryConviction]="entryConviction"
+        [sectionTitle]="breakdownTitle"
+        [bonuses]="displayBonuses"
+        [baseConviction]="displayBaseConviction"
+        [entryConviction]="displayEntryConviction"
       />
     </section>
   `,
@@ -84,6 +85,35 @@ export class PaGaugeComponent {
   @Input() weightedBaseConviction = 0;
   @Input() entryConviction = 0;
   @Input() convictionBonuses: ConvictionBonus[] = [];
+  /** PA-specific ledger (penalties + decay); preferred over blend entry bonuses. */
+  @Input() paConvictionBonuses: ConvictionBonus[] = [];
+  @Input() paBaseConviction?: number;
+
+  get breakdownTitle(): string {
+    return this.paConvictionBonuses.length
+      ? 'PA advantages & penalties'
+      : 'Entry bonuses';
+  }
+
+  get displayBonuses(): ConvictionBonus[] {
+    return this.paConvictionBonuses.length
+      ? this.paConvictionBonuses
+      : this.convictionBonuses;
+  }
+
+  get displayBaseConviction(): number {
+    if (this.paConvictionBonuses.length && this.paBaseConviction != null) {
+      return this.paBaseConviction;
+    }
+    return this.weightedBaseConviction;
+  }
+
+  get displayEntryConviction(): number {
+    if (this.paConvictionBonuses.length) {
+      return this.paPercent;
+    }
+    return this.entryConviction;
+  }
 
   needleLeft(reading: Pick<DeckGaugeReading, 'value'>): number {
     const value = Number.isFinite(reading.value) ? reading.value : 0;

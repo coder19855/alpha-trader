@@ -34,7 +34,7 @@ function baseDecision(
     lastPrice: 24_500,
     tradeGuidance: { thresholdsForThisStyle: { enter: 40 } },
     priceAction: {
-      overallSignal: { vetoReason: 'Double top forming' },
+      overallSignal: { vetoReason: 'Hard decay veto: 35% decay' },
     },
     ...patch,
   };
@@ -75,8 +75,21 @@ describe('resolveEngineEntryThreshold', () => {
 });
 
 describe('isEngineEntryBlockedByVeto', () => {
-  it('blocks engine entries when chart veto is active by default', () => {
+  it('blocks engine entries when a hard chart gate is active', () => {
     expect(isEngineEntryBlockedByVeto(basePref(), baseDecision())).toBe(true);
+  });
+
+  it('does not block on soft structural reads (penalties only)', () => {
+    expect(
+      isEngineEntryBlockedByVeto(
+        basePref(),
+        baseDecision({
+          priceAction: {
+            overallSignal: { vetoReason: 'Double top forming' },
+          },
+        }),
+      ),
+    ).toBe(false);
   });
 
   it('allows engine entries when ignoreChartVeto is enabled', () => {

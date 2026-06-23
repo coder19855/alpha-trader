@@ -6,6 +6,7 @@ export * from './trading-style.js';
 export * from './fyers-symbols.js';
 export * from './flow-mode.js';
 export * from './veto-mode.js';
+export * from '../veto-penalties.js';
 export * from './adaptive-conviction.js';
 export * from './alert-intelligence.js';
 export * from './exact-strike-recommendation.js';

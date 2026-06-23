@@ -18,6 +18,10 @@ export {
 } from './lib/deck-stream-hub.js';
 export { buildDeckGauges, type DeckGauges } from './lib/deck-gauge.js';
 export {
+  buildPaConvictionLedger,
+  type PaConvictionLedger,
+} from './lib/pa-conviction-ledger.js';
+export {
   buildDeckLiveEnrichmentPayload,
   buildDeckLiveStreamEnrichment,
   buildDeckReplayPayload,

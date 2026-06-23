@@ -32,6 +32,7 @@ import {
 import { attachAutoEntryGuard } from './auto-entry-runner.js';
 import { resolveAutoEntryPresetSignal } from './auto-entry-preset.js';
 import { buildDeckGauges, DeckGauges } from './deck-gauge.js';
+import { buildPaConvictionLedger } from './pa-conviction-ledger.js';
 import {
   buildDeckEvents,
   extractComponentGauges,
@@ -91,6 +92,8 @@ export interface DeckLiveStreamTick {
   conviction: number;
   weightedBaseConviction: number;
   convictionBonuses: Array<{ label: string; points: number }>;
+  paConvictionBonuses?: Array<{ label: string; points: number }>;
+  paBaseConviction?: number;
   marketRegime?: DeckMarketRegime;
   entryThreshold: number;
   lastPrice: number;
@@ -376,13 +379,38 @@ function buildStreamTickParts(
   const primaryTf = primaryTimeframeForStyle(params.style);
   const primaryScore =
     params.decision.priceAction.components?.[primaryTf]?.score ?? 0;
+  const rawPrice = params.decision._debug?.rawPrice;
+  const signal = rawPrice?.signal as
+    | {
+        confidence?: number;
+        confidenceBeforeDecay?: number;
+        entryPenalties?: Array<{ label: string; points: number }>;
+      }
+    | undefined;
+  const paLedger = buildPaConvictionLedger({
+    confidence:
+      signal?.confidence ??
+      params.decision.priceConviction ??
+      params.decision.conviction,
+    confidenceBeforeDecay:
+      signal?.confidenceBeforeDecay ??
+      params.decision.priceConvictionBeforeDecay,
+    entryPenalties: signal?.entryPenalties,
+    momentumDecayPercent: rawPrice?.momentumDecay?.decayPercent ?? null,
+  });
+  const priceConviction =
+    signal?.confidence != null
+      ? paLedger.entryConviction
+      : params.decision.priceConviction ?? params.decision.conviction;
   const gauges = buildDeckGauges({
     action: params.decision.action,
     optionConviction: 0,
     optionBias: 'neutral',
     optionOverallScore: 0,
-    priceConviction: params.decision.priceConviction ?? params.decision.conviction,
-    priceConvictionBeforeDecay: params.decision.priceConvictionBeforeDecay,
+    priceConviction,
+    priceConvictionBeforeDecay:
+      signal?.confidenceBeforeDecay ??
+      params.decision.priceConvictionBeforeDecay,
     primaryScore,
     hasMomentumDecay: Boolean(params.decision.momentumDecayPercent),
   });
@@ -397,7 +425,6 @@ function buildStreamTickParts(
   const spotSeries =
     fastify.fyersMarketStream?.getSpotSeries(indexSymbol) ?? [];
   const aligned = resolveDeckAlignmentCount(params.decision);
-  const rawPrice = params.decision._debug?.rawPrice;
   const marketRegime = resolveDeckMarketRegime({
     symbol: indexSymbol,
     tradingStyle: params.style,
@@ -422,6 +449,8 @@ function buildStreamTickParts(
     conviction: params.decision.conviction,
     weightedBaseConviction: laneMeta.weightedBaseConviction,
     convictionBonuses: laneMeta.convictionBonuses,
+    paConvictionBonuses: paLedger.bonuses,
+    paBaseConviction: paLedger.baseConviction,
     entryThreshold:
       params.decision.convictionThresholds?.enter ??
       getStyleScoringConfig(params.style).convictionThreshold.enter,

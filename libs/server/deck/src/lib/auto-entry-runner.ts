@@ -11,6 +11,7 @@ import {
   recordAutoEntryTradeClosed,
   trackAutoEntryPositionPresence,
 } from '@alpha-trader/server-preferences';
+import { isHardVetoReason } from '@alpha-trader/server-shared';
 import {
   AutoExitDecisionSlice,
   AutoEntryGuardStatus,
@@ -67,7 +68,9 @@ function resolveChartVetoReason(
     | undefined;
   const fromOverall =
     typeof overall?.vetoReason === 'string' ? overall.vetoReason : undefined;
-  return fromOverall ?? decision._debug?.rawPrice?.signal?.vetoReason ?? undefined;
+  const reason =
+    fromOverall ?? decision._debug?.rawPrice?.signal?.vetoReason ?? undefined;
+  return isHardVetoReason(reason) ? reason : undefined;
 }
 
 function isNearEngineEntryThreshold(

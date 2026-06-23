@@ -191,6 +191,8 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
             "
             [entryConviction]="data.conviction"
             [convictionBonuses]="data.convictionBonuses ?? []"
+            [paConvictionBonuses]="data.paConvictionBonuses ?? []"
+            [paBaseConviction]="data.paBaseConviction"
           />
           } @else {
             <app-option-chain-signal-panel />
