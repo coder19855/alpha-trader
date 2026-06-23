@@ -181,9 +181,10 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
           <div>
             <span>OI Guard</span>
             <p class="guard-legend">
-              <span class="call-tag">Call</span> / <span class="put-tag">Put</span> = contract
-              type. <strong>Price OI Buildup</strong> = OI bar (size) + price bar (premium Δ).
-              Flow icon combines both — tap for writer summary.
+              <span class="call-tag">Call</span> /
+              <span class="put-tag">Put</span> = contract type.
+              <strong>Price OI Buildup</strong> = OI bar (size) + price bar
+              (premium Δ). Flow icon combines both — tap for writer summary.
             </p>
           </div>
         </div>
@@ -203,7 +204,11 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
           </div>
           <div class="stat">
             <span class="label">PCR</span>
-            <span class="val" [class.bull]="g.pcr < 0.9" [class.bear]="g.pcr > 1.1">
+            <span
+              class="val"
+              [class.bull]="g.pcr < 0.9"
+              [class.bear]="g.pcr > 1.1"
+            >
               {{ g.pcr | number: '1.2-2' }}
             </span>
           </div>
@@ -221,7 +226,9 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
             (click)="focus.set(focus() === 'ce' ? null : 'ce')"
           >
             <span class="wall-title">Call resistance</span>
-            <span class="wall-strike">{{ g.resistanceStrike ?? g.intradayResistance ?? '—' }}</span>
+            <span class="wall-strike">{{
+              g.resistanceStrike ?? g.intradayResistance ?? '—'
+            }}</span>
             <span class="wall-oi">{{ g.callOiTotal | number }} call OI</span>
           </button>
           <button
@@ -231,7 +238,9 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
             (click)="focus.set(focus() === 'pe' ? null : 'pe')"
           >
             <span class="wall-title">Put support</span>
-            <span class="wall-strike">{{ g.supportStrike ?? g.intradaySupport ?? '—' }}</span>
+            <span class="wall-strike">{{
+              g.supportStrike ?? g.intradaySupport ?? '—'
+            }}</span>
             <span class="wall-oi">{{ g.putOiTotal | number }} put OI</span>
           </button>
         </div>
@@ -252,7 +261,11 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
                 role="listitem"
                 [class.highlight]="row.strike === g.atmStrike"
               >
-                <span class="type-pill" [class.call]="row.type === 'CE'" [class.put]="row.type === 'PE'">
+                <span
+                  class="type-pill"
+                  [class.call]="row.type === 'CE'"
+                  [class.put]="row.type === 'PE'"
+                >
                   {{ row.type === 'CE' ? 'Call' : 'Put' }}
                 </span>
                 <span class="strike">{{ row.strike }}</span>
@@ -264,7 +277,9 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
                     [class.down]="row.ltpChange < 0"
                     [class.side]="row.ltpChange === 0"
                   >
-                    <mat-icon class="trend-icon">{{ flowIcon(row.ltpChange) }}</mat-icon>
+                    <mat-icon class="trend-icon">{{
+                      flowIcon(row.ltpChange)
+                    }}</mat-icon>
                     {{ formatPremChange(row) }}
                   </span>
                 </div>
@@ -294,12 +309,16 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
                     [class.unwind]="row.oiChange < 0"
                     [class.side]="row.oiChange === 0"
                   >
-                    <mat-icon class="trend-icon">{{ flowIcon(row.oiChange) }}</mat-icon>
+                    <mat-icon class="trend-icon">{{
+                      flowIcon(row.oiChange)
+                    }}</mat-icon>
                     {{ row.oiChange > 0 ? '+' : '' }}{{ row.oiChange | number }}
                   </span>
                 </div>
                 <div class="flow-cell">
-                  <span class="flow-label">{{ insightFor(row, g).shortLabel }}</span>
+                  <span class="flow-label">{{
+                    insightFor(row, g).shortLabel
+                  }}</span>
                   <button
                     type="button"
                     class="flow-btn"
@@ -317,19 +336,37 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       </section>
 
       @if (selectedRow(); as row) {
-        <div class="detail-backdrop" (pointerdown)="closeDetail()" role="presentation"></div>
-        <aside class="detail-panel" role="dialog" aria-labelledby="guard-detail-title" (pointerdown)="$event.stopPropagation()">
+        <div
+          class="detail-backdrop"
+          (pointerdown)="closeDetail()"
+          role="presentation"
+        ></div>
+        <aside
+          class="detail-panel"
+          role="dialog"
+          aria-labelledby="guard-detail-title"
+          (pointerdown)="$event.stopPropagation()"
+        >
           <header class="detail-head">
             <div>
               <h3 id="guard-detail-title">
-                <span class="type-pill" [class.call]="row.type === 'CE'" [class.put]="row.type === 'PE'">
+                <span
+                  class="type-pill"
+                  [class.call]="row.type === 'CE'"
+                  [class.put]="row.type === 'PE'"
+                >
                   {{ row.type === 'CE' ? 'Call' : 'Put' }}
                 </span>
                 {{ row.strike }}
               </h3>
               <p class="detail-sub">{{ insightFor(row, g).flowLabel }}</p>
             </div>
-            <button type="button" class="detail-close" (click)="closeDetail()" aria-label="Close">
+            <button
+              type="button"
+              class="detail-close"
+              (click)="closeDetail()"
+              aria-label="Close"
+            >
               <mat-icon>close</mat-icon>
             </button>
           </header>
@@ -341,7 +378,13 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
                 {{ insightFor(row, g).priceRead }}
               </span>
               <span class="chip">
-                <mat-icon>{{ row.oiChange > 0 ? 'add_chart' : row.oiChange < 0 ? 'remove_circle_outline' : 'horizontal_rule' }}</mat-icon>
+                <mat-icon>{{
+                  row.oiChange > 0
+                    ? 'add_chart'
+                    : row.oiChange < 0
+                      ? 'remove_circle_outline'
+                      : 'horizontal_rule'
+                }}</mat-icon>
                 {{ insightFor(row, g).oiRead }}
               </span>
             </div>
@@ -350,20 +393,31 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
               <div class="detail-stat">
                 <span class="label">Premium</span>
                 <span class="val">₹ {{ row.ltp | number: '1.2-2' }}</span>
-                <span class="sub" [class.up]="row.ltpChange > 0" [class.down]="row.ltpChange < 0">
+                <span
+                  class="sub"
+                  [class.up]="row.ltpChange > 0"
+                  [class.down]="row.ltpChange < 0"
+                >
                   {{ formatPremChange(row) }}
                 </span>
               </div>
               <div class="detail-stat">
                 <span class="label">Open interest</span>
                 <span class="val">{{ row.oi | number }}</span>
-                <span class="sub" [class.build]="row.oiChange > 0" [class.unwind]="row.oiChange < 0">
-                  OI Δ {{ row.oiChange > 0 ? '+' : '' }}{{ row.oiChange | number }}
+                <span
+                  class="sub"
+                  [class.build]="row.oiChange > 0"
+                  [class.unwind]="row.oiChange < 0"
+                >
+                  OI Δ {{ row.oiChange > 0 ? '+' : ''
+                  }}{{ row.oiChange | number }}
                 </span>
               </div>
               <div class="detail-stat">
                 <span class="label">IV</span>
-                <span class="val">{{ row.iv != null ? (row.iv | number: '1.1-1') + '%' : '—' }}</span>
+                <span class="val">{{
+                  row.iv !== null ? (row.iv | number: '1.1-1') + '%' : '—'
+                }}</span>
               </div>
               <div class="detail-stat">
                 <span class="label">vs spot</span>
@@ -393,7 +447,11 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         border: 1px solid rgba(167, 139, 250, 0.25);
         background: rgba(167, 139, 250, 0.05);
       }
-      .guard-head { margin-bottom: 10px; font-weight: 700; font-size: 0.82rem; }
+      .guard-head {
+        margin-bottom: 10px;
+        font-weight: 700;
+        font-size: 0.82rem;
+      }
       .guard-legend {
         margin: 4px 0 0;
         font-size: 0.65rem;
@@ -401,24 +459,42 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         font-weight: 400;
         line-height: 1.4;
       }
-      .call-tag { color: var(--oc-call, #38bdf8); font-weight: 700; }
-      .put-tag { color: var(--oc-put, #c4b5fd); font-weight: 700; }
+      .call-tag {
+        color: var(--oc-call, #38bdf8);
+        font-weight: 700;
+      }
+      .put-tag {
+        color: var(--oc-put, #c4b5fd);
+        font-weight: 700;
+      }
       .guard-stats {
         display: flex;
         flex-wrap: wrap;
         gap: 10px 16px;
         margin-bottom: 12px;
       }
-      .stat { display: flex; flex-direction: column; gap: 2px; min-width: 64px; }
+      .stat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 64px;
+      }
       .stat .label {
         font-size: 0.62rem;
         color: var(--muted);
         text-transform: uppercase;
         letter-spacing: 0.04em;
       }
-      .stat .val { font-size: 0.88rem; font-weight: 700; }
-      .stat .val.bull { color: #4ade80; }
-      .stat .val.bear { color: #f87171; }
+      .stat .val {
+        font-size: 0.88rem;
+        font-weight: 700;
+      }
+      .stat .val.bull {
+        color: #4ade80;
+      }
+      .stat .val.bear {
+        color: #f87171;
+      }
       .guard-walls {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -434,27 +510,47 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         cursor: pointer;
         color: inherit;
       }
-      .wall.call { border-color: var(--oc-call-border, rgba(56, 189, 248, 0.4)); }
-      .wall.put { border-color: var(--oc-put-border, rgba(196, 181, 253, 0.4)); }
-      .wall.active { box-shadow: 0 0 0 1px currentColor inset; }
+      .wall.call {
+        border-color: var(--oc-call-border, rgba(56, 189, 248, 0.4));
+      }
+      .wall.put {
+        border-color: var(--oc-put-border, rgba(196, 181, 253, 0.4));
+      }
+      .wall.active {
+        box-shadow: 0 0 0 1px currentColor inset;
+      }
       .wall-title {
         display: block;
         font-size: 0.62rem;
         color: var(--muted);
         text-transform: uppercase;
       }
-      .wall-strike { display: block; font-size: 1rem; font-weight: 700; }
-      .wall-oi { display: block; font-size: 0.68rem; color: var(--muted); }
+      .wall-strike {
+        display: block;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+      .wall-oi {
+        display: block;
+        font-size: 0.68rem;
+        color: var(--muted);
+      }
       .wall-oi {
         display: inline-flex;
         align-items: center;
         gap: 4px;
       }
-      .ladder-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .ladder-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
       .ladder-head,
       .ladder-row {
         display: grid;
-        grid-template-columns: 40px 44px 72px minmax(88px, 1fr) 72px minmax(108px, 1.1fr);
+        grid-template-columns: 40px 44px 72px minmax(88px, 1fr) 72px minmax(
+            108px,
+            1.1fr
+          );
         gap: 6px;
         align-items: center;
         min-width: 380px;
@@ -500,10 +596,21 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         min-width: 2px;
         background: #a78bfa;
       }
-      .price-bar.up { background: #4ade80; }
-      .price-bar.down { background: #f87171; }
-      .guard-ladder { display: flex; flex-direction: column; gap: 4px; }
-      .ladder-row { font-size: 0.68rem; padding: 4px 0; }
+      .price-bar.up {
+        background: #4ade80;
+      }
+      .price-bar.down {
+        background: #f87171;
+      }
+      .guard-ladder {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .ladder-row {
+        font-size: 0.68rem;
+        padding: 4px 0;
+      }
       .ladder-row.highlight {
         background: rgba(255, 255, 255, 0.04);
         border-radius: 6px;
@@ -538,20 +645,41 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         background: #a78bfa;
         min-width: 2px;
       }
-      .oi-bar.build { background: #22d3ee; }
-      .oi-bar.unwind { background: #fb923c; }
+      .oi-bar.build {
+        background: #22d3ee;
+      }
+      .oi-bar.unwind {
+        background: #fb923c;
+      }
       .prem-ch,
       .oi-ch {
         display: inline-flex;
         align-items: center;
         gap: 3px;
       }
-      .prem-ch.up, .sub.up { color: #4ade80; }
-      .prem-ch.down, .sub.down { color: #f87171; }
-      .prem-ch.side, .sub.side { color: #9ca3af; }
-      .oi-ch.build, .sub.build { color: #22d3ee; }
-      .oi-ch.unwind, .sub.unwind { color: #fb923c; }
-      .oi-ch.side { color: #9ca3af; }
+      .prem-ch.up,
+      .sub.up {
+        color: #4ade80;
+      }
+      .prem-ch.down,
+      .sub.down {
+        color: #f87171;
+      }
+      .prem-ch.side,
+      .sub.side {
+        color: #9ca3af;
+      }
+      .oi-ch.build,
+      .sub.build {
+        color: #22d3ee;
+      }
+      .oi-ch.unwind,
+      .sub.unwind {
+        color: #fb923c;
+      }
+      .oi-ch.side {
+        color: #9ca3af;
+      }
       .trend-icon {
         font-size: 13px;
         width: 13px;
@@ -571,7 +699,9 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
           grid-template-columns: 34px 40px 68px 1fr 68px 84px;
           min-width: 320px;
         }
-        .flow-label { display: none; }
+        .flow-label {
+          display: none;
+        }
         .flow-btn {
           width: 30px;
           height: 30px;
@@ -601,11 +731,27 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         color: var(--muted);
         cursor: pointer;
       }
-      .flow-btn mat-icon { font-size: 15px; width: 15px; height: 15px; }
-      .flow-btn.resistance { color: #fb923c; border-color: rgba(251, 146, 60, 0.4); }
-      .flow-btn.support { color: var(--oc-call, #38bdf8); border-color: var(--oc-call-border, rgba(56, 189, 248, 0.4)); }
-      .flow-btn.bullish { color: #4ade80; border-color: rgba(74, 222, 128, 0.35); }
-      .flow-btn.bearish { color: #f87171; border-color: rgba(248, 113, 113, 0.35); }
+      .flow-btn mat-icon {
+        font-size: 15px;
+        width: 15px;
+        height: 15px;
+      }
+      .flow-btn.resistance {
+        color: #fb923c;
+        border-color: rgba(251, 146, 60, 0.4);
+      }
+      .flow-btn.support {
+        color: var(--oc-call, #38bdf8);
+        border-color: var(--oc-call-border, rgba(56, 189, 248, 0.4));
+      }
+      .flow-btn.bullish {
+        color: #4ade80;
+        border-color: rgba(74, 222, 128, 0.35);
+      }
+      .flow-btn.bearish {
+        color: #f87171;
+        border-color: rgba(248, 113, 113, 0.35);
+      }
       .detail-backdrop {
         position: fixed;
         inset: 0;
@@ -627,8 +773,12 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         animation: slide-in 0.2s ease-out;
       }
       @keyframes slide-in {
-        from { transform: translateX(100%); }
-        to { transform: translateX(0); }
+        from {
+          transform: translateX(100%);
+        }
+        to {
+          transform: translateX(0);
+        }
       }
       .detail-head {
         display: flex;
@@ -658,7 +808,11 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         cursor: pointer;
         padding: 4px;
       }
-      .detail-body { padding: 12px 14px 20px; overflow-y: auto; flex: 1; }
+      .detail-body {
+        padding: 12px 14px 20px;
+        overflow-y: auto;
+        flex: 1;
+      }
       .flow-chips {
         display: flex;
         flex-wrap: wrap;
@@ -675,7 +829,12 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.08);
       }
-      .chip mat-icon { font-size: 14px; width: 14px; height: 14px; color: #22d3ee; }
+      .chip mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+        color: #22d3ee;
+      }
       .detail-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -738,7 +897,9 @@ export class OptionGuardDashboardComponent {
     if (!g) return [];
     const levels = g.levels ?? [];
     if (!f) return levels;
-    return levels.filter((l) => (f === 'ce' ? l.type === 'CE' : l.type === 'PE'));
+    return levels.filter((l) =>
+      f === 'ce' ? l.type === 'CE' : l.type === 'PE',
+    );
   });
 
   insightFor(row: OptionChainGuardLevel, g: OptionChainGuardData): RowInsight {
