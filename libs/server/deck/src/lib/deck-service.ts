@@ -250,6 +250,11 @@ type DeckDecision = TradeDecisionAlertPayload & {
   _debug?: { rawPrice?: PriceActionResponse };
 };
 
+function shouldExecuteAutoEntry(fastify: FastifyInstance): boolean {
+  if (isIndianMarketOpen()) return true;
+  return fastify.preferences.getAutoEntry().dryRun;
+}
+
 async function buildDeckDecision(
   fastify: FastifyInstance,
   symbol: string,
@@ -733,7 +738,7 @@ export async function buildDeckLiveStreamTick(
     style,
     {
       executeAutoExit: isIndianMarketOpen(),
-      executeAutoEntry: isIndianMarketOpen(),
+      executeAutoEntry: shouldExecuteAutoEntry(fastify),
     },
   );
 
@@ -782,7 +787,7 @@ export async function buildDeckLivePayload(
       style,
       {
       executeAutoExit: isIndianMarketOpen(),
-      executeAutoEntry: isIndianMarketOpen(),
+      executeAutoEntry: shouldExecuteAutoEntry(fastify),
     },
     );
     const tick = buildStreamTickParts(fastify, {
@@ -923,7 +928,7 @@ export async function runDeckAutoEntryPoll(
     positions,
     {
       executeAutoExit: false,
-      executeAutoEntry: isIndianMarketOpen(),
+      executeAutoEntry: shouldExecuteAutoEntry(fastify),
     },
   );
 }
@@ -968,7 +973,7 @@ export async function runDeckAutoExitPoll(
     positions,
     {
       executeAutoExit: isIndianMarketOpen(),
-      executeAutoEntry: isIndianMarketOpen(),
+      executeAutoEntry: shouldExecuteAutoEntry(fastify),
     },
   );
 }
@@ -993,7 +998,7 @@ export async function buildDeckPositionsUpdate(
     style,
     {
       executeAutoExit: isIndianMarketOpen(),
-      executeAutoEntry: isIndianMarketOpen(),
+      executeAutoEntry: shouldExecuteAutoEntry(fastify),
     },
   );
   return {

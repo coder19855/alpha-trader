@@ -24,7 +24,7 @@ import {
   setAutoEntryRuntimeState,
   simulateAutoEntryBuy,
 } from '@alpha-trader/server-position';
-import { TradingStyle } from '@alpha-trader/server-shared';
+import { TradingStyle, getStyleScoringConfig } from '@alpha-trader/server-shared';
 
 export type { AutoEntryGuardStatus };
 
@@ -38,6 +38,64 @@ export type AutoEntryPresetSignalResolver = (params: {
 
 const ENTRY_COOLDOWN_MS = 120_000;
 const CONFIRMATIONS_REQUIRED = 2;
+const GENERIC_DEFAULT_ENTRY_THRESHOLD = 60;
+const ENTRY_THRESHOLD_HYSTERESIS_PCT = 5;
+
+export function resolveEngineEntryThreshold(
+  pref: AutoEntryPreferenceState,
+  decision: AutoExitDecisionSlice,
+  style: TradingStyle,
+): number {
+  const styleEnter =
+    decision.tradeGuidance?.thresholdsForThisStyle?.enter ??
+    getStyleScoringConfig(style).convictionThreshold.enter;
+  // Align with deck entry % when the user has not customized the generic default.
+  if (
+    pref.entryThreshold === GENERIC_DEFAULT_ENTRY_THRESHOLD &&
+    styleEnter !== GENERIC_DEFAULT_ENTRY_THRESHOLD
+  ) {
+    return styleEnter;
+  }
+  return pref.entryThreshold;
+}
+
+function resolveChartVetoReason(
+  decision: AutoExitDecisionSlice,
+): string | undefined {
+  const overall = decision.priceAction?.overallSignal as
+    | { vetoReason?: string }
+    | undefined;
+  const fromOverall =
+    typeof overall?.vetoReason === 'string' ? overall.vetoReason : undefined;
+  return fromOverall ?? decision._debug?.rawPrice?.signal?.vetoReason ?? undefined;
+}
+
+function isNearEngineEntryThreshold(
+  decision: AutoExitDecisionSlice,
+  threshold: number,
+): boolean {
+  return (
+    isTradeableAction(decision.action) &&
+    decision.conviction >= threshold - ENTRY_THRESHOLD_HYSTERESIS_PCT
+  );
+}
+
+function describeEngineWatchDetail(
+  decision: AutoExitDecisionSlice,
+  threshold: number,
+): string {
+  const vetoReason = resolveChartVetoReason(decision);
+  if (vetoReason) {
+    return `Chart veto active — ${vetoReason}`;
+  }
+  if (!isTradeableAction(decision.action)) {
+    return `Need CE-BUY or PE-BUY (current: ${decision.action}).`;
+  }
+  if (decision.conviction < threshold) {
+    return `Conviction ${decision.conviction}% below auto-entry threshold ${threshold}%.`;
+  }
+  return `Waiting for ${threshold}%+ on a tradeable engine signal.`;
+}
 
 function isTradeableAction(action: string): action is HeldDirection {
   return action === 'CE-BUY' || action === 'PE-BUY';
@@ -68,15 +126,16 @@ function buildGuardStatus(params: {
   runtime: ReturnType<typeof getAutoEntryRuntimeState>;
   message: string;
   status: AutoEntryGuardStatus['status'];
+  entryThreshold?: number;
 }): AutoEntryGuardStatus {
-  const { pref, session, runtime, message, status } = params;
+  const { pref, session, runtime, message, status, entryThreshold } = params;
   return {
     enabled: pref.enabled,
     dryRun: pref.dryRun,
     armedLive: pref.armedLive,
     signalMode: pref.signalMode,
     signalProfile: pref.signalProfile,
-    entryThreshold: pref.entryThreshold,
+    entryThreshold: entryThreshold ?? pref.entryThreshold,
     lots: pref.lots,
     maxEntriesPerDay: pref.maxEntriesPerDay,
     greenDayStop: pref.greenDayStop,
@@ -98,6 +157,7 @@ function buildGuardStatus(params: {
 async function resolveEntrySignal(
   pref: AutoEntryPreferenceState,
   decision: AutoExitDecisionSlice,
+  style: TradingStyle,
   resolvePresetSignal?: AutoEntryPresetSignalResolver,
   presetContext?: {
     fastify: FastifyInstance;
@@ -106,11 +166,13 @@ async function resolveEntrySignal(
   },
 ): Promise<{ action: HeldDirection; reason: string } | null> {
   if (pref.signalMode === 'engine') {
+    if (resolveChartVetoReason(decision)) return null;
     if (!isTradeableAction(decision.action)) return null;
-    if (decision.conviction < pref.entryThreshold) return null;
+    const threshold = resolveEngineEntryThreshold(pref, decision, style);
+    if (decision.conviction < threshold) return null;
     return {
       action: decision.action,
-      reason: `Engine ${decision.action} @ ${decision.conviction}% (≥ ${pref.entryThreshold}%)`,
+      reason: `Engine ${decision.action} @ ${decision.conviction}% (≥ ${threshold}%)`,
     };
   }
 
@@ -149,6 +211,16 @@ export async function attachAutoEntryGuard(params: {
   const stateKey = autoEntryStateKey(indexSymbol);
   const runtime = { ...getAutoEntryRuntimeState(stateKey) };
   runtime.lastEvaluatedAt = new Date().toISOString();
+  const effectiveEntryThreshold =
+    pref.signalMode === 'engine'
+      ? resolveEngineEntryThreshold(pref, decision, style)
+      : pref.entryThreshold;
+  const guardParams = {
+    pref,
+    session,
+    runtime,
+    entryThreshold: effectiveEntryThreshold,
+  };
 
   const closeTrack = trackAutoEntryPositionPresence(
     indexSymbol,
@@ -171,9 +243,7 @@ export async function attachAutoEntryGuard(params: {
       detail: 'Enable auto-entry in Positions to start watching for entries.',
     });
     const guard = buildGuardStatus({
-      pref,
-      session,
-      runtime,
+      ...guardParams,
       message:
         'Auto-entry off — enable in Positions tab to place MARKET buys on signal confirm.',
       status: 'off',
@@ -195,9 +265,8 @@ export async function attachAutoEntryGuard(params: {
       detail: 'Close the current index option leg before a new entry can be made.',
     });
     const guard = buildGuardStatus({
-      pref,
+      ...guardParams,
       session: await loadAutoEntrySession(fastify),
-      runtime,
       message: 'Auto-entry paused — close existing index option leg before new entry.',
       status: 'blocked',
     });
@@ -216,9 +285,7 @@ export async function attachAutoEntryGuard(params: {
       detail: gate.reason ?? 'Session blocked for new entries.',
     });
     const guard = buildGuardStatus({
-      pref,
-      session,
-      runtime,
+      ...guardParams,
       message: gate.reason ?? 'Session blocked for new entries.',
       status: 'blocked',
     });
@@ -230,15 +297,22 @@ export async function attachAutoEntryGuard(params: {
   const signal = await resolveEntrySignal(
     pref,
     decision,
+    style,
     resolvePresetSignal,
     { fastify, style, indexSymbol },
   );
 
   if (!signal) {
-    runtime.pendingKey = null;
-    runtime.pendingAction = null;
-    runtime.pendingReason = null;
-    runtime.confirmationCount = 0;
+    const holdConfirmation =
+      pref.signalMode === 'engine' &&
+      runtime.confirmationCount > 0 &&
+      isNearEngineEntryThreshold(decision, effectiveEntryThreshold);
+    if (!holdConfirmation) {
+      runtime.pendingKey = null;
+      runtime.pendingAction = null;
+      runtime.pendingReason = null;
+      runtime.confirmationCount = 0;
+    }
     appendTrace(runtime, stateKey, {
       at: runtime.lastEvaluatedAt,
       stage: 'watching',
@@ -249,17 +323,15 @@ export async function attachAutoEntryGuard(params: {
           : `Watching preset ${pref.signalProfile}`,
       detail:
         pref.signalMode === 'engine'
-          ? `Waiting for engine conviction to reach ${pref.entryThreshold}% or above.`
+          ? describeEngineWatchDetail(decision, effectiveEntryThreshold)
           : `Waiting for preset gates on ${pref.signalProfile}.`,
     });
     const hint =
       pref.signalMode === 'engine'
-        ? `Watching engine — need ${pref.entryThreshold}%+ CE/PE signal.`
+        ? `Watching engine — ${describeEngineWatchDetail(decision, effectiveEntryThreshold)}`
         : `Watching ${pref.signalProfile} — waiting for preset gates.`;
     const guard = buildGuardStatus({
-      pref,
-      session,
-      runtime,
+      ...guardParams,
       message: hint,
       status: 'watching',
     });
@@ -304,9 +376,7 @@ export async function attachAutoEntryGuard(params: {
         detail: 'Signal confirmed, but live orders are not armed yet.',
       });
       const guard = buildGuardStatus({
-        pref,
-        session,
-        runtime,
+        ...guardParams,
         message: `Entry confirmed — arm live orders to place MARKET buy. ${signal.reason}`,
         status: 'pending',
       });
@@ -366,9 +436,8 @@ export async function attachAutoEntryGuard(params: {
 
     const updatedSession = await loadAutoEntrySession(fastify);
     const guard = buildGuardStatus({
-      pref,
+      ...guardParams,
       session: updatedSession,
-      runtime,
       message: runtime.lastExecutionNote,
       status: result.succeeded
         ? pref.dryRun
@@ -392,9 +461,7 @@ export async function attachAutoEntryGuard(params: {
   }
 
   const guard = buildGuardStatus({
-    pref,
-    session,
-    runtime,
+    ...guardParams,
     message: ready
       ? cooldownActive
         ? `Entry confirmed — cooldown before next order. ${signal.reason}`

@@ -90,9 +90,10 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   private resizeObserver: ResizeObserver | null = null;
   private intersectionObserver: IntersectionObserver | null = null;
   private initRetryId: number | null = null;
-  private userAdjustedViewport = false;
+  private followLatestViewport = true;
   private hasFocusedSession = false;
   private lastDataKey = '';
+  private latestLogicalIndex = -1;
 
   ngAfterViewInit(): void {
     const el = this.container.nativeElement;
@@ -117,7 +118,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['timeframe'] && !changes['timeframe'].firstChange) {
       this.hasFocusedSession = false;
-      this.userAdjustedViewport = false;
+      this.followLatestViewport = true;
       this.applyTimeframeOptions();
     }
 
@@ -159,7 +160,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.scheduleInitRetries();
     if (this.chart && sized) {
       this.hasFocusedSession = false;
-      this.userAdjustedViewport = false;
+      this.followLatestViewport = true;
       this.render();
     }
   }
@@ -186,7 +187,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       this.initChart();
       return;
     }
-    if (!this.userAdjustedViewport && !this.hasFocusedSession) {
+    if (this.followLatestViewport && !this.hasFocusedSession) {
       this.render();
     }
   }
@@ -205,7 +206,8 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.overlayPriceLines = [];
     this.lastDataKey = '';
     this.hasFocusedSession = false;
-    this.userAdjustedViewport = false;
+    this.followLatestViewport = true;
+    this.latestLogicalIndex = -1;
   }
 
   private initChart(): void {
@@ -267,8 +269,8 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     });
 
     this.chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (range && this.hasFocusedSession) {
-        this.userAdjustedViewport = true;
+      if (range && this.latestLogicalIndex >= 0) {
+        this.followLatestViewport = range.to >= this.latestLogicalIndex - 1;
       }
     });
 
@@ -335,9 +337,9 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   private rightOffsetBars(): number {
-    if (this.timeframe === '5m') return 18;
-    if (this.timeframe === '1h') return 4;
-    return 10;
+    if (this.timeframe === '5m') return 8;
+    if (this.timeframe === '1h') return 3;
+    return 6;
   }
 
   private applyTimeframeOptions(): void {
@@ -356,6 +358,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     const dataKey = this.buildDataKey(candles, spotSeries);
     const dataChanged = dataKey !== this.lastDataKey;
     this.lastDataKey = dataKey;
+    this.latestLogicalIndex = Math.max(candles.length, this.resolveLinePoints(candles, spotSeries).length) - 1;
 
     const useCandles =
       this.chartStyle === 'candlestick' && candles.length > 0;
@@ -391,6 +394,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
         this.clearOverlayLines();
         this.clearStudyLines();
         this.hasFocusedSession = false;
+        this.followLatestViewport = true;
         return;
       }
 
@@ -405,7 +409,6 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
           { time: t, value: min },
           { time: t, value: max },
         ]);
-        this.userAdjustedViewport = false;
         this.hasFocusedSession = false;
       } else {
         this.scrubSeries.setData([]);
@@ -423,7 +426,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       return;
     }
 
-    if (!this.userAdjustedViewport && (dataChanged || !this.hasFocusedSession)) {
+    if (this.followLatestViewport && (dataChanged || !this.hasFocusedSession)) {
       this.focusViewport(candles, spotSeries);
     }
   }
@@ -460,6 +463,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
           to: toSec as Time,
         });
         this.hasFocusedSession = true;
+        this.followLatestViewport = true;
         return;
       } catch {
         this.fitChartContent();
@@ -481,6 +485,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
         to: toSec as Time,
       });
       this.hasFocusedSession = true;
+      this.followLatestViewport = true;
     } catch {
       this.fitChartContent();
     }
@@ -518,6 +523,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
         to: toSec as Time,
       });
       this.hasFocusedSession = true;
+      this.followLatestViewport = true;
     } catch {
       this.focusViewport(candles, series);
     }
