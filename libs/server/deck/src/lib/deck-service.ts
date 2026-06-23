@@ -380,28 +380,14 @@ function buildStreamTickParts(
   const primaryScore =
     params.decision.priceAction.components?.[primaryTf]?.score ?? 0;
   const rawPrice = params.decision._debug?.rawPrice;
-  const signal = rawPrice?.signal as
-    | {
-        confidence?: number;
-        confidenceBeforeDecay?: number;
-        entryPenalties?: Array<{ label: string; points: number }>;
-      }
-    | undefined;
   const paLedger = buildPaConvictionLedger({
-    confidence:
-      signal?.confidence ??
-      params.decision.priceConviction ??
-      params.decision.conviction,
-    confidenceBeforeDecay:
-      signal?.confidenceBeforeDecay ??
-      params.decision.priceConvictionBeforeDecay,
-    entryPenalties: signal?.entryPenalties,
+    confidence: params.decision.conviction,
+    confidenceBeforeDecay: params.decision.priceConvictionBeforeDecay,
+    convictionBonuses: params.decision.convictionBonuses,
+    baseConviction: params.decision.weightedBaseConviction,
     momentumDecayPercent: rawPrice?.momentumDecay?.decayPercent ?? null,
   });
-  const priceConviction =
-    signal?.confidence != null
-      ? paLedger.entryConviction
-      : params.decision.priceConviction ?? params.decision.conviction;
+  const priceConviction = paLedger.entryConviction;
   const gauges = buildDeckGauges({
     action: params.decision.action,
     optionConviction: 0,
@@ -409,7 +395,6 @@ function buildStreamTickParts(
     optionOverallScore: 0,
     priceConviction,
     priceConvictionBeforeDecay:
-      signal?.confidenceBeforeDecay ??
       params.decision.priceConvictionBeforeDecay,
     primaryScore,
     hasMomentumDecay: Boolean(params.decision.momentumDecayPercent),

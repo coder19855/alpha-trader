@@ -6,8 +6,10 @@ export interface PaConvictionBonus {
 export interface PaConvictionLedgerInput {
   confidence: number;
   confidenceBeforeDecay?: number;
+  convictionBonuses?: Array<{ label: string; points: number }>;
   entryPenalties?: Array<{ label: string; points: number }>;
   momentumDecayPercent?: number | null;
+  baseConviction?: number;
 }
 
 export interface PaConvictionLedger {
@@ -17,28 +19,40 @@ export interface PaConvictionLedger {
 }
 
 /**
- * Builds a PA % breakdown: base + bonuses/penalties → final confidence.
+ * Builds a PA % breakdown: base + bonuses/penalties -> final confidence.
  * Penalties from chart gates are negative points; decay is shown separately when not already listed.
  */
 export function buildPaConvictionLedger(
   input: PaConvictionLedgerInput,
 ): PaConvictionLedger {
   const final = Math.round(Math.max(0, Math.min(95, input.confidence)));
-  const penalties = input.entryPenalties ?? [];
-
-  const bonuses: PaConvictionBonus[] = penalties.map((row) => ({
+  const sourceBonuses = input.convictionBonuses?.length
+    ? input.convictionBonuses
+    : (input.entryPenalties ?? []).map((row) => ({
+        label: row.label,
+        points: -Math.abs(row.points),
+      }));
+  const bonuses: PaConvictionBonus[] = sourceBonuses.map((row) => ({
     label: row.label,
-    points: -Math.abs(row.points),
+    points: Math.round(row.points),
   }));
 
   const decayPct = input.momentumDecayPercent ?? 0;
-  const hasDecayPenalty = penalties.some((row) => /decay/i.test(row.label));
+  const hasDecayPenalty = bonuses.some((row) => /decay/i.test(row.label));
   if (decayPct > 0 && !hasDecayPenalty) {
-    const beforeDecay = Math.round(
-      input.confidenceBeforeDecay ?? final,
-    );
-    const penaltyTotal = penalties.reduce((sum, row) => sum + row.points, 0);
-    const decayPoints = Math.max(0, beforeDecay - final - penaltyTotal);
+    const beforeDecay = Math.round(input.confidenceBeforeDecay ?? final);
+    const decayPoints =
+      input.convictionBonuses?.length && input.baseConviction != null
+        ? Math.max(0, beforeDecay - Math.round(input.baseConviction))
+        : Math.max(
+            0,
+            beforeDecay -
+              final -
+              (input.entryPenalties ?? []).reduce(
+                (sum, row) => sum + row.points,
+                0,
+              ),
+          );
     if (decayPoints > 0) {
       bonuses.push({
         label: `Momentum decay (${Math.round(decayPct * 100)}%)`,
@@ -48,10 +62,10 @@ export function buildPaConvictionLedger(
   }
 
   const bonusTotal = bonuses.reduce((sum, row) => sum + row.points, 0);
-  const baseConviction = Math.min(
-    95,
-    Math.max(0, Math.round(final - bonusTotal)),
-  );
+  const baseConviction =
+    input.baseConviction != null
+      ? Math.min(95, Math.max(0, Math.round(input.baseConviction)))
+      : Math.min(95, Math.max(0, Math.round(final - bonusTotal)));
 
   return {
     baseConviction,

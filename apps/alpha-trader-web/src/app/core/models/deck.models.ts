@@ -155,7 +155,7 @@ export interface DeckLiveTick {
   conviction: number;
   weightedBaseConviction?: number;
   convictionBonuses?: ConvictionBonus[];
-  /** PA % breakdown: structural penalties + decay (adds up to PA bar). */
+  /** PA % breakdown: advantages, penalties, and decay (adds up to PA bar). */
   paConvictionBonuses?: ConvictionBonus[];
   paBaseConviction?: number;
   tfAligned?: number;
