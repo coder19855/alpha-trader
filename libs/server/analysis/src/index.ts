@@ -3,6 +3,23 @@ export { computePriceAction, parseVetoModeQuery } from './lib/compute-price-acti
 export { computePaDecision } from './lib/compute-pa-decision.js';
 
 export {
+  optionOverlayKey,
+  setOptionOverlay,
+  peekOptionOverlay,
+  readOptionOverlay,
+  clearOptionOverlay,
+} from './lib/option-chain/option-overlay-cache.js';
+export type {
+  OptionOverlayStatus,
+  OptionOverlayEntry,
+  OptionOverlayRead,
+} from './lib/option-chain/option-overlay-cache.js';
+export {
+  fetchOptionMetricsSnapshot,
+  refreshOptionOverlay,
+} from './lib/option-chain/fetch-option-metrics-snapshot.js';
+
+export {
   computeOppositeExitStreak,
   buildFlipExitSignals,
   findFirstConfirmedFlipExit,

@@ -3,8 +3,10 @@ import { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { onQuoteTicksUpdated } from '@alpha-trader/server-market-data';
 import { fetchOpenIndexOptionPositions } from '@alpha-trader/server-position';
+import { refreshOptionOverlay } from '@alpha-trader/server-analysis';
 import {
   isIndianMarketOpen,
+  normalizeOptionOverlayRefreshMs,
   TELEGRAM_NOTIFICATION_DEFAULTS,
   TradingStyle,
 } from '@alpha-trader/server-shared';
@@ -86,8 +88,37 @@ const deckStreamPlugin = fp(
     }, pollIntervalMs);
     guardPollTimer.unref?.();
 
+    // Option-chain overlay side-car. Keeps watched symbols' option metrics warm
+    // on an independent cadence so the deck signal tick can blend them without
+    // ever awaiting a REST fetch. Single-flight; degrades silently when the
+    // chain is unavailable (the deck falls back to PA-only).
+    const overlayRefreshMs = normalizeOptionOverlayRefreshMs(
+      process.env.OPTION_OVERLAY_REFRESH_MS,
+    );
+    let overlayRefreshInFlight = false;
+    const runOverlayRefreshCycle = async (): Promise<void> => {
+      if (overlayRefreshInFlight || !isIndianMarketOpen()) return;
+      overlayRefreshInFlight = true;
+      try {
+        const tokenOk = await fastify.ensureFyersSession();
+        if (!tokenOk) return;
+        for (const symbol of watchedSymbols) {
+          await refreshOptionOverlay(fastify, symbol, pollTradingStyle);
+        }
+      } catch (err) {
+        fastify.log.warn({ err }, 'Option overlay refresh failed');
+      } finally {
+        overlayRefreshInFlight = false;
+      }
+    };
+    const overlayRefreshTimer = setInterval(() => {
+      void runOverlayRefreshCycle();
+    }, overlayRefreshMs);
+    overlayRefreshTimer.unref?.();
+
     fastify.addHook('onClose', async () => {
       if (guardPollTimer) clearInterval(guardPollTimer);
+      clearInterval(overlayRefreshTimer);
       unsubscribe();
       hub.shutdown();
     });

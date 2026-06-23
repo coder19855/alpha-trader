@@ -109,6 +109,99 @@ export function buildPaRecommendedStrategies(
   ];
 }
 
+function classifyIvRegime(ivRegime?: string): 'high' | 'low' | 'normal' {
+  const r = (ivRegime ?? '').toLowerCase();
+  if (r.includes('expand') || r.includes('high') || r.includes('fear')) {
+    return 'high';
+  }
+  if (r.includes('crush') || r.includes('low')) return 'low';
+  return 'normal';
+}
+
+/**
+ * Option-structure recommendations, distinct from the price-action structural
+ * checklist. These answer "which option structure fits?" given direction,
+ * conviction and — when an option overlay is fresh — the live IV regime and
+ * option-flow bias. High IV favours defined-risk spreads (theta/vega aware);
+ * low IV favours buying premium outright. When IV is unknown (PA-only), it
+ * still returns sensible directional structures so the tab is never empty and
+ * never identical to the PA tab.
+ */
+export function buildOptionRecommendedStrategies(
+  action: string,
+  conviction: number,
+  ivRegime?: string,
+  optionBias?: string,
+): DeckStrategyItem[] {
+  const iv = classifyIvRegime(ivRegime);
+  const ivNote =
+    iv === 'high'
+      ? 'IV elevated — defined-risk spreads cut theta/vega bleed vs naked longs.'
+      : iv === 'low'
+        ? 'IV compressed — long premium is cheap; debit / long structures favored.'
+        : 'IV in a normal band — standard sizing.';
+  const flowNote =
+    optionBias && optionBias.toLowerCase() !== 'neutral'
+      ? ` Option-flow bias: ${optionBias}.`
+      : '';
+  const base = Math.max(20, Math.round(conviction));
+
+  if (action === 'CE-BUY' || action === 'PE-BUY') {
+    const bullish = action === 'CE-BUY';
+    const longLeg = bullish ? 'Long CE (ATM / ITM)' : 'Long PE (ATM / ITM)';
+    const spread = bullish ? 'Bull call debit spread' : 'Bear put debit spread';
+    const longItem: DeckStrategyItem = {
+      strategy: longLeg,
+      confidenceScore: iv === 'high' ? Math.max(20, base - 18) : base,
+      reason: `Directional ${bullish ? 'long call' : 'long put'}. ${ivNote}${flowNote}`,
+      risk: iv === 'high' ? 'Full premium at risk; high theta/vega bleed' : 'Premium at risk',
+      executionHint: 'Prefer liquid weekly expiry; check bid/ask spread before entry.',
+    };
+    const spreadItem: DeckStrategyItem = {
+      strategy: spread,
+      confidenceScore: iv === 'high' ? base : Math.max(20, base - 12),
+      reason:
+        iv === 'high'
+          ? `Caps cost and vega in elevated IV while keeping ${bullish ? 'bullish' : 'bearish'} bias.`
+          : 'Lower-cost defined-risk directional structure.',
+      risk: 'Spread width caps max gain',
+    };
+    // In high IV, lead with the spread (cheaper, less decay); otherwise the long.
+    return iv === 'high' ? [spreadItem, longItem] : [longItem, spreadItem];
+  }
+
+  // Neutral / no-trade
+  if (iv === 'high') {
+    return [
+      {
+        strategy: 'Iron condor',
+        confidenceScore: 45,
+        reason: `No directional edge with elevated IV — premium selling favored. ${ivNote}${flowNote}`,
+        risk: 'Gap risk on indices; defined max loss',
+      },
+      {
+        strategy: 'Short strangle (defined-risk)',
+        confidenceScore: 35,
+        reason: 'Range-bound expectation; collect rich premium with wings for protection.',
+        risk: 'Assignment / gap risk — keep wings',
+      },
+    ];
+  }
+  return [
+    {
+      strategy: 'Wait for clearer setup',
+      confidenceScore: 40,
+      reason: `No directional edge. ${ivNote}${flowNote}`,
+    },
+    {
+      strategy: 'Long straddle (only on expected expansion)',
+      confidenceScore: 30,
+      reason: 'Cheap premium can favor long volatility if a breakout is expected.',
+      risk: 'Theta decay if range persists',
+    },
+  ];
+}
+
 export function buildTradeGuidanceForPa(
   conviction: number,
   style: TradingStyle,

@@ -4,6 +4,9 @@ import {
   computePaDecision,
   computePriceAction,
   computeTechnicalAnalysisTimeline,
+  readOptionOverlay,
+  refreshOptionOverlay,
+  type OptionOverlayStatus,
 } from '@alpha-trader/server-analysis';
 import {
   attachAutoExitGuard,
@@ -45,7 +48,7 @@ import {
   timelineToVetoSeries,
 } from './deck-replay-utils.js';
 import {
-  buildPaRecommendedStrategies,
+  buildOptionRecommendedStrategies,
   buildTradeGuidanceForPa,
   extractDeckStrategyPayload,
 } from './deck-strategy.js';
@@ -253,6 +256,11 @@ type DeckDecision = TradeDecisionAlertPayload & {
     };
   };
   optionFlow?: { bias: string; overallScore?: number; components?: unknown[] };
+  optionOverlay?: {
+    status: OptionOverlayStatus;
+    ageMs: number | null;
+    ivRegime?: string;
+  };
   risk?: { suggestedRiskPercent?: number; notes?: string[] };
   _debug?: { rawPrice?: PriceActionResponse };
 };
@@ -277,7 +285,21 @@ async function buildDeckDecision(
     throw new Error('Price action unavailable');
   }
 
-  const paDecision = computePaDecision(fastify, priceData, style, { vetoMode });
+  // Read the option-chain overlay non-blockingly. A fresh snapshot blends into
+  // conviction; a stale/missing one degrades to PA-only AND triggers a
+  // fire-and-forget refresh so the next tick can blend. The fetch never sits on
+  // this code path, so blending cannot delay or slow the signal.
+  const overlay = readOptionOverlay(symbol, style, Date.now());
+  const optionMetrics = overlay.metrics;
+  if (overlay.status !== 'fresh') {
+    void refreshOptionOverlay(fastify, symbol, style).catch(() => undefined);
+  }
+
+  const paDecision = computePaDecision(fastify, priceData, style, {
+    vetoMode,
+    optionMetrics,
+  });
+  const optionConviction = optionMetrics ? paDecision.optionConviction : 0;
   const components: Record<string, { score: number }> = {
     '5m': { score: priceData.timeframeScores['5m'] },
     '15m': { score: priceData.timeframeScores['15m'] },
@@ -300,7 +322,7 @@ async function buildDeckDecision(
     convictionBonuses: paDecision.convictionBonuses,
     priceConviction: paDecision.priceConviction,
     priceConvictionBeforeDecay: paDecision.priceConvictionBeforeDecay,
-    optionConviction: 0,
+    optionConviction,
     recommendation: paDecision.recommendation,
     humanSummary: paDecision.humanSummary,
     tradeGuidance: buildTradeGuidanceForPa(
@@ -326,20 +348,43 @@ async function buildDeckDecision(
       structureElements: priceData.structureElements,
       candlestick: priceData.candlestick,
     } as DeckDecision['priceAction'],
-    recommendedStrategies: buildPaRecommendedStrategies(
+    // Option-structure recommendations (IV-aware when the overlay is fresh).
+    // These feed the Strategy tab's "Options" view and are deliberately
+    // distinct from the PA structural checklist (priceActionStrategies), which
+    // the strategy payload derives separately — fixing the duplicate tabs.
+    recommendedStrategies: buildOptionRecommendedStrategies(
       paDecision.action,
       paDecision.conviction,
+      optionMetrics?.ivRegime,
+      optionMetrics?.bias,
     ),
     risk: {
       suggestedRiskPercent: paDecision.conviction >= 60 ? 1 : 0.5,
-      notes: ['PA-only sizing — adjust to your capital and risk rules.'],
+      notes: [
+        optionMetrics
+          ? 'Blended PA + option-flow sizing — adjust to your capital and risk rules.'
+          : 'PA-only sizing — adjust to your capital and risk rules.',
+      ],
     },
     tradeSetup: priceData.tradeSetup ?? null,
     momentumDecayPercent: priceData.momentumDecay?.decayPercent ?? null,
-    optionFlow: {
-      bias: 'neutral',
-      overallScore: 0,
-      components: [],
+    optionFlow: optionMetrics
+      ? {
+          bias: optionMetrics.bias,
+          overallScore: optionMetrics.score,
+          components: optionMetrics.components
+            ? [optionMetrics.components]
+            : [],
+        }
+      : {
+          bias: 'neutral',
+          overallScore: 0,
+          components: [],
+        },
+    optionOverlay: {
+      status: overlay.status,
+      ageMs: overlay.ageMs,
+      ivRegime: optionMetrics?.ivRegime,
     },
     convictionThresholds: getStyleScoringConfig(style).convictionThreshold,
     _debug: { rawPrice: priceData },
@@ -357,11 +402,20 @@ function buildLaneMeta(
   const priceActionPercent = gauges.priceAction.percent ?? 0;
   const weightedBase =
     decision.weightedBaseConviction ?? Math.round(decision.conviction ?? 0);
+  const optionFresh = decision.optionOverlay?.status === 'fresh';
+  const optionPercent = optionFresh
+    ? Math.round(decision.optionConviction ?? 0)
+    : 0;
+  // When option flow is blended in, the combined lane reflects the engine's
+  // final (blended) conviction; PA-only keeps the prior behaviour.
+  const combinedPercent = optionFresh
+    ? Math.round(decision.conviction ?? priceActionPercent)
+    : Math.round(priceActionPercent || weightedBase);
   return {
     lanes: {
-      optionPercent: 0,
+      optionPercent,
       priceActionPercent,
-      combinedPercent: Math.round(priceActionPercent || weightedBase),
+      combinedPercent,
     },
     weightedBaseConviction: weightedBase,
     convictionBonuses: decision.convictionBonuses ?? [],
@@ -379,7 +433,17 @@ function buildStreamTickParts(
     managementContext?: PositionManagementContext;
   },
 ): DeckLiveStreamTick {
-  const flowMode: FlowMode = 'pa-only';
+  const optionOverlayFresh = params.decision.optionOverlay?.status === 'fresh';
+  const flowMode: FlowMode = optionOverlayFresh ? 'blend' : 'pa-only';
+  const optionConvictionPct = optionOverlayFresh
+    ? params.decision.optionConviction ?? 0
+    : 0;
+  const optionBias = optionOverlayFresh
+    ? params.decision.optionFlow?.bias ?? 'neutral'
+    : 'neutral';
+  const optionOverallScore = optionOverlayFresh
+    ? params.decision.optionFlow?.overallScore ?? 0
+    : 0;
   const primaryTf = primaryTimeframeForStyle(params.style);
   const primaryScore =
     params.decision.priceAction.components?.[primaryTf]?.score ?? 0;
@@ -394,9 +458,9 @@ function buildStreamTickParts(
   const priceConviction = paLedger.entryConviction;
   const gauges = buildDeckGauges({
     action: params.decision.action,
-    optionConviction: 0,
-    optionBias: 'neutral',
-    optionOverallScore: 0,
+    optionConviction: optionConvictionPct,
+    optionBias,
+    optionOverallScore,
     priceConviction,
     priceConvictionBeforeDecay:
       params.decision.priceConvictionBeforeDecay,

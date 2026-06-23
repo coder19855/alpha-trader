@@ -29,7 +29,7 @@ import {
   timelineToVetoSeries,
 } from './deck-replay-utils.js';
 import {
-  buildPaRecommendedStrategies,
+  buildOptionRecommendedStrategies,
   buildTradeGuidanceForPa,
   extractDeckStrategyPayload,
 } from './deck-strategy.js';
@@ -193,7 +193,10 @@ async function buildReplayDecision(
     recommendation: paDecision.recommendation,
     humanSummary: paDecision.humanSummary,
     tradeGuidance: buildTradeGuidanceForPa(paDecision.conviction, style, action),
-    recommendedStrategies: buildPaRecommendedStrategies(action, paDecision.conviction),
+    recommendedStrategies: buildOptionRecommendedStrategies(
+      action,
+      paDecision.conviction,
+    ),
     weightedBaseConviction: paDecision.weightedBaseConviction,
     convictionBonuses: paDecision.convictionBonuses,
     priceConviction: paDecision.priceConviction,
