@@ -183,6 +183,15 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
               </div>
             </div>
             <p class="status-line">{{ data.bias || '—' }}</p>
+            <p class="combined-score-line" role="status">
+              @if (data.flowMode === 'blend') {
+                Blended conviction {{ data.conviction }}% · PA
+                {{ data.lanes.priceActionPercent }}% · Option
+                {{ data.lanes.optionPercent }}%
+              } @else {
+                PA conviction {{ data.conviction }}% · option overlay not fresh
+              }
+            </p>
             <p class="signal-calc-stamp" role="status">
               Signal calculated:
               <time [attr.datetime]="data.signalCalculatedAt ?? data.asOf">
@@ -247,6 +256,7 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
                   data.gauges.priceAction.percent || data.lanes.priceActionPercent
                 "
                 [combinedPercent]="data.lanes.combinedPercent"
+                [combinedLabel]="data.flowMode === 'blend' ? 'Blended' : 'Weighted'"
                 [hideCombinedLane]="data.flowMode === 'pa-only'"
                 [weightedBaseConviction]="
                   data.weightedBaseConviction ?? data.lanes.combinedPercent
@@ -704,6 +714,12 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
       }
       .signal-refresh-btn mat-icon.spinning {
         animation: signal-refresh-spin 0.8s linear infinite;
+      }
+      .combined-score-line {
+        margin: 4px 0 0;
+        font-size: 0.7rem;
+        color: var(--text);
+        opacity: 0.88;
       }
       @keyframes signal-refresh-spin {
         to {
