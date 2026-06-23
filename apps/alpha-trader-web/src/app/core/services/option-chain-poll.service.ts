@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Subscription, timer } from 'rxjs';
+import { EMPTY, Subscription, timer } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { OptionChainSignalPayload } from '../models/option-chain.models';
 import { TradingStyle } from '../models/deck.models';
@@ -31,50 +31,81 @@ export class OptionChainPollService {
   private readonly api = inject(OptionChainApiService);
 
   readonly data = signal<OptionChainSignalPayload | null>(null);
+  /** True only for initial load or explicit refresh/prefetch — not background polls. */
   readonly loading = signal(false);
+
   readonly error = signal<string | null>(null);
 
   private sub: Subscription | null = null;
+  private fetchSub: Subscription | null = null;
   private ctx: OptionPollContext | null = null;
 
+  private scheduleKey(ctx: OptionPollContext): string {
+    return `${ctx.symbol}|${ctx.style}|${ctx.pollMs}|${ctx.moneyness ?? ''}`;
+  }
+
+  private fetchParams(
+    ctx: OptionPollContext,
+    refresh = false,
+  ): Parameters<OptionChainApiService['fetch']>[0] {
+    return {
+      symbol: ctx.symbol,
+      style: ctx.style,
+      refresh,
+      paAction: ctx.paAction,
+      moneyness: ctx.moneyness || undefined,
+    };
+  }
+
+  private runFetch(showLoading: boolean, refresh = false): void {
+    if (!this.ctx) return;
+    this.fetchSub?.unsubscribe();
+    if (showLoading) this.loading.set(true);
+    this.error.set(null);
+    this.fetchSub = this.api.fetch(this.fetchParams(this.ctx, refresh)).subscribe({
+      next: (payload) => {
+        this.data.set(payload);
+        if (showLoading) this.loading.set(false);
+      },
+      error: (err) => {
+        if (showLoading) this.loading.set(false);
+        this.error.set(readOptionChainError(err));
+      },
+    });
+  }
+
   configure(ctx: OptionPollContext): void {
+    if (!ctx.enabled) {
+      this.stop();
+      return;
+    }
+
+    const prev = this.ctx;
+    const sameSchedule =
+      prev != null &&
+      this.scheduleKey(prev) === this.scheduleKey(ctx) &&
+      this.sub != null;
+
     this.ctx = ctx;
+
+    // Deck ticks only change paAction — keep polling schedule, skip refetch + loading flash.
+    if (sameSchedule) {
+      return;
+    }
+
     this.sub?.unsubscribe();
     this.sub = null;
 
-    if (!ctx.enabled) return;
+    this.runFetch(!this.data());
 
-    const pollOnce = () => {
-      this.loading.set(true);
-      this.error.set(null);
-      this.api
-        .fetch({
-          symbol: ctx.symbol,
-          style: ctx.style,
-          paAction: ctx.paAction,
-          moneyness: ctx.moneyness || undefined,
-        })
-        .subscribe({
-          next: (payload) => {
-            this.data.set(payload);
-            this.loading.set(false);
-          },
-          error: (err) => {
-            this.loading.set(false);
-            this.error.set(readOptionChainError(err));
-          },
-        });
-    };
-
-    pollOnce();
     if (ctx.pollMs > 0) {
       this.sub = timer(ctx.pollMs, ctx.pollMs)
-        .pipe(switchMap(() => this.api.fetch({
-          symbol: ctx.symbol,
-          style: ctx.style,
-          paAction: ctx.paAction,
-          moneyness: ctx.moneyness || undefined,
-        })))
+        .pipe(
+          switchMap(() => {
+            if (!this.ctx) return EMPTY;
+            return this.api.fetch(this.fetchParams(this.ctx));
+          }),
+        )
         .subscribe({
           next: (payload) => this.data.set(payload),
           error: () => {
@@ -89,55 +120,28 @@ export class OptionChainPollService {
     params: Pick<OptionPollContext, 'symbol' | 'style' | 'paAction' | 'moneyness'>,
     force = true,
   ): void {
-    this.loading.set(true);
-    this.error.set(null);
-    this.api
-      .fetch({
-        symbol: params.symbol,
-        style: params.style,
-        refresh: force,
-        paAction: params.paAction,
-        moneyness: params.moneyness || undefined,
-      })
-      .subscribe({
-        next: (payload) => {
-          this.data.set(payload);
-          this.loading.set(false);
-        },
-        error: (err) => {
-          this.loading.set(false);
-          this.error.set(readOptionChainError(err));
-        },
-      });
+    this.ctx = {
+      symbol: params.symbol,
+      style: params.style,
+      pollMs: this.ctx?.pollMs ?? 0,
+      paAction: params.paAction,
+      moneyness: params.moneyness,
+      enabled: true,
+    };
+    this.runFetch(true, force);
   }
 
   refresh(force = true): void {
     if (!this.ctx) return;
-    this.loading.set(true);
-    this.error.set(null);
-    this.api
-      .fetch({
-        symbol: this.ctx.symbol,
-        style: this.ctx.style,
-        refresh: force,
-        paAction: this.ctx.paAction,
-        moneyness: this.ctx.moneyness || undefined,
-      })
-      .subscribe({
-        next: (payload) => {
-          this.data.set(payload);
-          this.loading.set(false);
-        },
-        error: (err) => {
-          this.loading.set(false);
-          this.error.set(readOptionChainError(err));
-        },
-      });
+    this.runFetch(true, force);
   }
 
   stop(): void {
     this.sub?.unsubscribe();
     this.sub = null;
+    this.fetchSub?.unsubscribe();
+    this.fetchSub = null;
     this.ctx = null;
+    this.loading.set(false);
   }
 }
