@@ -1,3 +1,4 @@
+import { NgClass } from '@angular/common';
 import {
   AfterViewInit,
   Component,
@@ -88,7 +89,7 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = CHART_LAYER_GROUPS.map((group) => ({
 @Component({
   selector: 'app-deck-charts',
   standalone: true,
-  imports: [SpotChartComponent],
+  imports: [NgClass, SpotChartComponent],
   template: `
     <section class="chart-block chart-block-padded">
       <div class="chart-title-row">
@@ -111,15 +112,21 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = CHART_LAYER_GROUPS.map((group) => ({
             [class.unavailable]="!isGroupAvailable(layer.id)"
             [disabled]="!isGroupAvailable(layer.id)"
             [attr.aria-pressed]="isGroupOn(layer.id)"
+            [title]="groupDetail(layer.id)"
             (click)="toggleGroup(layer.id)"
           >
-            <span
-              class="chart-layer-swatch"
-              [class]="layer.swatch"
-              [style.--layer-color]="layer.color"
-            ></span>
-            <span class="chart-layer-label" [style.color]="isGroupOn(layer.id) ? layer.color : null">
-              {{ layer.label }}
+            <span class="chart-layer-btn-head">
+              <span
+                class="chart-layer-swatch"
+                [ngClass]="layer.swatch"
+                [style.--layer-color]="layer.color"
+              ></span>
+              <span
+                class="chart-layer-label"
+                [style.color]="isGroupOn(layer.id) ? layer.color : null"
+              >
+                {{ layer.label }}
+              </span>
             </span>
             <span class="chart-layer-detail">{{ groupDetail(layer.id) }}</span>
           </button>
@@ -281,10 +288,23 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = CHART_LAYER_GROUPS.map((group) => ({
         color: var(--text);
         background: rgba(34, 211, 238, 0.1);
       }
+      .chart-layer-btn-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        min-width: 0;
+      }
       .chart-layer-detail {
-        font-size: 0.65rem;
+        display: block;
+        width: 100%;
+        padding-left: 20px;
+        font-size: 0.58rem;
+        line-height: 1.3;
         color: var(--muted);
-        white-space: nowrap;
+        white-space: normal;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .chart-empty {
         position: absolute;

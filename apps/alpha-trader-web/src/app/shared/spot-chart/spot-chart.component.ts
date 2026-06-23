@@ -17,6 +17,7 @@ import {
   ISeriesApi,
   LineData,
   LineSeries,
+  LogicalRange,
   Time,
   createChart,
 } from 'lightweight-charts';
@@ -112,7 +113,10 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   private initRetryId: number | null = null;
   private followLatestViewport = true;
   private hasFocusedSession = false;
+  private suppressViewportFollow = false;
   private lastDataKey = '';
+  private lastRenderedCandleCount = -1;
+  private lastRenderedLineCount = -1;
   private latestLogicalIndex = -1;
 
   ngAfterViewInit(): void {
@@ -139,7 +143,14 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     if (changes['timeframe'] && !changes['timeframe'].firstChange) {
       this.hasFocusedSession = false;
       this.followLatestViewport = true;
+      this.lastRenderedCandleCount = -1;
+      this.lastRenderedLineCount = -1;
       this.applyTimeframeOptions();
+    }
+
+    if (changes['chartStyle'] && !changes['chartStyle'].firstChange) {
+      this.lastRenderedCandleCount = -1;
+      this.lastRenderedLineCount = -1;
     }
 
     if (
@@ -228,6 +239,8 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.resistanceTrendSeries = null;
     this.overlayPriceLines = [];
     this.lastDataKey = '';
+    this.lastRenderedCandleCount = -1;
+    this.lastRenderedLineCount = -1;
     this.hasFocusedSession = false;
     this.followLatestViewport = true;
     this.latestLogicalIndex = -1;
@@ -292,8 +305,9 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     });
 
     this.chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (range && this.latestLogicalIndex >= 0) {
-        this.followLatestViewport = range.to >= this.latestLogicalIndex - 1;
+      if (!this.suppressViewportFollow && range && this.latestLogicalIndex >= 0) {
+        const margin = this.rightOffsetBars() + 2;
+        this.followLatestViewport = range.to >= this.latestLogicalIndex - margin;
       }
       this.scheduleOverlayRedraw();
     });
@@ -386,6 +400,14 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
         ? this.lineSeries
         : null;
 
+    const savedLogicalRange =
+      dataChanged && !this.followLatestViewport
+        ? this.chart.timeScale().getVisibleLogicalRange()
+        : null;
+    const prevCandleCount = this.lastRenderedCandleCount;
+    const prevLineCount = this.lastRenderedLineCount;
+    let seriesFullReset = false;
+
     try {
       if (useCandles) {
         const data: CandlestickData[] = candles.map((c) => ({
@@ -395,15 +417,33 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
           low: c.l,
           close: c.c,
         }));
-        this.candleSeries.setData(data);
-        this.lineSeries.setData([]);
+        if (dataChanged) {
+          seriesFullReset = this.applyCandleSeriesData(
+            data,
+            candles.length,
+            prevCandleCount,
+          );
+        }
+        if (this.lastRenderedLineCount !== 0) {
+          this.lineSeries.setData([]);
+          this.lastRenderedLineCount = 0;
+        }
       } else if (linePoints.length) {
         const data: LineData[] = linePoints.map((p) => ({
           time: Math.floor(p.t / 1000) as Time,
           value: p.v,
         }));
-        this.lineSeries.setData(data);
-        this.candleSeries.setData([]);
+        if (dataChanged) {
+          seriesFullReset = this.applyLineSeriesData(
+            data,
+            linePoints.length,
+            prevLineCount,
+          );
+        }
+        if (this.lastRenderedCandleCount !== 0) {
+          this.candleSeries.setData([]);
+          this.lastRenderedCandleCount = 0;
+        }
       } else {
         this.candleSeries.setData([]);
         this.lineSeries.setData([]);
@@ -431,6 +471,21 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
         this.scrubSeries.setData([]);
       }
 
+      if (savedLogicalRange && seriesFullReset) {
+        this.restoreLogicalRange(
+          savedLogicalRange,
+          useCandles ? candles.length - prevCandleCount : linePoints.length - prevLineCount,
+        );
+      } else if (
+        this.followLatestViewport &&
+        dataChanged &&
+        prevCandleCount > 0 &&
+        ((useCandles && candles.length > prevCandleCount) ||
+          (!useCandles && linePoints.length > prevLineCount))
+      ) {
+        this.chart.timeScale().scrollToRealTime();
+      }
+
       this.applyOverlayLines(activeSeries);
       this.applyStudyLines(candles);
       this.scheduleOverlayRedraw(candles, activeSeries);
@@ -443,9 +498,71 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       return;
     }
 
-    if (this.followLatestViewport && (dataChanged || !this.hasFocusedSession)) {
+    if (this.followLatestViewport && !this.hasFocusedSession) {
       this.focusViewport(candles, spotSeries);
     }
+  }
+
+  private applyCandleSeriesData(
+    data: CandlestickData[],
+    count: number,
+    prevCount: number,
+  ): boolean {
+    if (!this.candleSeries) return false;
+
+    const canIncremental =
+      prevCount > 0 && count >= prevCount && count - prevCount <= 1;
+
+    if (canIncremental && data.length) {
+      this.candleSeries.update(data[data.length - 1]);
+      this.lastRenderedCandleCount = count;
+      return false;
+    }
+
+    this.candleSeries.setData(data);
+    this.lastRenderedCandleCount = count;
+    return true;
+  }
+
+  private applyLineSeriesData(
+    data: LineData[],
+    count: number,
+    prevCount: number,
+  ): boolean {
+    if (!this.lineSeries) return false;
+
+    const canIncremental =
+      prevCount > 0 && count >= prevCount && count - prevCount <= 1;
+
+    if (canIncremental && data.length) {
+      this.lineSeries.update(data[data.length - 1]);
+      this.lastRenderedLineCount = count;
+      return false;
+    }
+
+    this.lineSeries.setData(data);
+    this.lastRenderedLineCount = count;
+    return true;
+  }
+
+  private restoreLogicalRange(
+    range: LogicalRange,
+    barsAdded: number,
+  ): void {
+    if (!this.chart) return;
+    const next =
+      barsAdded > 0
+        ? { from: range.from + barsAdded, to: range.to + barsAdded }
+        : range;
+    this.suppressViewportFollow = true;
+    try {
+      this.chart.timeScale().setVisibleLogicalRange(next);
+    } catch {
+      /* range may be invalid after a full data reset */
+    }
+    requestAnimationFrame(() => {
+      this.suppressViewportFollow = false;
+    });
   }
 
   private resolveLinePoints(candles: Candle[], spotSeries: SpotPoint[]): SpotPoint[] {
