@@ -322,8 +322,8 @@ import { MatIconModule } from '@angular/material/icon';
         margin-bottom: 12px;
       }
       .oc-readout-panel {
-        background: rgba(167, 139, 250, 0.06) !important;
-        border: 1px solid rgba(167, 139, 250, 0.28) !important;
+        background: color-mix(in srgb, var(--option) 6%, var(--surface)) !important;
+        border: 1px solid color-mix(in srgb, var(--option) 18%, var(--border)) !important;
         border-radius: 10px !important;
         box-shadow: none !important;
       }
@@ -337,7 +337,7 @@ import { MatIconModule } from '@angular/material/icon';
         display: flex;
         align-items: center;
         gap: 8px;
-        color: #c4b5fd;
+        color: var(--option);
         font-weight: 600;
       }
       .oc-readout-title mat-icon {
@@ -349,7 +349,7 @@ import { MatIconModule } from '@angular/material/icon';
         padding: 2px 4px 12px;
         font-size: 0.74rem;
         line-height: 1.5;
-        color: var(--text, #e8ecf1);
+        color: var(--text);
       }
       .oc-readout-lead {
         margin: 0 0 12px;
@@ -361,7 +361,7 @@ import { MatIconModule } from '@angular/material/icon';
         font-weight: 700;
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: #a78bfa;
+        color: var(--option);
       }
       .oc-readout-section:first-of-type {
         margin-top: 0;
@@ -382,7 +382,7 @@ import { MatIconModule } from '@angular/material/icon';
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: #c4b5fd;
+        color: var(--option);
       }
       .oc-readout-item dd {
         margin: 0;
@@ -392,7 +392,7 @@ import { MatIconModule } from '@angular/material/icon';
         font-family: ui-monospace, monospace;
         font-size: 0.68rem;
         color: var(--text);
-        background: rgba(255, 255, 255, 0.06);
+        background: color-mix(in srgb, var(--text) 8%, transparent);
         padding: 1px 5px;
         border-radius: 4px;
       }
@@ -400,7 +400,7 @@ import { MatIconModule } from '@angular/material/icon';
         display: block;
         margin-top: 5px;
         padding-left: 8px;
-        border-left: 2px solid rgba(167, 139, 250, 0.35);
+        border-left: 2px solid color-mix(in srgb, var(--option) 35%, transparent);
         font-size: 0.68rem;
         color: var(--muted);
       }
@@ -408,8 +408,8 @@ import { MatIconModule } from '@angular/material/icon';
         margin-top: 14px;
         padding: 10px 12px;
         border-radius: 8px;
-        border: 1px dashed rgba(167, 139, 250, 0.35);
-        background: rgba(22, 26, 32, 0.55);
+        border: 1px dashed color-mix(in srgb, var(--option) 35%, transparent);
+        background: color-mix(in srgb, var(--surface) 88%, var(--bg));
       }
       .oc-readout-example-label {
         display: block;
@@ -418,7 +418,7 @@ import { MatIconModule } from '@angular/material/icon';
         font-weight: 700;
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: #fbbf24;
+        color: var(--pa);
       }
       .oc-readout-example p {
         margin: 0 0 6px;

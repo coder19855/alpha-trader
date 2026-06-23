@@ -97,7 +97,7 @@ export function settingsGroups(): SettingsGroup[] {
       id: 'option-chain-poll',
       title: 'Option chain refresh',
       description:
-        'How often the UI auto-fetches option chain data. Manual refresh always works.',
+        'How often the server refreshes option chain data. Manual refresh always works.',
       control: 'segmented',
       field: 'optionChainPollMs',
       options: OPTION_CHAIN_POLL_PRESETS.map((p) => ({

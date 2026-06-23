@@ -2,6 +2,8 @@ import './augment-fastify.js';
 import { randomUUID } from 'crypto';
 import { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { TradingStyle, isIndianMarketOpen } from '@alpha-trader/server-shared';
+import type { OptionChainSignalResponse } from '@alpha-trader/server-shared';
+import { buildOptionChainSignalResponse } from '@alpha-trader/server-analysis';
 import {
   getMarketDataStore,
   getOpenPositionsCacheSnapshot,
@@ -49,6 +51,12 @@ function parseTradingStyle(raw?: string): TradingStyle {
   return TradingStyle.Intraday;
 }
 
+function resolveOptionChainRefreshMs(fastify: FastifyInstance): number {
+  const settings = fastify.preferences.getSettings();
+  const raw = Number(settings.optionChainPollMs ?? 10_000);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 10_000;
+}
+
 export class DeckStreamHub {
   private readonly channels = new Map<
     string,
@@ -64,9 +72,13 @@ export class DeckStreamHub {
         spotCandles15m?: DeckCandlePoint[];
         spotCandles1h?: DeckCandlePoint[];
       } | null;
+      lastOptionSnapshot: OptionChainSignalResponse | null;
+      lastOptionAction: string | null;
       tickInFlight: boolean;
       ltpInFlight: boolean;
       signalRefreshTimer: NodeJS.Timeout | null;
+      optionRefreshTimer: NodeJS.Timeout | null;
+      optionInFlight: boolean;
     }
   >();
 
@@ -93,13 +105,18 @@ export class DeckStreamHub {
         lastTick: null,
         cachedOpenPositions: null,
         cachedChartCandles: null,
+        lastOptionSnapshot: null,
+        lastOptionAction: null,
         tickInFlight: false,
         ltpInFlight: false,
         signalRefreshTimer: null,
+        optionRefreshTimer: null,
+        optionInFlight: false,
       };
       this.channels.set(key, channel);
       this.startHeartbeat(channel);
       this.startSignalRefresh(channel);
+      this.startOptionRefresh(channel);
     }
 
     channel.subscribers.set(subscriber.id, subscriber);
@@ -107,6 +124,7 @@ export class DeckStreamHub {
     void seedIndexQuotesFromRest(this.fastify, [normalized.symbol]).then(() => {
       void this.sendLtpPatch(channel);
     });
+    void this.sendOptionSnapshot(channel, false);
     void this.sendTick(channel);
 
     return () => {
@@ -114,6 +132,7 @@ export class DeckStreamHub {
       if (channel && channel.subscribers.size === 0) {
         this.stopHeartbeat(channel);
         this.stopSignalRefresh(channel);
+        this.stopOptionRefresh(channel);
         this.channels.delete(key);
       }
     };
@@ -123,6 +142,7 @@ export class DeckStreamHub {
     for (const channel of this.channels.values()) {
       this.stopHeartbeat(channel);
       this.stopSignalRefresh(channel);
+      this.stopOptionRefresh(channel);
     }
     this.channels.clear();
   }
@@ -229,6 +249,27 @@ export class DeckStreamHub {
     channel.signalRefreshTimer = null;
   }
 
+  private startOptionRefresh(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): void {
+    if (channel.optionRefreshTimer) return;
+    const intervalMs = resolveOptionChainRefreshMs(this.fastify);
+    if (intervalMs <= 0) return;
+    channel.optionRefreshTimer = setInterval(() => {
+      if (!isIndianMarketOpen() || channel.subscribers.size === 0) return;
+      void this.sendOptionSnapshot(channel, true);
+    }, intervalMs);
+    channel.optionRefreshTimer.unref?.();
+  }
+
+  private stopOptionRefresh(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): void {
+    if (channel.optionRefreshTimer) clearInterval(channel.optionRefreshTimer);
+    channel.optionRefreshTimer = null;
+    channel.optionInFlight = false;
+  }
+
   private broadcast(
     channel: NonNullable<ReturnType<typeof this.channels.get>>,
     payload: unknown,
@@ -263,6 +304,9 @@ export class DeckStreamHub {
       channel.cachedOpenPositions = tick.openPositions ?? channel.cachedOpenPositions;
       const chartPatch = this.patchCachedChartCandles(channel, tick.lastPrice);
       this.broadcast(channel, chartPatch ? { ...tick, ...chartPatch } : tick);
+      if (channel.lastOptionAction !== tick.action) {
+        void this.sendOptionSnapshot(channel, false);
+      }
     } catch (err) {
       this.log.warn({ err, channel: channel.params }, 'Deck stream tick failed');
       this.broadcast(channel, {
@@ -271,6 +315,33 @@ export class DeckStreamHub {
       });
     } finally {
       channel.tickInFlight = false;
+    }
+  }
+
+  private async sendOptionSnapshot(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+    forceRefresh: boolean,
+  ): Promise<void> {
+    if (channel.optionInFlight) return;
+    channel.optionInFlight = true;
+    try {
+      const payload = await buildOptionChainSignalResponse(this.fastify, {
+        symbol: channel.params.symbol.trim(),
+        tradingStyle: parseTradingStyle(channel.params.tradingStyle),
+        paAction: channel.lastTick?.action,
+        forceRefresh,
+      });
+      channel.lastOptionSnapshot = payload;
+      channel.lastOptionAction = channel.lastTick?.action ?? null;
+      this.broadcast(channel, { type: 'option-chain', ...payload });
+    } catch (err) {
+      this.log.warn({ err, channel: channel.params }, 'Option chain refresh failed');
+      this.broadcast(channel, {
+        type: 'error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      channel.optionInFlight = false;
     }
   }
 

@@ -1,7 +1,9 @@
-/** Default client poll interval for option chain (5 minutes). */
-export const OPTION_CHAIN_POLL_DEFAULT_MS = 300_000;
+/** Default server refresh interval for option chain (10 seconds). */
+export const OPTION_CHAIN_POLL_DEFAULT_MS = 10_000;
 
 export const OPTION_CHAIN_POLL_PRESETS = [
+  { value: 10_000, label: '10 sec' },
+  { value: 30_000, label: '30 sec' },
   { value: 60_000, label: '1 min' },
   { value: 120_000, label: '2 min' },
   { value: 300_000, label: '5 min' },
@@ -18,5 +20,5 @@ export function normalizeOptionChainPollMs(value: unknown): number {
   const allowed = OPTION_CHAIN_POLL_PRESETS.map((p) => p.value);
   if (allowed.includes(parsed as (typeof allowed)[number])) return parsed;
   if (parsed === 0) return 0;
-  return Math.min(900_000, Math.max(60_000, parsed));
+  return Math.min(900_000, Math.max(10_000, parsed));
 }

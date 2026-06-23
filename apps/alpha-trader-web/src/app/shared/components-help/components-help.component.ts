@@ -106,8 +106,8 @@ import { MatIconModule } from '@angular/material/icon';
       }
 
       .components-panel {
-        background: rgba(99, 102, 241, 0.03) !important;
-        border: 1px solid rgba(99, 102, 241, 0.15) !important;
+        background: color-mix(in srgb, var(--option) 6%, var(--surface)) !important;
+        border: 1px solid color-mix(in srgb, var(--option) 18%, var(--border)) !important;
         border-radius: 10px !important;
         box-shadow: none !important;
       }
@@ -120,14 +120,14 @@ import { MatIconModule } from '@angular/material/icon';
       }
 
       .components-header:hover {
-        background: rgba(99, 102, 241, 0.04) !important;
+        background: color-mix(in srgb, var(--option) 8%, transparent) !important;
       }
 
       .components-title {
         display: flex;
         align-items: center;
         gap: 8px;
-        color: var(--pa, #a78bfa);
+        color: var(--option);
         font-weight: 600;
         letter-spacing: 0.02em;
       }
@@ -142,7 +142,7 @@ import { MatIconModule } from '@angular/material/icon';
         padding: 2px 4px 12px;
         font-size: 0.74rem;
         line-height: 1.5;
-        color: var(--text, #e8ecf1);
+        color: var(--text);
       }
 
       .components-lead {
@@ -162,7 +162,7 @@ import { MatIconModule } from '@angular/material/icon';
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: var(--pa, #a78bfa);
+        color: var(--option);
       }
 
       .components-item dd {
@@ -175,7 +175,7 @@ import { MatIconModule } from '@angular/material/icon';
         padding: 10px 12px;
         border-radius: 8px;
         border: 1px dashed var(--border);
-        background: rgba(22, 26, 32, 0.55);
+        background: color-mix(in srgb, var(--surface) 88%, var(--bg));
       }
 
       .components-example-label {
@@ -185,7 +185,7 @@ import { MatIconModule } from '@angular/material/icon';
         font-weight: 700;
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: var(--pa, #a78bfa);
+        color: var(--option);
       }
 
       .components-note {

@@ -1,6 +1,9 @@
 export { registerAnalysisPlugins } from './lib/register-analysis-plugins.js';
 export { computePriceAction, parseVetoModeQuery } from './lib/compute-price-action.js';
 export { computePaDecision } from './lib/compute-pa-decision.js';
+export {
+  buildOptionChainSignalResponse,
+} from './lib/option-chain/build-option-chain-signal.js';
 
 export {
   computeOppositeExitStreak,

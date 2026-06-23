@@ -31,6 +31,113 @@ const STATE_ORDER: Record<VetoBreakupItem['state'], number> = {
       }
     }
   `,
+  styles: [
+    `
+      :host {
+        display: block;
+      }
+
+      .veto-row {
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 90%, var(--bg));
+      }
+
+      .veto-row + .veto-row {
+        margin-top: 8px;
+      }
+
+      .veto-row.block {
+        border-color: color-mix(in srgb, var(--pe) 35%, var(--border));
+        background: color-mix(in srgb, var(--pe) 10%, var(--surface));
+      }
+
+      .veto-row.warn {
+        border-color: color-mix(in srgb, var(--conflict) 35%, var(--border));
+        background: color-mix(in srgb, var(--conflict) 10%, var(--surface));
+      }
+
+      .veto-row.skipped {
+        border-color: color-mix(in srgb, var(--option) 28%, var(--border));
+      }
+
+      .veto-row.ok {
+        border-color: color-mix(in srgb, var(--ce) 28%, var(--border));
+      }
+
+      .veto-row-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .veto-row-detail {
+        margin-top: 4px;
+        font-size: 0.64rem;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .veto-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        font-size: 0.54rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .veto-badge.block {
+        color: var(--pe);
+        border-color: color-mix(in srgb, var(--pe) 35%, var(--border));
+        background: color-mix(in srgb, var(--pe) 10%, transparent);
+      }
+
+      .veto-badge.warn {
+        color: var(--conflict);
+        border-color: color-mix(in srgb, var(--conflict) 35%, var(--border));
+        background: color-mix(in srgb, var(--conflict) 10%, transparent);
+      }
+
+      .veto-badge.skipped {
+        color: var(--option);
+        border-color: color-mix(in srgb, var(--option) 30%, var(--border));
+        background: color-mix(in srgb, var(--option) 10%, transparent);
+      }
+
+      .veto-badge.ok {
+        color: var(--ce);
+        border-color: color-mix(in srgb, var(--ce) 30%, var(--border));
+        background: color-mix(in srgb, var(--ce) 10%, transparent);
+      }
+
+      .veto-meter {
+        height: 6px;
+        margin-top: 8px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--border) 80%, transparent);
+        overflow: hidden;
+      }
+
+      .veto-meter > div {
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--option) 65%, transparent),
+          color-mix(in srgb, var(--ce) 75%, transparent)
+        );
+      }
+    `,
+  ],
 })
 export class VetoBreakupComponent {
   @Input() items: VetoBreakupItem[] | null | undefined;

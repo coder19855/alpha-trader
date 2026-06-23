@@ -134,10 +134,12 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
                 [disabled]="optionPoll.loading()"
                 [attr.aria-label]="
                   optionPoll.loading()
-                    ? 'Refreshing option chain'
-                    : 'Refresh option chain'
+                    ? 'Reconnecting option stream'
+                    : 'Reconnect option stream'
                 "
-                [title]="optionPoll.loading() ? 'Refreshing…' : 'Refresh now'"
+                [title]="
+                  optionPoll.loading() ? 'Reconnecting…' : 'Reconnect stream'
+                "
                 (click)="optionPoll.refresh(true)"
               >
                 <mat-icon [class.spinning]="optionPoll.loading()">refresh</mat-icon>
@@ -395,10 +397,12 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
                   [disabled]="optionPoll.loading()"
                   [attr.aria-label]="
                     optionPoll.loading()
-                      ? 'Refreshing option chain'
-                      : 'Refresh option chain'
+                      ? 'Reconnecting option stream'
+                      : 'Reconnect option stream'
                   "
-                  [title]="optionPoll.loading() ? 'Refreshing…' : 'Refresh now'"
+                  [title]="
+                    optionPoll.loading() ? 'Reconnecting…' : 'Reconnect stream'
+                  "
                   (click)="optionPoll.refresh(true)"
                 >
                   <mat-icon [class.spinning]="optionPoll.loading()">refresh</mat-icon>
@@ -760,29 +764,13 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     this.reloadSub = this.deckReload.requested.subscribe(() => this.forceReconnect());
 
     effect(() => {
-      const tab = this.ctx.activeTab();
-      const signalTab = this.signalSubTab();
-      const compTab = this.componentsSubTab();
       const symbol = this.ctx.symbol();
       const style = this.ctx.style();
-      const pollMs = this.settings()?.optionChainPollMs ?? 300_000;
-      const paAction = this.tick()?.action;
-      const needsOption =
-        tab === 'signal' && signalTab === 'optionChain'
-          ? true
-          : tab === 'components' && compTab === 'optionChain';
-
-      if (needsOption) {
-        this.optionPoll.configure({
-          symbol,
-          style,
-          pollMs,
-          paAction,
-          enabled: true,
-        });
-      } else {
-        this.optionPoll.stop();
-      }
+      this.optionPoll.configure({
+        symbol,
+        style,
+        paAction: this.tick()?.action,
+      });
     });
   }
 
@@ -801,10 +789,10 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   }
 
   optionPollLabel(): string {
-    const ms = this.settings()?.optionChainPollMs ?? 300_000;
-    if (ms <= 0) return 'Manual refresh';
-    if (ms < 60_000) return `Auto: ${Math.round(ms / 1000)}s`;
-    return `Auto: ${Math.round(ms / 60_000)} min`;
+    const ms = this.settings()?.optionChainPollMs ?? 10_000;
+    if (ms <= 0) return 'Server refresh: manual';
+    if (ms < 60_000) return `Server refresh: ${Math.round(ms / 1000)}s`;
+    return `Server refresh: ${Math.round(ms / 60_000)} min`;
   }
 
   retry(): void {
@@ -816,15 +804,6 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     const symbol = this.ctx.symbol();
     const style = this.ctx.style();
     this.reload(symbol, style);
-    this.refreshOptionChain(symbol, style);
-  }
-
-  private refreshOptionChain(symbol: string, style: TradingStyle): void {
-    this.optionPoll.prefetch({
-      symbol,
-      style,
-      paAction: this.tick()?.action,
-    });
   }
 
   onSymbolChange(symbol: string): void {
@@ -859,7 +838,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     if (field === 'tradingStyle') return s.tradingStyle;
     if (field === 'vetoMode') return s.vetoMode;
     if (field === 'optionChainPollMs') {
-      return String(s.optionChainPollMs ?? 300_000);
+      return String(s.optionChainPollMs ?? 10_000);
     }
     if (field === 'flowMode') return s.flowMode;
     return '';
@@ -1013,6 +992,14 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
             };
             const { type: _type, ...rest } = patch;
             this.mergeChartPatch(rest);
+            return;
+          }
+          if ('type' in event && event.type === 'option-chain') {
+            this.optionPoll.receive(event);
+            return;
+          }
+          if ('type' in event && event.type === 'error') {
+            this.optionPoll.markError(event.message || 'Option chain unavailable');
             return;
           }
           if ('action' in event) {

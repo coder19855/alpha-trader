@@ -101,8 +101,8 @@ import { MatIconModule } from '@angular/material/icon';
       }
 
       .signal-readout-panel {
-        background: rgba(34, 211, 238, 0.05) !important;
-        border: 1px solid rgba(34, 211, 238, 0.22) !important;
+        background: color-mix(in srgb, var(--option) 6%, var(--surface)) !important;
+        border: 1px solid color-mix(in srgb, var(--option) 18%, var(--border)) !important;
         border-radius: 10px !important;
         box-shadow: none !important;
       }
@@ -115,14 +115,14 @@ import { MatIconModule } from '@angular/material/icon';
       }
 
       .signal-readout-header:hover {
-        background: rgba(34, 211, 238, 0.06) !important;
+        background: color-mix(in srgb, var(--option) 8%, transparent) !important;
       }
 
       .signal-readout-title {
         display: flex;
         align-items: center;
         gap: 8px;
-        color: var(--option, #22d3ee);
+        color: var(--option);
         font-weight: 600;
         letter-spacing: 0.02em;
       }
@@ -137,7 +137,7 @@ import { MatIconModule } from '@angular/material/icon';
         padding: 2px 4px 12px;
         font-size: 0.74rem;
         line-height: 1.5;
-        color: var(--text, #e8ecf1);
+        color: var(--text);
       }
 
       .signal-readout-lead {
@@ -161,7 +161,7 @@ import { MatIconModule } from '@angular/material/icon';
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: var(--option, #22d3ee);
+        color: var(--option);
       }
 
       .signal-readout-item dd {
@@ -173,7 +173,7 @@ import { MatIconModule } from '@angular/material/icon';
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 0.68rem;
         color: var(--text, #e8ecf1);
-        background: rgba(255, 255, 255, 0.06);
+        background: color-mix(in srgb, var(--text) 8%, transparent);
         padding: 1px 5px;
         border-radius: 4px;
       }
@@ -183,7 +183,7 @@ import { MatIconModule } from '@angular/material/icon';
         padding: 10px 12px;
         border-radius: 8px;
         border: 1px dashed var(--border);
-        background: rgba(22, 26, 32, 0.55);
+        background: color-mix(in srgb, var(--surface) 88%, var(--bg));
       }
 
       .signal-readout-example-label {
@@ -193,7 +193,7 @@ import { MatIconModule } from '@angular/material/icon';
         font-weight: 700;
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: var(--pa, #fbbf24);
+        color: var(--pa);
       }
 
       .signal-readout-example p {

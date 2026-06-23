@@ -444,8 +444,8 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         margin-top: 12px;
         padding: 12px;
         border-radius: 10px;
-        border: 1px solid rgba(167, 139, 250, 0.25);
-        background: rgba(167, 139, 250, 0.05);
+        border: 1px solid color-mix(in srgb, var(--option) 18%, var(--border));
+        background: color-mix(in srgb, var(--option) 6%, var(--surface));
       }
       .guard-head {
         margin-bottom: 10px;
@@ -490,10 +490,10 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         font-weight: 700;
       }
       .stat .val.bull {
-        color: #4ade80;
+        color: var(--ce);
       }
       .stat .val.bear {
-        color: #f87171;
+        color: var(--pe);
       }
       .guard-walls {
         display: grid;
@@ -504,7 +504,7 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       .wall {
         border-radius: 8px;
         border: 1px solid var(--border);
-        background: rgba(0, 0, 0, 0.2);
+        background: color-mix(in srgb, var(--surface) 88%, var(--bg));
         padding: 8px 10px;
         text-align: left;
         cursor: pointer;
@@ -561,7 +561,7 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         text-transform: uppercase;
         letter-spacing: 0.04em;
         padding-bottom: 4px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
         margin-bottom: 4px;
       }
       .ladder-head .flow-head,
@@ -586,7 +586,7 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       }
       .price-bar-wrap {
         height: 6px;
-        background: rgba(255, 255, 255, 0.06);
+        background: color-mix(in srgb, var(--border) 65%, transparent);
         border-radius: 3px;
         overflow: hidden;
       }
@@ -594,13 +594,13 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         height: 100%;
         border-radius: 3px;
         min-width: 2px;
-        background: #a78bfa;
+        background: var(--option);
       }
       .price-bar.up {
-        background: #4ade80;
+        background: var(--ce);
       }
       .price-bar.down {
-        background: #f87171;
+        background: var(--pe);
       }
       .guard-ladder {
         display: flex;
@@ -612,7 +612,7 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         padding: 4px 0;
       }
       .ladder-row.highlight {
-        background: rgba(255, 255, 255, 0.04);
+        background: color-mix(in srgb, var(--option) 8%, transparent);
         border-radius: 6px;
       }
       .type-pill {
@@ -624,32 +624,32 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         text-transform: uppercase;
       }
       .type-pill.call {
-        color: var(--oc-call, #38bdf8);
-        background: var(--oc-call-soft, rgba(56, 189, 248, 0.12));
-        border: 1px solid var(--oc-call-border, rgba(56, 189, 248, 0.35));
+        color: var(--option);
+        background: color-mix(in srgb, var(--option) 12%, transparent);
+        border: 1px solid color-mix(in srgb, var(--option) 35%, var(--border));
       }
       .type-pill.put {
-        color: var(--oc-put, #c4b5fd);
-        background: var(--oc-put-soft, rgba(196, 181, 253, 0.12));
-        border: 1px solid var(--oc-put-border, rgba(196, 181, 253, 0.35));
+        color: var(--option);
+        background: color-mix(in srgb, var(--option) 12%, transparent);
+        border: 1px solid color-mix(in srgb, var(--option) 35%, var(--border));
       }
       .oi-bar-wrap {
         height: 8px;
-        background: rgba(255, 255, 255, 0.06);
+        background: color-mix(in srgb, var(--border) 65%, transparent);
         border-radius: 4px;
         overflow: hidden;
       }
       .oi-bar {
         height: 100%;
         border-radius: 4px;
-        background: #a78bfa;
+        background: var(--option);
         min-width: 2px;
       }
       .oi-bar.build {
-        background: #22d3ee;
+        background: var(--option);
       }
       .oi-bar.unwind {
-        background: #fb923c;
+        background: var(--conflict);
       }
       .prem-ch,
       .oi-ch {
@@ -659,26 +659,26 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       }
       .prem-ch.up,
       .sub.up {
-        color: #4ade80;
+        color: var(--ce);
       }
       .prem-ch.down,
       .sub.down {
-        color: #f87171;
+        color: var(--pe);
       }
       .prem-ch.side,
       .sub.side {
-        color: #9ca3af;
+        color: var(--muted);
       }
       .oi-ch.build,
       .sub.build {
-        color: #22d3ee;
+        color: var(--option);
       }
       .oi-ch.unwind,
       .sub.unwind {
-        color: #fb923c;
+        color: var(--conflict);
       }
       .oi-ch.side {
-        color: #9ca3af;
+        color: var(--muted);
       }
       .trend-icon {
         font-size: 13px;
@@ -727,7 +727,7 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         padding: 0;
         border-radius: 6px;
         border: 1px solid var(--border);
-        background: rgba(0, 0, 0, 0.25);
+        background: color-mix(in srgb, var(--surface) 84%, var(--bg));
         color: var(--muted);
         cursor: pointer;
       }
@@ -737,25 +737,25 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         height: 15px;
       }
       .flow-btn.resistance {
-        color: #fb923c;
-        border-color: rgba(251, 146, 60, 0.4);
+        color: var(--conflict);
+        border-color: color-mix(in srgb, var(--conflict) 35%, var(--border));
       }
       .flow-btn.support {
-        color: var(--oc-call, #38bdf8);
-        border-color: var(--oc-call-border, rgba(56, 189, 248, 0.4));
+        color: var(--option);
+        border-color: color-mix(in srgb, var(--option) 35%, var(--border));
       }
       .flow-btn.bullish {
-        color: #4ade80;
-        border-color: rgba(74, 222, 128, 0.35);
+        color: var(--ce);
+        border-color: color-mix(in srgb, var(--ce) 35%, var(--border));
       }
       .flow-btn.bearish {
-        color: #f87171;
-        border-color: rgba(248, 113, 113, 0.35);
+        color: var(--pe);
+        border-color: color-mix(in srgb, var(--pe) 35%, var(--border));
       }
       .detail-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.45);
+        background: color-mix(in srgb, var(--bg) 55%, transparent);
         z-index: 1200;
       }
       .detail-panel {
@@ -765,9 +765,9 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         bottom: 0;
         width: min(360px, 92vw);
         z-index: 1201;
-        background: #11151c;
+        background: var(--card-bg, var(--surface));
         border-left: 1px solid var(--border);
-        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+        box-shadow: -8px 0 24px color-mix(in srgb, var(--bg) 75%, transparent);
         display: flex;
         flex-direction: column;
         animation: slide-in 0.2s ease-out;
@@ -786,7 +786,7 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         align-items: flex-start;
         gap: 12px;
         padding: 14px 14px 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
       }
       .detail-head h3 {
         margin: 0;
@@ -798,7 +798,7 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       .detail-sub {
         margin: 4px 0 0;
         font-size: 0.72rem;
-        color: #22d3ee;
+        color: var(--option);
         font-weight: 600;
       }
       .detail-close {
@@ -826,14 +826,14 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
         font-size: 0.68rem;
         padding: 4px 8px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+        border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
       }
       .chip mat-icon {
         font-size: 14px;
         width: 14px;
         height: 14px;
-        color: #22d3ee;
+        color: var(--option);
       }
       .detail-grid {
         display: grid;
@@ -844,8 +844,8 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       .detail-stat {
         padding: 8px 10px;
         border-radius: 8px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: color-mix(in srgb, var(--surface) 90%, var(--bg));
+        border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
       }
       .detail-stat .label {
         display: block;
