@@ -30,6 +30,8 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
 import { ComponentsHelpComponent } from '../../shared/components-help/components-help.component';
 import { PositionSizingComponent } from '../../shared/position-sizing/position-sizing.component';
 
+type PaSignalSubTab = 'overview' | 'timeframes' | 'context';
+
 @Component({
   selector: 'app-replay-deck',
   standalone: true,
@@ -135,49 +137,116 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
             <app-market-regime [regime]="data.marketRegime" />
           </section>
 
-          <app-pa-gauge
-            [reading]="scrubbedPaReading(data)"
-            [paPercent]="
-              scrubbed()?.paPercent ?? data.gauges.priceAction.percent
-            "
-            [combinedPercent]="
-              scrubbed()?.paPercent ??
-              data.lanes?.combinedPercent ??
-              data.gauges.priceAction.percent
-            "
-            [hideCombinedLane]="true"
-            [weightedBaseConviction]="
-              data.paBaseConviction ?? data.weightedBaseConviction ?? scrubbed()?.conviction ?? data.entryThreshold
-            "
-            [entryConviction]="scrubbed()?.conviction ?? 0"
-            [convictionBonuses]="data.convictionBonuses ?? []"
-            [paConvictionBonuses]="data.paConvictionBonuses ?? []"
-            [paBaseConviction]="data.paBaseConviction"
-          />
+          <nav class="signal-subtabs pa-signal-subtabs" aria-label="Price action views">
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="paSubTab() === 'overview'"
+              (click)="paSubTab.set('overview')"
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="paSubTab() === 'timeframes'"
+              (click)="paSubTab.set('timeframes')"
+            >
+              Timeframes
+            </button>
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="paSubTab() === 'context'"
+              (click)="paSubTab.set('context')"
+            >
+              Context
+            </button>
+          </nav>
 
-          <app-pa-signal-insights
-            [action]="scrubbed()?.action ?? data.gauges.priceAction.label"
-            [structuralAction]="scrubbed()?.structuralAction"
-            [vetoReason]="scrubbed()?.vetoReason"
-            [chartVetoed]="!!scrubbed()?.vetoed"
-            [conviction]="scrubbed()?.conviction ?? 0"
-            [entryThreshold]="data.entryThreshold"
-            [paDrilldown]="scrubbedPaDrilldown(data)"
-            [patternInsights]="scrubbed()?.patternInsights ?? data.patternInsights"
-            [convictionSeries]="replayConvictionSeries(data)"
-            [reading]="scrubbedPaReading(data)"
-            [marketRegime]="data.marketRegime"
-          />
-
-          <app-pa-trade-setup [setup]="scrubbed()?.tradeSetup" />
-          <app-pa-component-signals
-            [componentSignals]="scrubbed()?.componentSignals"
-            [primaryTimeframe]="
-              scrubbed()?.paDrilldown?.primaryTimeframe ??
-              scrubbedPaDrilldown(data)?.primaryTimeframe ??
-              '15m'
-            "
-          />
+          @if (paSubTab() === 'overview') {
+            <div class="pa-signal-subpanel">
+              <app-pa-gauge
+                [reading]="scrubbedPaReading(data)"
+                [paPercent]="
+                  scrubbed()?.paPercent ?? data.gauges.priceAction.percent
+                "
+                [combinedPercent]="
+                  scrubbed()?.paPercent ??
+                  data.lanes?.combinedPercent ??
+                  data.gauges.priceAction.percent
+                "
+                [hideCombinedLane]="true"
+                [weightedBaseConviction]="
+                  data.paBaseConviction ??
+                  data.weightedBaseConviction ??
+                  scrubbed()?.conviction ??
+                  data.entryThreshold
+                "
+                [entryConviction]="scrubbed()?.conviction ?? 0"
+                [convictionBonuses]="data.convictionBonuses ?? []"
+                [paConvictionBonuses]="data.paConvictionBonuses ?? []"
+                [paBaseConviction]="data.paBaseConviction"
+              />
+              <app-pa-signal-insights
+                view="overview"
+                [action]="scrubbed()?.action ?? data.gauges.priceAction.label"
+                [structuralAction]="scrubbed()?.structuralAction"
+                [vetoReason]="scrubbed()?.vetoReason"
+                [chartVetoed]="!!scrubbed()?.vetoed"
+                [conviction]="scrubbed()?.conviction ?? 0"
+                [entryThreshold]="data.entryThreshold"
+                [paDrilldown]="scrubbedPaDrilldown(data)"
+                [patternInsights]="scrubbed()?.patternInsights ?? data.patternInsights"
+                [convictionSeries]="replayConvictionSeries(data)"
+                [reading]="scrubbedPaReading(data)"
+                [marketRegime]="data.marketRegime"
+              />
+              <app-pa-trade-setup [setup]="scrubbed()?.tradeSetup" />
+            </div>
+          } @else if (paSubTab() === 'timeframes') {
+            <div class="pa-signal-subpanel">
+              <app-pa-signal-insights
+                view="timeframes"
+                [action]="scrubbed()?.action ?? data.gauges.priceAction.label"
+                [structuralAction]="scrubbed()?.structuralAction"
+                [vetoReason]="scrubbed()?.vetoReason"
+                [chartVetoed]="!!scrubbed()?.vetoed"
+                [conviction]="scrubbed()?.conviction ?? 0"
+                [entryThreshold]="data.entryThreshold"
+                [paDrilldown]="scrubbedPaDrilldown(data)"
+                [patternInsights]="scrubbed()?.patternInsights ?? data.patternInsights"
+                [convictionSeries]="replayConvictionSeries(data)"
+                [reading]="scrubbedPaReading(data)"
+                [marketRegime]="data.marketRegime"
+              />
+              <app-pa-component-signals
+                [componentSignals]="scrubbed()?.componentSignals"
+                [primaryTimeframe]="
+                  scrubbed()?.paDrilldown?.primaryTimeframe ??
+                  scrubbedPaDrilldown(data)?.primaryTimeframe ??
+                  '15m'
+                "
+              />
+            </div>
+          } @else {
+            <div class="pa-signal-subpanel">
+              <app-pa-signal-insights
+                view="context"
+                [action]="scrubbed()?.action ?? data.gauges.priceAction.label"
+                [structuralAction]="scrubbed()?.structuralAction"
+                [vetoReason]="scrubbed()?.vetoReason"
+                [chartVetoed]="!!scrubbed()?.vetoed"
+                [conviction]="scrubbed()?.conviction ?? 0"
+                [entryThreshold]="data.entryThreshold"
+                [paDrilldown]="scrubbedPaDrilldown(data)"
+                [patternInsights]="scrubbed()?.patternInsights ?? data.patternInsights"
+                [convictionSeries]="replayConvictionSeries(data)"
+                [reading]="scrubbedPaReading(data)"
+                [marketRegime]="data.marketRegime"
+              />
+            </div>
+          }
         </section>
 
         <section
@@ -340,6 +409,41 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
       :host ::ng-deep .mat-mdc-progress-spinner {
         --mdc-circular-progress-active-indicator-color: var(--option);
       }
+      .signal-subtabs {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .signal-subtab {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .signal-subtab.active {
+        color: var(--option);
+        border-color: rgba(34, 211, 238, 0.4);
+        background: rgba(34, 211, 238, 0.1);
+      }
+      .pa-signal-subtabs {
+        margin-top: 2px;
+        margin-bottom: 10px;
+      }
+      .pa-signal-subtabs .signal-subtab.active {
+        color: #c4b5fd;
+        border-color: rgba(167, 139, 250, 0.45);
+        background: rgba(167, 139, 250, 0.12);
+      }
+      .pa-signal-subpanel {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
     `,
   ],
 })
@@ -356,6 +460,7 @@ export class ReplayDeckComponent implements OnInit {
   readonly payload = signal<DeckReplayPayload | null>(null);
   readonly loading = signal(false);
   readonly drilldownOpen = signal(true);
+  readonly paSubTab = signal<PaSignalSubTab>('overview');
 
   readonly scrubbed = computed(() => {
     const data = this.payload();

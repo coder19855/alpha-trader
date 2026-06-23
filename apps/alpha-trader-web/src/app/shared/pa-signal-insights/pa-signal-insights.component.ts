@@ -7,6 +7,8 @@ import {
 } from '../../core/models/deck.models';
 import { drilldownRow, drilldownSection } from './pa-drilldown-utils';
 
+export type PaInsightView = 'overview' | 'timeframes' | 'context';
+
 interface InsightChip {
   id: string;
   label: string;
@@ -21,30 +23,33 @@ interface InsightChip {
   standalone: true,
   template: `
     <section class="pa-signal-insights" aria-label="Price action quick reads">
-      @if (chips().length || tfAligned != null) {
+      @if (showOverview() && (chips().length || tfAligned != null)) {
         <div class="pa-insight-hero">
           @if (tfAligned != null) {
             <div class="pa-insight-align-ring" [attr.title]="'Timeframes sharing primary direction'">
-              <svg viewBox="0 0 56 56" aria-hidden="true">
+              <svg
+                [attr.viewBox]="'0 0 ' + alignRingSize + ' ' + alignRingSize"
+                aria-hidden="true"
+              >
                 <circle
                   class="pa-align-ring-bg"
-                  cx="28"
-                  cy="28"
-                  r="22"
+                  [attr.cx]="alignRingCenter"
+                  [attr.cy]="alignRingCenter"
+                  [attr.r]="alignRingRadius"
                   fill="none"
-                  stroke-width="5"
+                  stroke-width="6"
                 />
                 <circle
                   class="pa-align-ring-fill"
                   [class]="'tone-' + alignTone()"
-                  cx="28"
-                  cy="28"
-                  r="22"
+                  [attr.cx]="alignRingCenter"
+                  [attr.cy]="alignRingCenter"
+                  [attr.r]="alignRingRadius"
                   fill="none"
-                  stroke-width="5"
+                  stroke-width="6"
                   stroke-linecap="round"
                   [attr.stroke-dasharray]="alignDash()"
-                  transform="rotate(-90 28 28)"
+                  [attr.transform]="'rotate(-90 ' + alignRingCenter + ' ' + alignRingCenter + ')'"
                 />
               </svg>
               <div class="pa-align-ring-label">
@@ -78,7 +83,7 @@ interface InsightChip {
         </div>
       }
 
-      @if (levelItems().length) {
+      @if (showContext() && levelItems().length) {
         <div class="pa-insight-card">
           <span class="pa-insight-card-title">Key levels</span>
           <div class="pa-insight-levels">
@@ -92,7 +97,7 @@ interface InsightChip {
         </div>
       }
 
-      @if (contextItems().length) {
+      @if (showContext() && contextItems().length) {
         <div class="pa-insight-card">
           <span class="pa-insight-card-title">Market context</span>
           <div class="pa-insight-context-chips">
@@ -109,7 +114,7 @@ interface InsightChip {
         </div>
       }
 
-      @if (patternTags().length) {
+      @if (showContext() && patternTags().length) {
         <div class="pa-insight-card">
           <span class="pa-insight-card-title">Active patterns</span>
           <div class="pa-insight-pattern-tags">
@@ -120,7 +125,7 @@ interface InsightChip {
         </div>
       }
 
-      @if (tfSnapshots().length) {
+      @if (showTimeframes() && tfSnapshots().length) {
         <div class="pa-insight-card">
           <span class="pa-insight-card-title">Timeframe snapshot</span>
           <div class="pa-insight-tf-grid">
@@ -156,7 +161,7 @@ interface InsightChip {
         </div>
       }
 
-      @if (convictionSeries?.length) {
+      @if (showOverview() && convictionSeries?.length) {
         <div class="pa-insight-card">
           <div class="pa-insight-card-head">
             <span class="pa-insight-card-title">PA conviction today</span>
@@ -193,12 +198,16 @@ interface InsightChip {
         </div>
       }
 
-      @if (statusNotes().length) {
+      @if (showOverview() && statusNotes().length) {
         <div class="pa-insight-status-row">
           @for (note of statusNotes(); track note.id) {
             <span class="pa-insight-status-chip" [class]="note.tone">{{ note.text }}</span>
           }
         </div>
+      }
+
+      @if (emptyView()) {
+        <p class="pa-insight-empty">{{ emptyView() }}</p>
       }
     </section>
   `,
@@ -206,7 +215,11 @@ interface InsightChip {
 export class PaSignalInsightsComponent {
   readonly sparkWidth = 280;
   readonly sparkHeight = 44;
+  readonly alignRingSize = 80;
+  readonly alignRingRadius = 31;
+  readonly alignRingCenter = this.alignRingSize / 2;
 
+  @Input() view: PaInsightView = 'overview';
   @Input() action = 'NO-TRADE';
   @Input() structuralAction?: string;
   @Input() vetoReason?: string;
@@ -221,6 +234,42 @@ export class PaSignalInsightsComponent {
   @Input() reading?: DeckGaugeReading;
   @Input() marketRegime?: DeckMarketRegime | null;
 
+  showOverview(): boolean {
+    return this.view === 'overview';
+  }
+
+  showTimeframes(): boolean {
+    return this.view === 'timeframes';
+  }
+
+  showContext(): boolean {
+    return this.view === 'context';
+  }
+
+  emptyView(): string | null {
+    if (this.view === 'overview') {
+      const hasHero = this.chips().length > 0 || this.tfAligned != null;
+      const hasSpark = (this.convictionSeries?.length ?? 0) > 0;
+      const hasNotes = this.statusNotes().length > 0;
+      if (!hasHero && !hasSpark && !hasNotes) {
+        return 'No overview metrics yet — waiting for the next signal tick.';
+      }
+      return null;
+    }
+    if (this.view === 'timeframes' && !this.tfSnapshots().length) {
+      return 'No timeframe breakdown available for this tick.';
+    }
+    if (
+      this.view === 'context' &&
+      !this.levelItems().length &&
+      !this.contextItems().length &&
+      !this.patternTags().length
+    ) {
+      return 'No levels, context, or patterns on this tick.';
+    }
+    return null;
+  }
+
   alignTone(): InsightChip['tone'] {
     const aligned = this.tfAligned ?? 0;
     if (aligned >= 2) return 'positive';
@@ -231,7 +280,7 @@ export class PaSignalInsightsComponent {
   alignDash(): string {
     const total = Math.max(1, this.tfAlignedTotal ?? 3);
     const aligned = Math.max(0, Math.min(total, this.tfAligned ?? 0));
-    const circumference = 2 * Math.PI * 22;
+    const circumference = 2 * Math.PI * this.alignRingRadius;
     const filled = (aligned / total) * circumference;
     return `${filled.toFixed(1)} ${circumference.toFixed(1)}`;
   }

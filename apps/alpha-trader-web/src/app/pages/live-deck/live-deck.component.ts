@@ -52,6 +52,7 @@ import { patchMultiTfSpotCandles } from '../../core/utils/live-candle-patch';
 import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timestamp';
 
 type SignalSubTab = 'priceAction' | 'optionChain';
+type PaSignalSubTab = 'overview' | 'timeframes' | 'context';
 type ComponentsSubTab = 'priceAction' | 'optionChain';
 
 @Component({
@@ -185,43 +186,115 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
             <app-market-regime [regime]="data.marketRegime" />
           </section>
 
-          <app-pa-gauge
-            [reading]="data.gauges.priceAction"
-            [paPercent]="
-              data.gauges.priceAction.percent || data.lanes.priceActionPercent
-            "
-            [combinedPercent]="data.lanes.combinedPercent"
-            [hideCombinedLane]="data.flowMode === 'pa-only'"
-            [weightedBaseConviction]="
-              data.weightedBaseConviction ?? data.lanes.combinedPercent
-            "
-            [entryConviction]="data.conviction"
-            [convictionBonuses]="data.convictionBonuses ?? []"
-            [paConvictionBonuses]="data.paConvictionBonuses ?? []"
-            [paBaseConviction]="data.paBaseConviction"
-          />
+          <nav class="signal-subtabs pa-signal-subtabs" aria-label="Price action views">
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="paSubTab() === 'overview'"
+              (click)="paSubTab.set('overview')"
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="paSubTab() === 'timeframes'"
+              (click)="paSubTab.set('timeframes')"
+            >
+              Timeframes
+            </button>
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="paSubTab() === 'context'"
+              (click)="paSubTab.set('context')"
+            >
+              Context
+            </button>
+          </nav>
 
-          <app-pa-signal-insights
-            [action]="data.action"
-            [structuralAction]="data.structuralAction"
-            [vetoReason]="data.vetoReason"
-            [chartVetoed]="!!data.chartVetoed"
-            [conviction]="data.conviction"
-            [entryThreshold]="data.entryThreshold"
-            [tfAligned]="data.tfAligned"
-            [tfAlignedTotal]="data.tfAlignedTotal"
-            [paDrilldown]="data.paDrilldown"
-            [patternInsights]="data.patternInsights"
-            [convictionSeries]="data.convictionSeries"
-            [reading]="data.gauges.priceAction"
-            [marketRegime]="data.marketRegime"
-          />
-
-          <app-pa-trade-setup [setup]="data.tradeSetup" />
-          <app-pa-component-signals
-            [componentSignals]="data.componentSignals"
-            [primaryTimeframe]="data.primaryTimeframe ?? data.paDrilldown?.primaryTimeframe ?? '15m'"
-          />
+          @if (paSubTab() === 'overview') {
+            <div class="pa-signal-subpanel">
+              <app-pa-gauge
+                [reading]="data.gauges.priceAction"
+                [paPercent]="
+                  data.gauges.priceAction.percent || data.lanes.priceActionPercent
+                "
+                [combinedPercent]="data.lanes.combinedPercent"
+                [hideCombinedLane]="data.flowMode === 'pa-only'"
+                [weightedBaseConviction]="
+                  data.weightedBaseConviction ?? data.lanes.combinedPercent
+                "
+                [entryConviction]="data.conviction"
+                [convictionBonuses]="data.convictionBonuses ?? []"
+                [paConvictionBonuses]="data.paConvictionBonuses ?? []"
+                [paBaseConviction]="data.paBaseConviction"
+              />
+              <app-pa-signal-insights
+                view="overview"
+                [action]="data.action"
+                [structuralAction]="data.structuralAction"
+                [vetoReason]="data.vetoReason"
+                [chartVetoed]="!!data.chartVetoed"
+                [conviction]="data.conviction"
+                [entryThreshold]="data.entryThreshold"
+                [tfAligned]="data.tfAligned"
+                [tfAlignedTotal]="data.tfAlignedTotal"
+                [paDrilldown]="data.paDrilldown"
+                [patternInsights]="data.patternInsights"
+                [convictionSeries]="data.convictionSeries"
+                [reading]="data.gauges.priceAction"
+                [marketRegime]="data.marketRegime"
+              />
+              <app-pa-trade-setup [setup]="data.tradeSetup" />
+            </div>
+          } @else if (paSubTab() === 'timeframes') {
+            <div class="pa-signal-subpanel">
+              <app-pa-signal-insights
+                view="timeframes"
+                [action]="data.action"
+                [structuralAction]="data.structuralAction"
+                [vetoReason]="data.vetoReason"
+                [chartVetoed]="!!data.chartVetoed"
+                [conviction]="data.conviction"
+                [entryThreshold]="data.entryThreshold"
+                [tfAligned]="data.tfAligned"
+                [tfAlignedTotal]="data.tfAlignedTotal"
+                [paDrilldown]="data.paDrilldown"
+                [patternInsights]="data.patternInsights"
+                [convictionSeries]="data.convictionSeries"
+                [reading]="data.gauges.priceAction"
+                [marketRegime]="data.marketRegime"
+              />
+              <app-pa-component-signals
+                [componentSignals]="data.componentSignals"
+                [primaryTimeframe]="
+                  data.primaryTimeframe ??
+                  data.paDrilldown?.primaryTimeframe ??
+                  '15m'
+                "
+              />
+            </div>
+          } @else {
+            <div class="pa-signal-subpanel">
+              <app-pa-signal-insights
+                view="context"
+                [action]="data.action"
+                [structuralAction]="data.structuralAction"
+                [vetoReason]="data.vetoReason"
+                [chartVetoed]="!!data.chartVetoed"
+                [conviction]="data.conviction"
+                [entryThreshold]="data.entryThreshold"
+                [tfAligned]="data.tfAligned"
+                [tfAlignedTotal]="data.tfAlignedTotal"
+                [paDrilldown]="data.paDrilldown"
+                [patternInsights]="data.patternInsights"
+                [convictionSeries]="data.convictionSeries"
+                [reading]="data.gauges.priceAction"
+                [marketRegime]="data.marketRegime"
+              />
+            </div>
+          }
           } @else {
             <app-option-chain-signal-panel />
           }
@@ -599,6 +672,20 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
         border-color: rgba(34, 211, 238, 0.4);
         background: rgba(34, 211, 238, 0.1);
       }
+      .pa-signal-subtabs {
+        margin-top: 2px;
+        margin-bottom: 10px;
+      }
+      .pa-signal-subtabs .signal-subtab.active {
+        color: #c4b5fd;
+        border-color: rgba(167, 139, 250, 0.45);
+        background: rgba(167, 139, 250, 0.12);
+      }
+      .pa-signal-subpanel {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
     `,
   ],
 })
@@ -619,6 +706,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   readonly error = signal<string | null>(null);
   readonly drilldownOpen = signal(true);
   readonly signalSubTab = signal<SignalSubTab>('priceAction');
+  readonly paSubTab = signal<PaSignalSubTab>('overview');
   readonly componentsSubTab = signal<ComponentsSubTab>('priceAction');
   protected readonly formatSignalCalculatedAt = formatSignalCalculatedAt;
 
