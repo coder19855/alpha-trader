@@ -5,6 +5,7 @@ import { TradingStyle, isIndianMarketOpen } from '@alpha-trader/server-shared';
 import {
   getMarketDataStore,
   getOpenPositionsCacheSnapshot,
+  seedIndexQuotesFromRest,
 } from '@alpha-trader/server-market-data';
 import {
   buildDeckLiveStreamTick,
@@ -103,6 +104,9 @@ export class DeckStreamHub {
 
     channel.subscribers.set(subscriber.id, subscriber);
     if (channel.lastTick) subscriber.write(channel.lastTick);
+    void seedIndexQuotesFromRest(this.fastify, [normalized.symbol]).then(() => {
+      void this.sendLtpPatch(channel);
+    });
     void this.sendTick(channel);
 
     return () => {
@@ -273,9 +277,21 @@ export class DeckStreamHub {
   private async sendLtpPatch(
     channel: NonNullable<ReturnType<typeof this.channels.get>>,
   ): Promise<void> {
-    if (channel.ltpInFlight || !channel.cachedOpenPositions) return;
+    if (channel.ltpInFlight) return;
     channel.ltpInFlight = true;
     try {
+      if (!channel.cachedOpenPositions) {
+        const patch = await buildDeckPositionsLtpPatch(
+          this.fastify,
+          channel.params,
+          { entries: [], asOf: new Date().toISOString(), note: null },
+          channel.lastTick?.managementContext,
+        );
+        const chartPatch = this.patchCachedChartCandles(channel, patch.lastPrice);
+        this.broadcast(channel, chartPatch ? { ...patch, ...chartPatch } : patch);
+        return;
+      }
+
       const patch = await buildDeckPositionsLtpPatch(
         this.fastify,
         channel.params,

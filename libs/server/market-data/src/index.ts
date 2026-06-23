@@ -20,6 +20,7 @@ export {
 } from './lib/market-stream-coordinator.js';
 
 export { getQuoteCache } from './lib/quote-cache.js';
+export { seedIndexQuotesFromRest } from './lib/seed-index-quotes.js';
 export { getMarketDataStore } from './lib/market-data-store.js';
 export {
   patchFyersCandlesWithLtp,

@@ -5,6 +5,8 @@ export interface LiveQuote {
   ltp: number;
   ch: number;
   chp: number;
+  /** Session previous close — used to recompute day change on LTP-only WS ticks. */
+  prevClose?: number;
   updatedAt: number;
   source: 'ws' | 'rest';
 }
@@ -32,11 +34,35 @@ export class QuoteCache {
     nowMs = Date.now(),
   ): LiveQuote {
     const prev = this.quotes.get(tick.symbol);
+    const prevClose =
+      tick.prevClose ??
+      prev?.prevClose ??
+      (prev && prev.ch !== 0 ? prev.ltp - prev.ch : undefined) ??
+      (tick.ch !== 0 ? tick.ltp - tick.ch : undefined);
+
+    let ch = tick.ch;
+    let chp = tick.chp;
+    if (
+      tick.source === 'ws' &&
+      prevClose != null &&
+      prevClose > 0 &&
+      tick.ltp > 0 &&
+      ch === 0 &&
+      chp === 0
+    ) {
+      ch = +(tick.ltp - prevClose).toFixed(2);
+      chp = +((ch / prevClose) * 100).toFixed(2);
+    } else if (prevClose != null && prevClose > 0 && tick.ltp > 0 && tick.ch !== 0) {
+      ch = tick.ch;
+      chp = tick.chp !== 0 ? tick.chp : +((ch / prevClose) * 100).toFixed(2);
+    }
+
     const entry: LiveQuote = {
       symbol: tick.symbol,
       ltp: tick.ltp,
-      ch: tick.ch,
-      chp: tick.chp,
+      ch,
+      chp,
+      prevClose,
       updatedAt: tick.updatedAt ?? nowMs,
       source: tick.source,
     };

@@ -900,11 +900,13 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     if (patch.lastPrice != null && Number.isFinite(patch.lastPrice)) {
       this.ctx.updateTracker({
         price: patch.lastPrice,
-        dayChange: patch.dayChange ?? null,
-        dayChangePct: patch.dayChangePct ?? null,
         connected: true,
         live: true,
         asOf: patch.asOf,
+        ...(patch.dayChange !== undefined ? { dayChange: patch.dayChange } : {}),
+        ...(patch.dayChangePct !== undefined
+          ? { dayChangePct: patch.dayChangePct }
+          : {}),
       });
     }
   }

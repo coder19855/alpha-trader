@@ -18,6 +18,7 @@ import {
   notifyOpenOutcomeSymbols,
 } from './market-stream-coordinator.js';
 import { getQuoteCache } from './quote-cache.js';
+import { seedIndexQuotesFromRest } from './seed-index-quotes.js';
 import { getMarketDataStore } from './market-data-store.js';
 import {
   getAllHeldOptionSymbols,
@@ -111,6 +112,15 @@ const fyersMarketStreamPlugin = fp(
       if (!appId || !accessToken) return;
 
       await manager.connect(accessToken, appId);
+      if (manager.isConnected()) {
+        const watch = parseWatchSymbols();
+        const needsSeed = watch.some((symbol) => !getQuoteCache().get(symbol)?.prevClose);
+        if (needsSeed) {
+          void seedIndexQuotesFromRest(fastify, watch).catch((err) => {
+            fastify.log.warn({ err }, 'Index quote REST seed failed');
+          });
+        }
+      }
     }
 
     fastify.decorate('fyersMarketStream', {

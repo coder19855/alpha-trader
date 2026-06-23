@@ -186,7 +186,7 @@ function shortSymbol(symbol: string): string {
   return part.replace('-INDEX', '');
 }
 
-function resolveLiveIndexQuote(
+export function resolveLiveIndexQuote(
   fastify: FastifyInstance,
   indexSymbol: string,
   fallback: number,
@@ -866,7 +866,7 @@ export async function buildDeckPositionsLtpPatch(
   const refreshed = refreshDeckOpenPositionsLtp(fastify, openPositions);
   const liveQuote = resolveLiveIndexQuote(fastify, indexSymbol, 0);
   const liveLastPrice =
-    fastify.fyersMarketStream?.getIndexLtp(indexSymbol) ?? null;
+    liveQuote.ltp > 0 ? liveQuote.ltp : null;
   const patchedManagementContext =
     managementContext && liveLastPrice != null
       ? refreshAutoExitGuardDisplay({

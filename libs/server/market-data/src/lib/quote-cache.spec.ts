@@ -46,4 +46,28 @@ describe('QuoteCache', () => {
     expect(ring.length).toBeGreaterThanOrEqual(1);
     expect(ring[ring.length - 1].v).toBe(25005);
   });
+
+  it('recomputes day change from prev close on LTP-only websocket ticks', () => {
+    const cache = getQuoteCache();
+    cache.upsert({
+      symbol: 'NSE:NIFTY50-INDEX',
+      ltp: 25_000,
+      ch: 100,
+      chp: 0.4,
+      prevClose: 24_900,
+      source: 'rest',
+    });
+
+    cache.upsert({
+      symbol: 'NSE:NIFTY50-INDEX',
+      ltp: 25_050,
+      ch: 0,
+      chp: 0,
+      source: 'ws',
+    });
+
+    const quote = cache.get('NSE:NIFTY50-INDEX');
+    expect(quote?.ch).toBe(150);
+    expect(quote?.chp).toBeCloseTo(0.6, 2);
+  });
 });
