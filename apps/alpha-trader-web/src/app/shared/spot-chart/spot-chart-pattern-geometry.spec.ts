@@ -45,10 +45,10 @@ describe('spot-chart-pattern-geometry', () => {
       },
     ];
 
-    const selected = selectChartPatternsToPlot(insights, '15m', 2);
+    const selected = selectChartPatternsToPlot(insights, '15m');
     expect(selected).toHaveLength(1);
     expect(selected[0].pattern).toBe('double top');
-    expect(selectChartPatternsToPlot(insights, '5m', 2)).toHaveLength(1);
+    expect(selectChartPatternsToPlot(insights, '5m')).toHaveLength(1);
     expect(isValidChartPattern(insights[2])).toBe(false);
   });
 
@@ -71,7 +71,7 @@ describe('spot-chart-pattern-geometry', () => {
       },
     ];
 
-    expect(selectChartPatternsToPlot(insights, '15m', 2)).toHaveLength(1);
+    expect(selectChartPatternsToPlot(insights, '15m')).toHaveLength(1);
     expect(isValidChartPattern(insights[0])).toBe(true);
     expect(isValidChartPattern(insights[1])).toBe(false);
     expect(candlestickInsightForTf(insights, '15m')?.pattern).toBe('hammer');

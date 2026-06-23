@@ -821,7 +821,6 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       const patterns = selectChartPatternsToPlot(
         this.patternInsights,
         this.timeframe,
-        2,
       );
       patterns.forEach((insight, index) => {
         const fallbackNeckline =

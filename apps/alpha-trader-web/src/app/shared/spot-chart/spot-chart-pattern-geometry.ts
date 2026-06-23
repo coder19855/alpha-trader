@@ -71,18 +71,15 @@ export function isValidChartPattern(insight: PatternInsight): boolean {
   return true;
 }
 
-/** Up to two valid chart-pattern insights for the active timeframe (geometry uses those candles). */
 export function selectChartPatternsToPlot(
   insights: PatternInsight[],
   activeTf: ChartTf,
-  max = 2,
 ): PatternInsight[] {
   const active = normalizeTimeframe(activeTf);
   return insights
     .filter(isValidChartPattern)
     .filter((row) => normalizeTimeframe(row.timeframe) === active)
     .sort((a, b) => patternRecencyRank(b) - patternRecencyRank(a))
-    .slice(0, max);
 }
 
 function patternRecencyRank(insight: PatternInsight): number {
