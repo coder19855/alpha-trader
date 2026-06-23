@@ -371,6 +371,8 @@ export interface TimelinePoint {
     '15m'?: CandlestickPatternId;
     '1h'?: CandlestickPatternId;
   };
+  /** Per-TF chart pattern state for replay and graph overlays. */
+  chartPatterns?: Record<'5m' | '15m' | '1h', ChartPatternResult>;
   momentum: {
     recent: Record<Timeframe, number>;
     adx?: Record<Timeframe, number>;

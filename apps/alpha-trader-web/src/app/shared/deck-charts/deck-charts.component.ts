@@ -404,6 +404,7 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
 
   constructor() {
     effect(() => {
+      this.syncActiveTimeframeWithPatterns();
       this.activeTf();
       if (this.tabActive && this.hasChartData()) {
         this.scheduleChartMount();
@@ -412,6 +413,9 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['patternInsights'] || changes['chartPatternNeckline']) {
+      this.syncActiveTimeframeWithPatterns();
+    }
     if (changes['tabActive']?.currentValue === true) {
       this.scheduleChartMount();
     }
@@ -577,6 +581,56 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
 
   private isChildAvailable(id: string): boolean {
     return this.isLayerAvailable(id);
+  }
+
+  private syncActiveTimeframeWithPatterns(): void {
+    const active = this.activeTf();
+    if (this.hasPatternForTimeframe(active)) return;
+
+    const nextTf =
+      this.patternInsights?.find(
+        (row) =>
+          this.isChartPatternInsight(row) &&
+          this.timeframes.includes(this.normalizeTimeframe(row.timeframe) as ChartTf),
+      )?.timeframe ??
+      this.patternInsights?.find(
+        (row) =>
+          this.isCandlestickInsight(row) &&
+          this.timeframes.includes(this.normalizeTimeframe(row.timeframe) as ChartTf),
+      )?.timeframe;
+
+    if (nextTf) {
+      const normalized = this.normalizeTimeframe(nextTf) as ChartTf;
+      if (normalized !== active) {
+        this.activeTf.set(normalized);
+      }
+    }
+  }
+
+  private hasPatternForTimeframe(tf: ChartTf): boolean {
+    return Boolean(
+      this.patternInsights?.some(
+        (row) =>
+          this.normalizeTimeframe(row.timeframe) === tf &&
+          (this.isChartPatternInsight(row) || this.isCandlestickInsight(row)),
+      ),
+    );
+  }
+
+  private isChartPatternInsight(row: NonNullable<DeckLiveTick['patternInsights']>[number]): boolean {
+    return (
+      row.type === 'chart' ||
+      this.normalizeLabel(row.label) === 'chart pattern'
+    );
+  }
+
+  private isCandlestickInsight(
+    row: NonNullable<DeckLiveTick['patternInsights']>[number],
+  ): boolean {
+    return (
+      row.type === 'candlestick' ||
+      this.normalizeLabel(row.label) === 'candlestick'
+    );
   }
 
   highlightedPattern(): HoveredPattern | null {

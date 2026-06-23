@@ -347,6 +347,7 @@ export async function computeTechnicalAnalysisTimeline(
         structuralAction,
       },
       candlestick: snapshot.candlestick,
+      chartPatterns: snapshot.chartPatterns,
       momentum: {
         recent: snapshot.momentum?.recent ?? {
           '5m': 0,
