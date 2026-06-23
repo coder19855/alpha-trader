@@ -442,8 +442,10 @@ export function computeOptionMetricsFromChain(
 
   const ceSnap = legSnapshot(atmCall);
   const peSnap = legSnapshot(atmPut);
-  const callIv = ceSnap?.iv;
-  const putIv = peSnap?.iv;
+  const skewCall = pickStrikeByMoneyness(chain, spotLtp, atmStrike, 'OTM', 'CE') ?? atmCall;
+  const skewPut = pickStrikeByMoneyness(chain, spotLtp, atmStrike, 'OTM', 'PE') ?? atmPut;
+  const callIv = skewCall?.greeks?.iv ?? ceSnap?.iv;
+  const putIv = skewPut?.greeks?.iv ?? peSnap?.iv;
   const ivSkew =
     callIv != null && putIv != null ? +(putIv - callIv).toFixed(2) : null;
 

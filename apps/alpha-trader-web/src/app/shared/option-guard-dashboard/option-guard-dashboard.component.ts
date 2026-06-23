@@ -262,7 +262,9 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
                     class="prem-ch"
                     [class.up]="row.ltpChange > 0"
                     [class.down]="row.ltpChange < 0"
+                    [class.side]="row.ltpChange === 0"
                   >
+                    <mat-icon class="trend-icon">{{ flowIcon(row.ltpChange) }}</mat-icon>
                     {{ formatPremChange(row) }}
                   </span>
                 </div>
@@ -290,7 +292,9 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
                     class="oi-ch"
                     [class.build]="row.oiChange > 0"
                     [class.unwind]="row.oiChange < 0"
+                    [class.side]="row.oiChange === 0"
                   >
+                    <mat-icon class="trend-icon">{{ flowIcon(row.oiChange) }}</mat-icon>
                     {{ row.oiChange > 0 ? '+' : '' }}{{ row.oiChange | number }}
                   </span>
                 </div>
@@ -301,7 +305,7 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
                     class="flow-btn"
                     [class]="insightFor(row, g).tone"
                     [attr.aria-label]="insightFor(row, g).flowLabel"
-                    (click)="openDetail(row)"
+                    (pointerdown)="openDetail($event, row)"
                   >
                     <mat-icon>{{ insightFor(row, g).flowIcon }}</mat-icon>
                   </button>
@@ -313,8 +317,8 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       </section>
 
       @if (selectedRow(); as row) {
-        <div class="detail-backdrop" (click)="closeDetail()" role="presentation"></div>
-        <aside class="detail-panel" role="dialog" aria-labelledby="guard-detail-title">
+        <div class="detail-backdrop" (pointerdown)="closeDetail()" role="presentation"></div>
+        <aside class="detail-panel" role="dialog" aria-labelledby="guard-detail-title" (pointerdown)="$event.stopPropagation()">
           <header class="detail-head">
             <div>
               <h3 id="guard-detail-title">
@@ -441,6 +445,11 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       }
       .wall-strike { display: block; font-size: 1rem; font-weight: 700; }
       .wall-oi { display: block; font-size: 0.68rem; color: var(--muted); }
+      .wall-oi {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
       .ladder-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .ladder-head,
       .ladder-row {
@@ -531,10 +540,24 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       }
       .oi-bar.build { background: #22d3ee; }
       .oi-bar.unwind { background: #fb923c; }
+      .prem-ch,
+      .oi-ch {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+      }
       .prem-ch.up, .sub.up { color: #4ade80; }
       .prem-ch.down, .sub.down { color: #f87171; }
+      .prem-ch.side, .sub.side { color: #9ca3af; }
       .oi-ch.build, .sub.build { color: #22d3ee; }
       .oi-ch.unwind, .sub.unwind { color: #fb923c; }
+      .oi-ch.side { color: #9ca3af; }
+      .trend-icon {
+        font-size: 13px;
+        width: 13px;
+        height: 13px;
+        flex-shrink: 0;
+      }
       .flow-cell {
         display: flex;
         align-items: center;
@@ -545,10 +568,14 @@ function rowInsight(row: OptionChainGuardLevel, spotLtp: number): RowInsight {
       @media (max-width: 520px) {
         .ladder-head,
         .ladder-row {
-          grid-template-columns: 36px 40px 64px 1fr 64px 96px;
+          grid-template-columns: 34px 40px 68px 1fr 68px 84px;
           min-width: 320px;
         }
         .flow-label { display: none; }
+        .flow-btn {
+          width: 30px;
+          height: 30px;
+        }
       }
       .flow-label {
         font-size: 0.58rem;
@@ -718,6 +745,12 @@ export class OptionGuardDashboardComponent {
     return rowInsight(row, g.spotLtp);
   }
 
+  flowIcon(change: number): string {
+    if (change > 0) return 'trending_up';
+    if (change < 0) return 'trending_down';
+    return 'horizontal_rule';
+  }
+
   priceBarWidth(row: OptionChainGuardLevel): number {
     const pct = Math.abs(row.ltpChangePct ?? 0);
     return Math.min(100, Math.max(8, pct * 4));
@@ -737,7 +770,9 @@ export class OptionGuardDashboardComponent {
     return d > 0 ? `${d} pts above` : `${Math.abs(d)} pts below`;
   }
 
-  openDetail(row: OptionChainGuardLevel): void {
+  openDetail(event: PointerEvent, row: OptionChainGuardLevel): void {
+    event.preventDefault();
+    event.stopPropagation();
     this.selectedRow.set(row);
   }
 

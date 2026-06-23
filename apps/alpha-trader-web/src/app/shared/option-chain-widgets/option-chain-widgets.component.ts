@@ -104,7 +104,7 @@ const WIDGET_INFO: Record<WidgetTopic, WidgetInfoContent> = {
           <header class="widget-head">
             <span class="widget-title">
               OI balance
-              <button type="button" class="info-btn" (click)="openInfo('oiBalance')" aria-label="About OI balance">
+              <button type="button" class="info-btn" (pointerdown)="openInfo($event, 'oiBalance')" aria-label="About OI balance">
                 <mat-icon>info_outline</mat-icon>
               </button>
             </span>
@@ -124,7 +124,7 @@ const WIDGET_INFO: Record<WidgetTopic, WidgetInfoContent> = {
           <header class="widget-head">
             <span class="widget-title">
               Volatility
-              <button type="button" class="info-btn" (click)="openInfo('volatility')" aria-label="About volatility">
+              <button type="button" class="info-btn" (pointerdown)="openInfo($event, 'volatility')" aria-label="About volatility">
                 <mat-icon>info_outline</mat-icon>
               </button>
             </span>
@@ -158,7 +158,7 @@ const WIDGET_INFO: Record<WidgetTopic, WidgetInfoContent> = {
           <header class="widget-head">
             <span class="widget-title">
               Max pain
-              <button type="button" class="info-btn" (click)="openInfo('maxPain')" aria-label="About max pain">
+              <button type="button" class="info-btn" (pointerdown)="openInfo($event, 'maxPain')" aria-label="About max pain">
                 <mat-icon>info_outline</mat-icon>
               </button>
             </span>
@@ -180,7 +180,7 @@ const WIDGET_INFO: Record<WidgetTopic, WidgetInfoContent> = {
           <header class="greeks-head">
             <span class="widget-title">
               ATM Greeks
-              <button type="button" class="info-btn" (click)="openInfo('atmGreeks')" aria-label="About ATM Greeks">
+              <button type="button" class="info-btn" (pointerdown)="openInfo($event, 'atmGreeks')" aria-label="About ATM Greeks">
                 <mat-icon>info_outline</mat-icon>
               </button>
             </span>
@@ -218,9 +218,9 @@ const WIDGET_INFO: Record<WidgetTopic, WidgetInfoContent> = {
       }
 
       @if (infoTopic(); as topic) {
-        <div class="detail-backdrop" (click)="closeInfo()" role="presentation"></div>
-        <aside class="detail-panel" role="dialog" [attr.aria-labelledby]="'widget-info-' + topic">
-          <header class="detail-head">
+        <div class="detail-backdrop" (pointerdown)="closeInfo()" role="presentation"></div>
+        <aside class="detail-panel" role="dialog" [attr.aria-labelledby]="'widget-info-' + topic" (pointerdown)="$event.stopPropagation()">
+          <header class="detail-head" (pointerdown)="$event.stopPropagation()">
             <div>
               <h3 [id]="'widget-info-' + topic">{{ infoContent(topic).title }}</h3>
               <p class="detail-sub">{{ infoContent(topic).summary }}</p>
@@ -565,7 +565,9 @@ export class OptionChainWidgetsComponent {
     return WIDGET_INFO[topic];
   }
 
-  openInfo(topic: WidgetTopic): void {
+  openInfo(event: PointerEvent, topic: WidgetTopic): void {
+    event.preventDefault();
+    event.stopPropagation();
     this.infoTopic.set(topic);
   }
 
