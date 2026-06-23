@@ -42,6 +42,15 @@ function isTradeableAction(action: string): action is HeldDirection {
   return action === 'CE-BUY' || action === 'PE-BUY';
 }
 
+function signalIdentity(pref: AutoEntryPreferenceState, signal: {
+  action: HeldDirection;
+  reason: string;
+}): string {
+  return pref.signalMode === 'engine'
+    ? `engine:${signal.action}`
+    : `preset:${pref.signalProfile}:${signal.action}`;
+}
+
 function buildGuardStatus(params: {
   pref: AutoEntryPreferenceState;
   session: Awaited<ReturnType<typeof loadAutoEntrySession>>;
@@ -153,6 +162,7 @@ export async function attachAutoEntryGuard(params: {
   }
 
   if (managementContext.hasOpenPosition) {
+    runtime.pendingKey = null;
     runtime.pendingAction = null;
     runtime.pendingReason = null;
     runtime.confirmationCount = 0;
@@ -190,6 +200,7 @@ export async function attachAutoEntryGuard(params: {
   );
 
   if (!signal) {
+    runtime.pendingKey = null;
     runtime.pendingAction = null;
     runtime.pendingReason = null;
     runtime.confirmationCount = 0;
@@ -209,12 +220,11 @@ export async function attachAutoEntryGuard(params: {
     return guard;
   }
 
-  if (
-    runtime.pendingAction === signal.action &&
-    runtime.pendingReason === signal.reason
-  ) {
+  const key = signalIdentity(pref, signal);
+  if (runtime.pendingKey === key) {
     runtime.confirmationCount += 1;
   } else {
+    runtime.pendingKey = key;
     runtime.pendingAction = signal.action;
     runtime.pendingReason = signal.reason;
     runtime.confirmationCount = 1;
@@ -259,6 +269,7 @@ export async function attachAutoEntryGuard(params: {
         ? `DRY-RUN: would buy ${pref.lots} lot(s) ${signal.action} @ ${result.symbol ?? 'ATM'} (qty ${result.qty}) — no broker order`
         : `Bought ${pref.lots} lot(s) ${signal.action} @ ${result.symbol ?? 'ATM'}`
       : result.error ?? 'Order failed';
+    runtime.pendingKey = null;
     runtime.pendingAction = null;
     runtime.pendingReason = null;
     runtime.confirmationCount = 0;

@@ -1,6 +1,7 @@
 const runtimeByKey = new Map<string, AutoEntryRuntimeState>();
 
 export interface AutoEntryRuntimeState {
+  pendingKey: string | null;
   pendingAction: string | null;
   pendingReason: string | null;
   confirmationCount: number;
@@ -10,6 +11,7 @@ export interface AutoEntryRuntimeState {
 }
 
 const EMPTY: AutoEntryRuntimeState = {
+  pendingKey: null,
   pendingAction: null,
   pendingReason: null,
   confirmationCount: 0,
