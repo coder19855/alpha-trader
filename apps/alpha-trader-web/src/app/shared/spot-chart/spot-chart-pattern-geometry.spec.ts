@@ -1,7 +1,9 @@
 import {
+  buildCandlestickHighlightOps,
   buildChartPatternOps,
   candlestickInsightForTf,
   isValidChartPattern,
+  resolveCandlestickCandles,
   selectChartPatternsToPlot,
 } from './spot-chart-pattern-geometry';
 
@@ -18,7 +20,7 @@ describe('spot-chart-pattern-geometry', () => {
     };
   });
 
-  it('selects up to two valid chart patterns for the active timeframe', () => {
+  it('selects all valid chart patterns for the active timeframe', () => {
     const insights = [
       {
         timeframe: '15m',
@@ -115,5 +117,54 @@ describe('spot-chart-pattern-geometry', () => {
     expect(outline?.points).toHaveLength(3);
     expect(ops.some((op) => op.kind === 'dot')).toBe(true);
     expect(ops.some((op) => op.kind === 'hline' && op.label === 'Neckline')).toBe(true);
+  });
+
+  it('resolves multi-candle candlestick windows and builds highlight ops', () => {
+    const insight = {
+      timeframe: '15m',
+      pattern: 'morning star',
+      tone: 'bull',
+      label: 'Candlestick',
+      type: 'candlestick' as const,
+    };
+    const resolved = resolveCandlestickCandles(insight, candles);
+    expect(resolved).toHaveLength(3);
+    const highlights = buildCandlestickHighlightOps(insight, candles, true);
+    expect(highlights).toHaveLength(3);
+    expect(highlights.every((op) => op.kind === 'candleHighlight')).toBe(true);
+    expect(highlights[0].highlighted).toBe(true);
+  });
+
+  it('snaps server pivot timestamps to the nearest chart candle', () => {
+    const ops = buildChartPatternOps(
+      {
+        timeframe: '15m',
+        pattern: 'double top',
+        tone: 'bear',
+        label: 'Chart Pattern',
+        type: 'chart',
+        status: 'forming',
+        points: [
+          {
+            index: 10,
+            price: 24_540,
+            kind: 'high',
+            t: candles[10].t + 1_500,
+          },
+          {
+            index: 18,
+            price: 24_560,
+            kind: 'high',
+            t: candles[18].t + 2_500,
+          },
+        ],
+      },
+      candles,
+    );
+    const outline = ops.find((op) => op.id === 'server-outline');
+    expect(outline?.points.map((point) => point.t)).toEqual([
+      candles[10].t,
+      candles[18].t,
+    ]);
   });
 });

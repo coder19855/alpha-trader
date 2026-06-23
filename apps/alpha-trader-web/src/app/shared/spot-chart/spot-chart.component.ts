@@ -25,9 +25,12 @@ import { ChartOverlayLine } from '../../core/models/deck.models';
 import {
   PatternDrawOp,
   PatternInsight,
+  buildCandlestickHighlightOps,
   buildCandlestickMarkerOp,
   buildChartPatternOps,
   candlestickInsightForTf,
+  collectPatternTimeBounds,
+  resolveCandlestickCandles,
   selectChartPatternsToPlot,
 } from './spot-chart-pattern-geometry';
 
@@ -74,6 +77,7 @@ interface IstChartSession {
       .pattern-overlay {
         position: absolute;
         inset: 0;
+        z-index: 2;
         width: 100%;
         height: 100%;
         pointer-events: none;
@@ -502,6 +506,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
 
     if (this.followLatestViewport && !this.hasFocusedSession) {
       this.focusViewport(candles, spotSeries);
+      this.ensurePatternsInViewport(candles);
     }
   }
 
@@ -848,8 +853,15 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     if (this.layerOn('candlestick')) {
       const insight = candlestickInsightForTf(this.patternInsights, this.timeframe);
       if (insight) {
-        const marker = buildCandlestickMarkerOp(insight, candles);
+        const highlighted = this.isHighlightedPattern(insight);
+        ops.push(
+          ...buildCandlestickHighlightOps(insight, candles, highlighted),
+        );
+        const marker = buildCandlestickMarkerOp(insight, candles, highlighted);
         if (marker) ops.push(marker);
+        if (highlighted) {
+          this.focusHighlightedCandlestick(insight, candles);
+        }
       }
     }
 
@@ -896,19 +908,71 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
         continue;
       }
 
+      if (op.kind === 'candleHighlight' && op.candle && projected.length >= 2) {
+        const x = this.chart!.timeScale().timeToCoordinate(
+          Math.floor(op.candle.t / 1000) as Time,
+        );
+        if (x == null || !Number.isFinite(x)) continue;
+
+        const bodyTop = series.priceToCoordinate(Math.max(op.candle.o, op.candle.c));
+        const bodyBottom = series.priceToCoordinate(Math.min(op.candle.o, op.candle.c));
+        const wickTop = projected[0].y;
+        const wickBottom = projected[1].y;
+        if (
+          bodyTop == null ||
+          bodyBottom == null ||
+          !Number.isFinite(bodyTop) ||
+          !Number.isFinite(bodyBottom)
+        ) {
+          continue;
+        }
+
+        const halfBar = Math.max(4, this.barSpacing() * 0.45);
+        const rect = document.createElementNS(ns, 'rect');
+        rect.setAttribute('x', String(x - halfBar));
+        rect.setAttribute('y', String(Math.min(wickTop, wickBottom)));
+        rect.setAttribute('width', String(halfBar * 2));
+        rect.setAttribute(
+          'height',
+          String(Math.abs(wickBottom - wickTop)),
+        );
+        rect.setAttribute('fill', op.fill ?? `${op.color}33`);
+        rect.setAttribute('stroke', op.color);
+        rect.setAttribute(
+          'stroke-width',
+          String(op.strokeWidth ?? (op.highlighted ? 2.5 : 1.5)),
+        );
+        rect.setAttribute('rx', '2');
+        svg.appendChild(rect);
+
+        const body = document.createElementNS(ns, 'rect');
+        body.setAttribute('x', String(x - halfBar * 0.72));
+        body.setAttribute('y', String(Math.min(bodyTop, bodyBottom)));
+        body.setAttribute('width', String(halfBar * 1.44));
+        body.setAttribute(
+          'height',
+          String(Math.max(2, Math.abs(bodyBottom - bodyTop))),
+        );
+        body.setAttribute('fill', op.highlighted ? `${op.color}aa` : `${op.color}66`);
+        body.setAttribute('stroke', op.color);
+        body.setAttribute('stroke-width', String(op.highlighted ? 2 : 1));
+        svg.appendChild(body);
+        continue;
+      }
+
       if (op.kind === 'marker' && projected[0]) {
         const g = document.createElementNS(ns, 'g');
         const { x, y } = projected[0];
         const bullish = op.markerBullish ?? false;
         const marker = document.createElementNS(ns, 'path');
-        const size = 7;
+        const size = op.highlighted ? 9 : 7;
         const path = bullish
           ? `M ${x} ${y + size} L ${x - size} ${y - size} L ${x + size} ${y - size} Z`
           : `M ${x} ${y - size} L ${x - size} ${y + size} L ${x + size} ${y + size} Z`;
         marker.setAttribute('d', path);
         marker.setAttribute('fill', op.color);
-        marker.setAttribute('stroke', '#0f172a');
-        marker.setAttribute('stroke-width', '1');
+        marker.setAttribute('stroke', op.highlighted ? '#f8fafc' : '#0f172a');
+        marker.setAttribute('stroke-width', op.highlighted ? '2' : '1');
         g.appendChild(marker);
 
         if (op.label) {
@@ -1004,6 +1068,62 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     );
   }
 
+  private ensurePatternsInViewport(candles: Candle[]): void {
+    if (!this.chart || !candles.length || this.highlightPattern) return;
+    if (!this.layerOn('chartPattern') && !this.layerOn('candlestick')) return;
+
+    const bounds = collectPatternTimeBounds(
+      this.patternInsights,
+      this.timeframe,
+      candles,
+      this.chartPatternNeckline,
+    );
+    if (!bounds) return;
+
+    const barMs =
+      this.timeframe === '5m' ? 300_000 : this.timeframe === '1h' ? 3_600_000 : 900_000;
+    const visibleBars = this.defaultVisibleBars();
+    const defaultStartMs = candles[Math.max(0, candles.length - visibleBars)].t;
+    const defaultEndMs = candles[candles.length - 1].t + barMs * 2;
+
+    const startMs = Math.min(defaultStartMs, bounds.startMs);
+    const endMs = Math.max(defaultEndMs, bounds.endMs);
+    const pad = Math.max(barMs * 3, Math.round((endMs - startMs) * 0.08));
+
+    try {
+      this.chart.timeScale().setVisibleRange({
+        from: Math.floor((startMs - pad) / 1000) as Time,
+        to: Math.floor((endMs + pad) / 1000) as Time,
+      });
+      this.hasFocusedSession = true;
+    } catch {
+      /* keep default viewport */
+    }
+  }
+
+  private focusHighlightedCandlestick(insight: PatternInsight, candles: Candle[]): void {
+    if (!this.chart) return;
+    const patternCandles = resolveCandlestickCandles(insight, candles);
+    if (!patternCandles.length) return;
+
+    const startMs = patternCandles[0].t;
+    const endMs = patternCandles[patternCandles.length - 1].t;
+    const barMs =
+      this.timeframe === '5m' ? 300_000 : this.timeframe === '1h' ? 3_600_000 : 900_000;
+    const pad = Math.max(barMs * 4, 8 * 60_000);
+
+    try {
+      this.chart.timeScale().setVisibleRange({
+        from: Math.floor((startMs - pad) / 1000) as Time,
+        to: Math.floor((endMs + pad) / 1000) as Time,
+      });
+      this.hasFocusedSession = true;
+      this.followLatestViewport = false;
+    } catch {
+      this.focusViewport(candles);
+    }
+  }
+
   private focusHighlightedPattern(insight: PatternInsight, candles: Candle[]): void {
     if (!this.chart) return;
     const points = insight.points?.filter(
@@ -1034,7 +1154,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   private normalizePatternName(pattern?: string): string {
-    return (pattern ?? '').trim().toLowerCase();
+    return (pattern ?? '').trim().toLowerCase().replace(/\s+/g, '_');
   }
 
   private normalizeTimeframe(value?: string): string {

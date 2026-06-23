@@ -72,7 +72,7 @@ const CHART_LAYER_GROUPS: ChartLayerGroupDef[] = [
     color: '#a78bfa',
     swatch: 'pattern',
     childIds: ['chartPattern'],
-    detail: 'Up to 2 valid patterns',
+    detail: 'All valid patterns on active TF',
   },
   {
     id: 'candlestick',
@@ -91,7 +91,12 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = CHART_LAYER_GROUPS.map((group) => ({
   swatch: group.swatch,
 }));
 
-const DEFAULT_ON_LAYER_IDS = new Set(['supportTrend', 'resistanceTrend', 'chartPattern']);
+const DEFAULT_ON_LAYER_IDS = new Set([
+  'supportTrend',
+  'resistanceTrend',
+  'chartPattern',
+  'candlestick',
+]);
 
 @Component({
   selector: 'app-deck-charts',
@@ -681,7 +686,7 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
   }
 
   private patternKey(timeframe: string, pattern: string): string {
-    return `${this.normalizeTimeframe(timeframe)}|${pattern.trim().toLowerCase()}`;
+    return `${this.normalizeTimeframe(timeframe)}|${pattern.trim().toLowerCase().replace(/\s+/g, '_')}`;
   }
 
   private normalizeLabel(value?: string): string {
