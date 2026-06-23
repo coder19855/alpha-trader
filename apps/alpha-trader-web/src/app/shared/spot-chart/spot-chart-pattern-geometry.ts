@@ -27,6 +27,14 @@ export interface PatternInsight {
   points?: PatternPivot[];
 }
 
+function normalizeLabel(value?: string): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function normalizeTimeframe(value?: string): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
 export interface PatternDrawOp {
   id: string;
   kind: 'polyline' | 'polygon' | 'hline' | 'marker' | 'text' | 'dot';
@@ -44,8 +52,17 @@ function normalizePatternName(pattern: string): string {
 }
 
 export function isValidChartPattern(insight: PatternInsight): boolean {
-  if (insight.type === 'candlestick' || insight.label === 'Candlestick') return false;
-  if (insight.type && insight.type !== 'chart' && insight.label !== 'Chart Pattern') {
+  if (
+    insight.type === 'candlestick' ||
+    normalizeLabel(insight.label) === 'candlestick'
+  ) {
+    return false;
+  }
+  if (
+    insight.type &&
+    insight.type !== 'chart' &&
+    normalizeLabel(insight.label) !== 'chart pattern'
+  ) {
     return false;
   }
   const name = normalizePatternName(insight.pattern);
@@ -60,9 +77,10 @@ export function selectChartPatternsToPlot(
   activeTf: ChartTf,
   max = 2,
 ): PatternInsight[] {
+  const active = normalizeTimeframe(activeTf);
   return insights
     .filter(isValidChartPattern)
-    .filter((row) => row.timeframe === activeTf)
+    .filter((row) => normalizeTimeframe(row.timeframe) === active)
     .sort((a, b) => patternRecencyRank(b) - patternRecencyRank(a))
     .slice(0, max);
 }
@@ -78,11 +96,13 @@ export function candlestickInsightForTf(
   insights: PatternInsight[],
   activeTf: ChartTf,
 ): PatternInsight | null {
+  const active = normalizeTimeframe(activeTf);
   return (
     insights.find(
       (row) =>
-        (row.type === 'candlestick' || row.label === 'Candlestick') &&
-        row.timeframe === activeTf &&
+        (row.type === 'candlestick' ||
+          normalizeLabel(row.label) === 'candlestick') &&
+        normalizeTimeframe(row.timeframe) === active &&
         row.pattern &&
         !/^none$/i.test(row.pattern),
     ) ?? null

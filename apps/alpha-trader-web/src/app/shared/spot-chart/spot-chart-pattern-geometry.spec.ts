@@ -1,5 +1,6 @@
 import {
   buildChartPatternOps,
+  candlestickInsightForTf,
   isValidChartPattern,
   selectChartPatternsToPlot,
 } from './spot-chart-pattern-geometry';
@@ -49,6 +50,31 @@ describe('spot-chart-pattern-geometry', () => {
     expect(selected[0].pattern).toBe('double top');
     expect(selectChartPatternsToPlot(insights, '5m', 2)).toHaveLength(1);
     expect(isValidChartPattern(insights[2])).toBe(false);
+  });
+
+  it('matches chart and candlestick labels case-insensitively', () => {
+    const insights = [
+      {
+        timeframe: ' 15M ',
+        pattern: 'double bottom',
+        tone: 'bull',
+        label: ' chart pattern ',
+        type: 'chart' as const,
+        status: 'confirmed',
+      },
+      {
+        timeframe: '15m',
+        pattern: 'hammer',
+        tone: 'bull',
+        label: ' candlestick ',
+        type: 'candlestick' as const,
+      },
+    ];
+
+    expect(selectChartPatternsToPlot(insights, '15m', 2)).toHaveLength(1);
+    expect(isValidChartPattern(insights[0])).toBe(true);
+    expect(isValidChartPattern(insights[1])).toBe(false);
+    expect(candlestickInsightForTf(insights, '15m')?.pattern).toBe('hammer');
   });
 
   it('builds geometry ops for a chart pattern', () => {

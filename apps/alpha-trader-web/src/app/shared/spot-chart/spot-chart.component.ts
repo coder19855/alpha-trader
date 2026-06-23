@@ -91,6 +91,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() overlays: ChartOverlayLine[] = [];
   @Input() chartPatternNeckline?: number;
   @Input() patternInsights: PatternInsight[] = [];
+  @Input() highlightPattern: { timeframe: string; pattern: string } | null = null;
   @Input() timeframe: '5m' | '15m' | '1h' = '15m';
   @Input() chartStyle: SpotChartStyle = 'candlestick';
   @Input() layers: Record<string, boolean> = {};
@@ -160,6 +161,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       changes['overlays'] ||
       changes['chartPatternNeckline'] ||
       changes['patternInsights'] ||
+      changes['highlightPattern'] ||
       changes['layers'] ||
       changes['chartStyle']
     ) {
@@ -827,7 +829,20 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
             ? this.chartPatternNeckline
             : undefined;
         const built = buildChartPatternOps(insight, candles, fallbackNeckline);
-        built.forEach((op) => ops.push({ ...op, id: `${index}-${op.id}` }));
+        const highlighted = this.isHighlightedPattern(insight);
+        built.forEach((op) =>
+          ops.push({
+            ...op,
+            id: `${index}-${op.id}`,
+            strokeWidth:
+              highlighted && op.kind !== 'dot'
+                ? Math.max(op.strokeWidth ?? 2, 3)
+                : op.strokeWidth,
+          }),
+        );
+        if (highlighted) {
+          this.focusHighlightedPattern(insight, candles);
+        }
       });
     }
 
@@ -978,6 +993,53 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       return null;
     }
     return { x, y };
+  }
+
+  private isHighlightedPattern(insight: PatternInsight): boolean {
+    if (!this.highlightPattern) return false;
+    return (
+      this.normalizeTimeframe(insight.timeframe) ===
+        this.normalizeTimeframe(this.highlightPattern.timeframe) &&
+      this.normalizePatternName(insight.pattern) ===
+        this.normalizePatternName(this.highlightPattern.pattern)
+    );
+  }
+
+  private focusHighlightedPattern(insight: PatternInsight, candles: Candle[]): void {
+    if (!this.chart) return;
+    const points = insight.points?.filter(
+      (point) => Number.isFinite(point.t) && Number.isFinite(point.price),
+    );
+    if (!points?.length) return;
+
+    const times = points
+      .map((point) => point.t as number)
+      .sort((a, b) => a - b);
+    const startMs = times[0];
+    const endMs = times[times.length - 1];
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs === endMs) {
+      return;
+    }
+
+    const pad = Math.max(5 * 60_000, Math.round((endMs - startMs) * 0.35));
+    try {
+      this.chart.timeScale().setVisibleRange({
+        from: Math.floor((startMs - pad) / 1000) as Time,
+        to: Math.floor((endMs + pad) / 1000) as Time,
+      });
+      this.hasFocusedSession = true;
+      this.followLatestViewport = false;
+    } catch {
+      this.focusViewport(candles);
+    }
+  }
+
+  private normalizePatternName(pattern?: string): string {
+    return (pattern ?? '').trim().toLowerCase();
+  }
+
+  private normalizeTimeframe(value?: string): string {
+    return (value ?? '').trim().toLowerCase();
   }
 
   private computeEmaSeries(candles: Candle[], period: number): LineData[] {

@@ -36,6 +36,11 @@ interface ChartLayerGroupDef {
   detail: string;
 }
 
+interface HoveredPattern {
+  timeframe: string;
+  pattern: string;
+}
+
 const CHART_LAYER_GROUPS: ChartLayerGroupDef[] = [
   {
     id: 'indicators',
@@ -85,6 +90,8 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = CHART_LAYER_GROUPS.map((group) => ({
   color: group.color,
   swatch: group.swatch,
 }));
+
+const DEFAULT_ON_LAYER_IDS = new Set(['supportTrend', 'resistanceTrend', 'chartPattern']);
 
 @Component({
   selector: 'app-deck-charts',
@@ -189,6 +196,7 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = CHART_LAYER_GROUPS.map((group) => ({
                 [chartPatternNeckline]="chartPatternNeckline"
                 [patternInsights]="patternInsights ?? []"
                 [layers]="layerState()"
+                [highlightPattern]="highlightedPattern()"
                 [timeframe]="activeTf()"
                 [chartStyle]="chartStyle()"
               />
@@ -206,23 +214,31 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = CHART_LAYER_GROUPS.map((group) => ({
         </div>
         @if (patternInsights?.length) {
           <div class="pattern-insights-list">
-          @for (insight of patternInsights!; track insight.timeframe + insight.pattern) {
-            <div class="pattern-insight-card">
-              <div class="pattern-insight-left">
-                <span class="pattern-insight-tf">{{ insight.timeframe }}</span>
-                <span class="pattern-insight-name">{{ insight.pattern }}</span>
-                <span class="pattern-insight-type">{{ insight.biasLabel || insight.label }}</span>
+            @for (insight of patternInsights!; track insight.timeframe + insight.pattern) {
+              <div
+                class="pattern-insight-card"
+                [class.hovered]="isPatternHovered(insight.timeframe, insight.pattern)"
+                (mouseenter)="onPatternHover(insight.timeframe, insight.pattern)"
+                (mouseleave)="onPatternHoverEnd()"
+              >
+                <div class="pattern-insight-left">
+                  <span class="pattern-insight-tf">{{ insight.timeframe }}</span>
+                  <span class="pattern-insight-name">{{ insight.pattern }}</span>
+                  <span class="pattern-insight-type">{{ insight.biasLabel || insight.label }}</span>
+                  @if (patternRangeLabel(insight); as rangeLabel) {
+                    <span class="pattern-insight-range">{{ rangeLabel }}</span>
+                  }
+                </div>
+                <div class="pattern-insight-right">
+                  @if (insight.status) {
+                    <span class="pattern-insight-status" [class]="insight.status">
+                      {{ insight.status }}
+                    </span>
+                  }
+                  <div class="pattern-insight-tone" [class]="insight.tone"></div>
+                </div>
               </div>
-              <div class="pattern-insight-right">
-                @if (insight.status) {
-                  <span class="pattern-insight-status" [class]="insight.status">
-                    {{ insight.status }}
-                  </span>
-                }
-                <div class="pattern-insight-tone" [class]="insight.tone"></div>
-              </div>
-            </div>
-          }
+            }
           </div>
         }
       </div>
@@ -247,6 +263,41 @@ const CHART_LAYER_DEFS: ChartLayerDef[] = CHART_LAYER_GROUPS.map((group) => ({
       }
       .pattern-insights-sub {
         font-size: 0.72rem;
+      }
+      .pattern-insights-list {
+        display: grid;
+        gap: 8px;
+      }
+      .pattern-insight-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.02);
+        transition:
+          border-color 120ms ease,
+          background 120ms ease,
+          transform 120ms ease;
+        cursor: pointer;
+      }
+      .pattern-insight-card.hovered {
+        border-color: rgba(167, 139, 250, 0.65);
+        background: rgba(167, 139, 250, 0.07);
+        transform: translateY(-1px);
+      }
+      .pattern-insight-left {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .pattern-insight-range {
+        margin-top: 2px;
+        font-size: 0.6rem;
+        color: var(--muted);
       }
       .chart-tf-panel {
         position: relative;
@@ -334,10 +385,11 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
   readonly layerState = signal<Record<string, boolean>>(
     Object.fromEntries(
       CHART_LAYER_GROUPS.flatMap((group) =>
-        group.childIds.map((id) => [id, false] as const),
+        group.childIds.map((id) => [id, DEFAULT_ON_LAYER_IDS.has(id)] as const),
       ),
     ),
   );
+  readonly hoveredPatternKey = signal<string | null>(null);
 
   @Input() spotCandles5m: Candle[] = [];
   @Input() spotCandles15m: Candle[] = [];
@@ -428,7 +480,12 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
   }
 
   patternContext(): string | null {
-    const active = this.patternInsights?.find((p) => p.timeframe === this.activeTf());
+    const active = this.patternInsights?.find(
+      (p) =>
+        this.normalizeTimeframe(p.timeframe) === this.activeTf() &&
+        this.normalizeLabel(p.label) === 'chart pattern' &&
+        !/^none$/i.test(p.pattern ?? ''),
+    );
     return active ? `${active.pattern} · ${active.label}` : null;
   }
 
@@ -443,7 +500,8 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
         Boolean(
           this.patternInsights?.some(
             (row) =>
-              (row.type === 'chart' || row.label === 'Chart Pattern') &&
+              (row.type === 'chart' || this.normalizeLabel(row.label) === 'chart pattern') &&
+              this.normalizeTimeframe(row.timeframe) === this.activeTf() &&
               row.pattern &&
               !/^none$/i.test(row.pattern),
           ),
@@ -454,8 +512,8 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
       return Boolean(
         this.patternInsights?.some(
           (row) =>
-            (row.type === 'candlestick' || row.label === 'Candlestick') &&
-            row.timeframe === this.activeTf() &&
+            (row.type === 'candlestick' || this.normalizeLabel(row.label) === 'candlestick') &&
+            this.normalizeTimeframe(row.timeframe) === this.activeTf() &&
             row.pattern &&
             !/^none$/i.test(row.pattern),
         ),
@@ -519,5 +577,64 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
 
   private isChildAvailable(id: string): boolean {
     return this.isLayerAvailable(id);
+  }
+
+  highlightedPattern(): HoveredPattern | null {
+    const key = this.hoveredPatternKey();
+    if (!key) return null;
+    const [timeframe, ...patternParts] = key.split('|');
+    return {
+      timeframe,
+      pattern: patternParts.join('|'),
+    };
+  }
+
+  isPatternHovered(timeframe: string, pattern: string): boolean {
+    return this.hoveredPatternKey() === this.patternKey(timeframe, pattern);
+  }
+
+  onPatternHover(timeframe: string, pattern: string): void {
+    this.hoveredPatternKey.set(this.patternKey(timeframe, pattern));
+    const normalizedTf = this.normalizeTimeframe(timeframe) as ChartTf;
+    if (this.timeframes.includes(normalizedTf)) {
+      this.activeTf.set(normalizedTf);
+    }
+  }
+
+  onPatternHoverEnd(): void {
+    this.hoveredPatternKey.set(null);
+  }
+
+  patternRangeLabel(
+    insight: NonNullable<DeckLiveTick['patternInsights']>[number],
+  ): string | null {
+    const points = insight.points?.filter(
+      (point) => Number.isFinite(point.t) && Number.isFinite(point.price),
+    );
+    if (!points?.length) return null;
+    const times = points.map((point) => point.t as number).sort((a, b) => a - b);
+    const start = times[0];
+    const end = times[times.length - 1];
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start === end) return null;
+    const fmt = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const mins = Math.max(1, Math.round((end - start) / 60000));
+    const duration = mins >= 60 ? `${Math.round(mins / 60)}h` : `${mins}m`;
+    return `Formed ${fmt.format(new Date(start))}–${fmt.format(new Date(end))} (${duration})`;
+  }
+
+  private patternKey(timeframe: string, pattern: string): string {
+    return `${this.normalizeTimeframe(timeframe)}|${pattern.trim().toLowerCase()}`;
+  }
+
+  private normalizeLabel(value?: string): string {
+    return (value ?? '').trim().toLowerCase();
+  }
+
+  private normalizeTimeframe(value?: string): string {
+    return (value ?? '').trim().toLowerCase();
   }
 }
