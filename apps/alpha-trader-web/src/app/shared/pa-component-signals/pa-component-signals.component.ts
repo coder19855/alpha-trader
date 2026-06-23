@@ -4,11 +4,12 @@ import {
   DeckTfComponentSignals,
 } from '../../core/models/deck.models';
 
-interface SignalRow {
+interface SignalBar {
   key: keyof DeckTfComponentSignals;
   label: string;
-  value: string;
-  tone: 'positive' | 'negative' | 'neutral' | 'warn';
+  value: number;
+  readout: string;
+  mode: 'bipolar' | 'rsi' | 'adx' | 'unipolar';
 }
 
 @Component({
@@ -27,16 +28,41 @@ interface SignalRow {
                   <span class="pa-insight-tf-badge">primary</span>
                 }
               </div>
-              <div class="pa-component-signals-rows">
-                @for (row of rowsFor(tf); track row.key) {
-                  <div class="pa-component-signals-row">
-                    <span class="pa-component-signals-label">{{ row.label }}</span>
-                    <span
-                      class="pa-component-signals-value"
-                      [class]="'tone-' + row.tone"
-                    >
-                      {{ row.value }}
+              <div class="pa-component-signals-bars">
+                @for (bar of barsFor(tf); track bar.key) {
+                  <div class="pa-signal-bar-row">
+                    <span class="pa-signal-bar-label" [title]="bar.readout">
+                      {{ bar.label }}
                     </span>
+                    @if (bar.mode === 'bipolar') {
+                      <div class="bipolar-track pa-signal-bar-track">
+                        <div class="bipolar-mid"></div>
+                        <div
+                          class="bipolar-fill"
+                          [class.positive]="bar.value >= 0"
+                          [class.negative]="bar.value < 0"
+                          [style.width.%]="bipolarFill(bar.value)"
+                        ></div>
+                      </div>
+                    } @else if (bar.mode === 'rsi') {
+                      <div class="pa-signal-meter pa-signal-meter-rsi">
+                        <div
+                          class="pa-signal-meter-fill"
+                          [class.overbought]="bar.value >= 70"
+                          [class.oversold]="bar.value <= 30"
+                          [style.width.%]="bar.value"
+                        ></div>
+                        <div class="pa-signal-meter-mid" aria-hidden="true"></div>
+                      </div>
+                    } @else {
+                      <div class="pa-signal-meter">
+                        <div
+                          class="pa-signal-meter-fill"
+                          [style.width.%]="meterFill(bar.value, bar.mode)"
+                        ></div>
+                      </div>
+                    }
+                    <span class="pa-signal-bar-value">{{ bar.readout }}</span>
                   </div>
                 }
               </div>
@@ -56,34 +82,52 @@ export class PaComponentSignalsComponent {
     return (['5m', '15m', '1h'] as const).filter((tf) => this.componentSignals?.[tf]);
   }
 
-  rowsFor(tf: '5m' | '15m' | '1h'): SignalRow[] {
+  barsFor(tf: '5m' | '15m' | '1h'): SignalBar[] {
     const signals = this.componentSignals?.[tf];
     if (!signals) return [];
-    const defs: Array<{ key: keyof DeckTfComponentSignals; label: string }> = [
-      { key: 'structure', label: 'Structure' },
-      { key: 'breakout', label: 'Breakout' },
-      { key: 'retest', label: 'Retest' },
-      { key: 'bos', label: 'BOS' },
-      { key: 'choch', label: 'CHoCH' },
-      { key: 'liquiditySweep', label: 'Liq sweep' },
-      { key: 'volume', label: 'Volume' },
-      { key: 'fakeout', label: 'Fakeout' },
-      { key: 'trendBias', label: 'Trend bias' },
-      { key: 'recentMomentum', label: 'Momentum' },
-      { key: 'adx', label: 'ADX' },
-      { key: 'rsi', label: 'RSI' },
-      { key: 'macd', label: 'MACD' },
-      { key: 'emaTrend', label: 'EMA trend' },
-      { key: 'bollinger', label: 'Bollinger' },
+    const defs: Array<{
+      key: keyof DeckTfComponentSignals;
+      label: string;
+      mode: SignalBar['mode'];
+    }> = [
+      { key: 'structure', label: 'Structure', mode: 'bipolar' },
+      { key: 'breakout', label: 'Breakout', mode: 'bipolar' },
+      { key: 'retest', label: 'Retest', mode: 'bipolar' },
+      { key: 'bos', label: 'BOS', mode: 'bipolar' },
+      { key: 'choch', label: 'CHoCH', mode: 'bipolar' },
+      { key: 'liquiditySweep', label: 'Liq sweep', mode: 'bipolar' },
+      { key: 'volume', label: 'Volume', mode: 'bipolar' },
+      { key: 'fakeout', label: 'Fakeout', mode: 'bipolar' },
+      { key: 'trendBias', label: 'Trend bias', mode: 'bipolar' },
+      { key: 'recentMomentum', label: 'Momentum', mode: 'bipolar' },
+      { key: 'adx', label: 'ADX', mode: 'adx' },
+      { key: 'rsi', label: 'RSI', mode: 'rsi' },
+      { key: 'macd', label: 'MACD', mode: 'bipolar' },
+      { key: 'emaTrend', label: 'EMA trend', mode: 'bipolar' },
+      { key: 'bollinger', label: 'Bollinger', mode: 'bipolar' },
     ];
-    return defs.map((def) => ({
-      ...def,
-      value: this.formatValue(def.key, signals[def.key]),
-      tone: this.toneFor(def.key, signals[def.key]),
-    }));
+    return defs.map((def) => {
+      const value = signals[def.key];
+      return {
+        ...def,
+        value: Number.isFinite(value) ? value : 0,
+        readout: this.formatReadout(def.key, value),
+      };
+    });
   }
 
-  private formatValue(
+  bipolarFill(value: number): number {
+    const v = Number.isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0;
+    return Math.abs(v) * 50;
+  }
+
+  meterFill(value: number, mode: 'adx' | 'unipolar'): number {
+    if (!Number.isFinite(value)) return 0;
+    if (mode === 'adx') return Math.min(100, Math.max(0, value));
+    return Math.min(100, Math.max(0, Math.abs(value) * 100));
+  }
+
+  private formatReadout(
     key: keyof DeckTfComponentSignals,
     value: number,
   ): string {
@@ -94,29 +138,9 @@ export class PaComponentSignalsComponent {
     if (key === 'emaTrend' || key === 'bollinger') {
       if (value > 0.25) return 'bull';
       if (value < -0.25) return 'bear';
-      return 'neutral';
+      return 'flat';
     }
     const sign = value >= 0 ? '+' : '';
     return `${sign}${value.toFixed(2)}`;
-  }
-
-  private toneFor(
-    key: keyof DeckTfComponentSignals,
-    value: number,
-  ): SignalRow['tone'] {
-    if (!Number.isFinite(value)) return 'neutral';
-    if (key === 'rsi') {
-      if (value >= 70) return 'negative';
-      if (value <= 30) return 'positive';
-      return 'neutral';
-    }
-    if (key === 'adx') return value >= 20 ? 'positive' : value < 15 ? 'warn' : 'neutral';
-    if (key === 'emaTrend' || key === 'bollinger') {
-      if (value > 0.25) return 'positive';
-      if (value < -0.25) return 'negative';
-      return 'neutral';
-    }
-    if (Math.abs(value) < 0.08) return 'neutral';
-    return value > 0 ? 'positive' : 'negative';
   }
 }

@@ -9,52 +9,33 @@ import { DeckComponentGauge } from '../../core/models/deck.models';
       :host {
         display: flex;
         flex-direction: column;
-        gap: 16px;
-      }
-      .bipolar-row {
-        display: grid;
-        grid-template-columns: 104px 1fr 58px;
-        gap: 14px;
-        align-items: center;
-        font-size: 0.78rem;
+        gap: 8px;
       }
       .bipolar-row-rich {
         grid-template-columns: 1fr;
-        gap: 6px;
+        gap: 4px;
         align-items: stretch;
       }
       .bipolar-row-rich .bipolar-row-main {
         display: grid;
-        grid-template-columns: 104px 1fr 58px;
-        gap: 14px;
+        grid-template-columns: 78px 1fr 44px;
+        gap: 8px;
         align-items: center;
       }
       .bipolar-meta {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 6px;
         padding-left: 0;
-        font-size: 0.62rem;
-        color: var(--muted);
-        line-height: 1.35;
       }
       .bipolar-weight {
         padding: 1px 6px;
         border-radius: 999px;
         border: 1px solid var(--border);
         background: rgba(255, 255, 255, 0.03);
+        font-size: 0.58rem;
         font-weight: 600;
-      }
-      .bipolar-label {
-        font-size: 0.74rem;
-      }
-      .bipolar-track {
-        height: 12px;
-        border-radius: 6px;
-      }
-      .bipolar-value {
-        font-size: 0.76rem;
-        font-weight: 600;
+        color: var(--muted);
       }
     `,
   ],
@@ -63,9 +44,36 @@ import { DeckComponentGauge } from '../../core/models/deck.models';
       <div class="muted" style="font-size: 0.72rem">No data</div>
     } @else {
       @for (comp of components; track comp.id) {
-        <div class="bipolar-row" [class.bipolar-row-rich]="showRichMeta(comp)">
-          <div class="bipolar-row-main">
-            <span class="bipolar-label" [title]="comp.interpretation || comp.label">
+        @if (showRichMeta(comp)) {
+          <div class="bipolar-row bipolar-row-rich">
+            <div class="bipolar-row-main">
+              <span
+                class="bipolar-label"
+                [title]="comp.interpretation || comp.label"
+              >
+                {{ comp.label }}
+              </span>
+              <div class="bipolar-track">
+                <div class="bipolar-mid"></div>
+                <div
+                  class="bipolar-fill"
+                  [class.positive]="comp.value >= 0"
+                  [class.negative]="comp.value < 0"
+                  [style.width.%]="fillWidth(comp.value)"
+                ></div>
+              </div>
+              <span class="bipolar-value">{{ comp.readout || formatValue(comp.value) }}</span>
+            </div>
+            <div class="bipolar-meta">
+              <span class="bipolar-weight">Weight {{ weightPct(comp.weight!) }}%</span>
+            </div>
+          </div>
+        } @else {
+          <div class="bipolar-row">
+            <span
+              class="bipolar-label"
+              [title]="comp.interpretation || comp.label"
+            >
               {{ comp.label }}
             </span>
             <div class="bipolar-track">
@@ -81,17 +89,7 @@ import { DeckComponentGauge } from '../../core/models/deck.models';
             </div>
             <span class="bipolar-value">{{ comp.readout || formatValue(comp.value) }}</span>
           </div>
-          @if (showRichMeta(comp)) {
-            <div class="bipolar-meta">
-              @if (comp.weight != null && Number.isFinite(comp.weight)) {
-                <span class="bipolar-weight">Weight {{ weightPct(comp.weight!) }}%</span>
-              }
-              @if (comp.interpretation) {
-                <span>{{ comp.interpretation }}</span>
-              }
-            </div>
-          }
-        </div>
+        }
       }
     }
   `,
@@ -104,10 +102,7 @@ export class BipolarListComponent {
 
   showRichMeta(comp: DeckComponentGauge): boolean {
     if (this.variant !== 'priceAction') return false;
-    return (
-      (comp.weight != null && Number.isFinite(comp.weight)) ||
-      Boolean(comp.interpretation)
-    );
+    return comp.weight != null && Number.isFinite(comp.weight);
   }
 
   weightPct(weight: number): number {

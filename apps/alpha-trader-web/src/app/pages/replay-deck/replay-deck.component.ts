@@ -135,6 +135,26 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
             <app-market-regime [regime]="data.marketRegime" />
           </section>
 
+          <app-pa-gauge
+            [reading]="scrubbedPaReading(data)"
+            [paPercent]="
+              scrubbed()?.paPercent ?? data.gauges.priceAction.percent
+            "
+            [combinedPercent]="
+              scrubbed()?.paPercent ??
+              data.lanes?.combinedPercent ??
+              data.gauges.priceAction.percent
+            "
+            [hideCombinedLane]="true"
+            [weightedBaseConviction]="
+              data.paBaseConviction ?? data.weightedBaseConviction ?? scrubbed()?.conviction ?? data.entryThreshold
+            "
+            [entryConviction]="scrubbed()?.conviction ?? 0"
+            [convictionBonuses]="data.convictionBonuses ?? []"
+            [paConvictionBonuses]="data.paConvictionBonuses ?? []"
+            [paBaseConviction]="data.paBaseConviction"
+          />
+
           <app-pa-signal-insights
             [action]="scrubbed()?.action ?? data.gauges.priceAction.label"
             [structuralAction]="scrubbed()?.structuralAction"
@@ -157,26 +177,6 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
               scrubbedPaDrilldown(data)?.primaryTimeframe ??
               '15m'
             "
-          />
-
-          <app-pa-gauge
-            [reading]="scrubbedPaReading(data)"
-            [paPercent]="
-              scrubbed()?.paPercent ?? data.gauges.priceAction.percent
-            "
-            [combinedPercent]="
-              scrubbed()?.paPercent ??
-              data.lanes?.combinedPercent ??
-              data.gauges.priceAction.percent
-            "
-            [hideCombinedLane]="true"
-            [weightedBaseConviction]="
-              data.paBaseConviction ?? data.weightedBaseConviction ?? scrubbed()?.conviction ?? data.entryThreshold
-            "
-            [entryConviction]="scrubbed()?.conviction ?? 0"
-            [convictionBonuses]="data.convictionBonuses ?? []"
-            [paConvictionBonuses]="data.paConvictionBonuses ?? []"
-            [paBaseConviction]="data.paBaseConviction"
           />
         </section>
 

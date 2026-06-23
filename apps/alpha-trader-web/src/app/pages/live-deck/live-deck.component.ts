@@ -185,6 +185,22 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
             <app-market-regime [regime]="data.marketRegime" />
           </section>
 
+          <app-pa-gauge
+            [reading]="data.gauges.priceAction"
+            [paPercent]="
+              data.gauges.priceAction.percent || data.lanes.priceActionPercent
+            "
+            [combinedPercent]="data.lanes.combinedPercent"
+            [hideCombinedLane]="data.flowMode === 'pa-only'"
+            [weightedBaseConviction]="
+              data.weightedBaseConviction ?? data.lanes.combinedPercent
+            "
+            [entryConviction]="data.conviction"
+            [convictionBonuses]="data.convictionBonuses ?? []"
+            [paConvictionBonuses]="data.paConvictionBonuses ?? []"
+            [paBaseConviction]="data.paBaseConviction"
+          />
+
           <app-pa-signal-insights
             [action]="data.action"
             [structuralAction]="data.structuralAction"
@@ -205,22 +221,6 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
           <app-pa-component-signals
             [componentSignals]="data.componentSignals"
             [primaryTimeframe]="data.primaryTimeframe ?? data.paDrilldown?.primaryTimeframe ?? '15m'"
-          />
-
-          <app-pa-gauge
-            [reading]="data.gauges.priceAction"
-            [paPercent]="
-              data.gauges.priceAction.percent || data.lanes.priceActionPercent
-            "
-            [combinedPercent]="data.lanes.combinedPercent"
-            [hideCombinedLane]="data.flowMode === 'pa-only'"
-            [weightedBaseConviction]="
-              data.weightedBaseConviction ?? data.lanes.combinedPercent
-            "
-            [entryConviction]="data.conviction"
-            [convictionBonuses]="data.convictionBonuses ?? []"
-            [paConvictionBonuses]="data.paConvictionBonuses ?? []"
-            [paBaseConviction]="data.paBaseConviction"
           />
           } @else {
             <app-option-chain-signal-panel />

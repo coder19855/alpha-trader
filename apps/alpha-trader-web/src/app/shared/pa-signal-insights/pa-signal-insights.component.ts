@@ -1,4 +1,3 @@
-import { DecimalPipe } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import {
   DeckGaugeReading,
@@ -14,24 +13,66 @@ interface InsightChip {
   value: string;
   tone: 'positive' | 'negative' | 'neutral' | 'warn';
   detail?: string;
+  meter?: number;
 }
 
 @Component({
   selector: 'app-pa-signal-insights',
   standalone: true,
-  imports: [DecimalPipe],
   template: `
     <section class="pa-signal-insights" aria-label="Price action quick reads">
-      @if (chips().length) {
-        <div class="pa-insight-chips">
-          @for (chip of chips(); track chip.id) {
-            <div
-              class="pa-insight-chip"
-              [class]="'tone-' + chip.tone"
-              [attr.title]="chip.detail || null"
-            >
-              <span class="pa-insight-chip-label">{{ chip.label }}</span>
-              <span class="pa-insight-chip-value">{{ chip.value }}</span>
+      @if (chips().length || tfAligned != null) {
+        <div class="pa-insight-hero">
+          @if (tfAligned != null) {
+            <div class="pa-insight-align-ring" [attr.title]="'Timeframes sharing primary direction'">
+              <svg viewBox="0 0 56 56" aria-hidden="true">
+                <circle
+                  class="pa-align-ring-bg"
+                  cx="28"
+                  cy="28"
+                  r="22"
+                  fill="none"
+                  stroke-width="5"
+                />
+                <circle
+                  class="pa-align-ring-fill"
+                  [class]="'tone-' + alignTone()"
+                  cx="28"
+                  cy="28"
+                  r="22"
+                  fill="none"
+                  stroke-width="5"
+                  stroke-linecap="round"
+                  [attr.stroke-dasharray]="alignDash()"
+                  transform="rotate(-90 28 28)"
+                />
+              </svg>
+              <div class="pa-align-ring-label">
+                <span class="pa-align-ring-value">{{ tfAligned }}/{{ tfAlignedTotal ?? 3 }}</span>
+                <span class="pa-align-ring-caption">TF align</span>
+              </div>
+            </div>
+          }
+          @if (chips().length) {
+            <div class="pa-insight-chips">
+              @for (chip of chips(); track chip.id) {
+                <div
+                  class="pa-insight-chip"
+                  [class]="'tone-' + chip.tone"
+                  [attr.title]="chip.detail || null"
+                >
+                  <span class="pa-insight-chip-label">{{ chip.label }}</span>
+                  <span class="pa-insight-chip-value">{{ chip.value }}</span>
+                  @if (chip.meter != null) {
+                    <div class="pa-insight-chip-meter">
+                      <div
+                        class="pa-insight-chip-meter-fill"
+                        [style.width.%]="chip.meter"
+                      ></div>
+                    </div>
+                  }
+                </div>
+              }
             </div>
           }
         </div>
@@ -54,26 +95,28 @@ interface InsightChip {
       @if (contextItems().length) {
         <div class="pa-insight-card">
           <span class="pa-insight-card-title">Market context</span>
-          <div class="pa-insight-context-grid">
+          <div class="pa-insight-context-chips">
             @for (item of contextItems(); track item.label) {
-              <div class="pa-insight-context-row">
-                <span class="pa-insight-context-label">{{ item.label }}</span>
-                <span
-                  class="pa-insight-context-value"
-                  [class]="item.tone ? 'tone-' + item.tone : ''"
-                >
-                  {{ item.value }}
-                </span>
-              </div>
+              <span
+                class="pa-insight-context-chip"
+                [class]="item.tone ? 'tone-' + item.tone : ''"
+              >
+                <span class="pa-insight-context-chip-label">{{ item.label }}</span>
+                <span class="pa-insight-context-chip-value">{{ item.value }}</span>
+              </span>
             }
           </div>
         </div>
       }
 
-      @if (patternSummary()) {
+      @if (patternTags().length) {
         <div class="pa-insight-card">
           <span class="pa-insight-card-title">Active patterns</span>
-          <p class="pa-insight-patterns">{{ patternSummary() }}</p>
+          <div class="pa-insight-pattern-tags">
+            @for (tag of patternTags(); track tag) {
+              <span class="pa-insight-pattern-tag">{{ tag }}</span>
+            }
+          </div>
         </div>
       }
 
@@ -95,6 +138,15 @@ interface InsightChip {
                 >
                   {{ tf.score }}
                 </span>
+                <div class="bipolar-track pa-insight-tf-bar">
+                  <div class="bipolar-mid"></div>
+                  <div
+                    class="bipolar-fill"
+                    [class.positive]="tf.numericScore >= 0"
+                    [class.negative]="tf.numericScore < 0"
+                    [style.width.%]="tfBarWidth(tf.numericScore)"
+                  ></div>
+                </div>
                 @if (tf.candle) {
                   <span class="pa-insight-tf-meta">{{ tf.candle }}</span>
                 }
@@ -118,6 +170,17 @@ interface InsightChip {
             preserveAspectRatio="none"
             aria-hidden="true"
           >
+            <defs>
+              <linearGradient id="paSparkFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--pa, #a78bfa)" stop-opacity="0.35" />
+                <stop offset="100%" stop-color="var(--pa, #a78bfa)" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <polygon
+              class="pa-insight-spark-area"
+              [attr.points]="sparkAreaPoints()"
+              fill="url(#paSparkFill)"
+            />
             <polyline
               [attr.points]="sparkPoints()"
               fill="none"
@@ -130,16 +193,12 @@ interface InsightChip {
         </div>
       }
 
-      @if (ghostDelta() != null) {
-        <p class="pa-insight-ghost-note" role="status">
-          Momentum decay ghost:
-          <strong>{{ ghostDelta()! >= 0 ? '+' : '' }}{{ ghostDelta()! | number: '1.2-2' }}</strong>
-          on the bipolar needle — faded direction before gates.
-        </p>
-      }
-
-      @if (gateNote()) {
-        <p class="pa-insight-gate-note" role="status">{{ gateNote() }}</p>
+      @if (statusNotes().length) {
+        <div class="pa-insight-status-row">
+          @for (note of statusNotes(); track note.id) {
+            <span class="pa-insight-status-chip" [class]="note.tone">{{ note.text }}</span>
+          }
+        </div>
       }
     </section>
   `,
@@ -162,21 +221,28 @@ export class PaSignalInsightsComponent {
   @Input() reading?: DeckGaugeReading;
   @Input() marketRegime?: DeckMarketRegime | null;
 
+  alignTone(): InsightChip['tone'] {
+    const aligned = this.tfAligned ?? 0;
+    if (aligned >= 2) return 'positive';
+    if (aligned === 1) return 'warn';
+    return 'negative';
+  }
+
+  alignDash(): string {
+    const total = Math.max(1, this.tfAlignedTotal ?? 3);
+    const aligned = Math.max(0, Math.min(total, this.tfAligned ?? 0));
+    const circumference = 2 * Math.PI * 22;
+    const filled = (aligned / total) * circumference;
+    return `${filled.toFixed(1)} ${circumference.toFixed(1)}`;
+  }
+
+  tfBarWidth(value: number): number {
+    const v = Number.isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0;
+    return Math.abs(v) * 50;
+  }
+
   chips(): InsightChip[] {
     const chips: InsightChip[] = [];
-
-    if (this.tfAligned != null) {
-      const total = this.tfAlignedTotal ?? 3;
-      const tone =
-        this.tfAligned >= 2 ? 'positive' : this.tfAligned === 1 ? 'warn' : 'negative';
-      chips.push({
-        id: 'tf-align',
-        label: 'TF alignment',
-        value: `${this.tfAligned}/${total}`,
-        tone,
-        detail: 'Timeframes sharing primary direction',
-      });
-    }
 
     const structural = this.structuralAction || this.action;
     if (structural && structural !== 'NO-TRADE') {
@@ -221,14 +287,20 @@ export class PaSignalInsightsComponent {
         value: 'Met',
         tone: 'positive',
         detail: `${this.conviction}% ≥ ${this.entryThreshold}%`,
+        meter: 100,
       });
     } else {
+      const meter = Math.min(
+        100,
+        Math.round((this.conviction / Math.max(1, this.entryThreshold)) * 100),
+      );
       chips.push({
         id: 'entry',
         label: 'Entry gate',
         value: `${this.conviction}%`,
         tone: 'warn',
         detail: `Needs ${this.entryThreshold}%`,
+        meter,
       });
     }
 
@@ -275,20 +347,18 @@ export class PaSignalInsightsComponent {
       }));
   }
 
-  patternSummary(): string | null {
+  patternTags(): string[] {
     const insights = this.patternInsights?.filter(
       (row) => row.pattern && !/^none$/i.test(row.pattern),
     );
-    if (!insights?.length) return null;
-    return insights
-      .slice(0, 6)
-      .map((row) => `${row.timeframe} ${row.pattern}`)
-      .join(' · ');
+    if (!insights?.length) return [];
+    return insights.slice(0, 8).map((row) => `${row.timeframe} ${row.pattern}`);
   }
 
   tfSnapshots(): Array<{
     timeframe: string;
     score: string;
+    numericScore: number;
     scoreTone?: string;
     candle?: string;
     primary: boolean;
@@ -305,12 +375,30 @@ export class PaSignalInsightsComponent {
         return {
           timeframe: tf,
           score: score.value,
+          numericScore: this.parseScore(score.value),
           scoreTone: score.tone,
           candle: candle?.value,
           primary: tf === primary,
         };
       })
       .filter((row): row is NonNullable<typeof row> => row != null);
+  }
+
+  statusNotes(): Array<{ id: string; text: string; tone: string }> {
+    const notes: Array<{ id: string; text: string; tone: string }> = [];
+    const ghost = this.ghostDelta();
+    if (ghost != null) {
+      notes.push({
+        id: 'ghost',
+        text: `Momentum decay ${ghost >= 0 ? '+' : ''}${ghost.toFixed(2)}`,
+        tone: 'ghost',
+      });
+    }
+    const gate = this.gateNote();
+    if (gate) {
+      notes.push({ id: 'gate', text: gate, tone: 'gate' });
+    }
+    return notes;
   }
 
   sparkPoints(): string {
@@ -334,7 +422,26 @@ export class PaSignalInsightsComponent {
       .join(' ');
   }
 
-  ghostDelta(): number | null {
+  sparkAreaPoints(): string {
+    const line = this.sparkPoints();
+    if (!line) return '';
+    const firstX = line.split(' ')[0].split(',')[0];
+    const lastX = line.split(' ').at(-1)?.split(',')[0] ?? firstX;
+    const baseline = this.sparkHeight - 2;
+    return `${firstX},${baseline} ${line} ${lastX},${baseline}`;
+  }
+
+  private parseScore(value: string): number {
+    const match = value.match(/([+-]?\d+(?:\.\d+)?)/);
+    if (!match) return 0;
+    const num = Number.parseFloat(match[1]);
+    if (!Number.isFinite(num)) return 0;
+    if (/PE/i.test(value)) return -Math.abs(num);
+    if (/CE/i.test(value)) return Math.abs(num);
+    return num;
+  }
+
+  private ghostDelta(): number | null {
     const reading = this.reading;
     if (
       !reading ||
@@ -349,7 +456,7 @@ export class PaSignalInsightsComponent {
     return delta;
   }
 
-  gateNote(): string | null {
+  private gateNote(): string | null {
     if (this.chartVetoed && this.vetoReason) {
       return `Chart veto: ${this.vetoReason}`;
     }
@@ -360,11 +467,11 @@ export class PaSignalInsightsComponent {
       this.action !== this.structuralAction &&
       this.action === 'NO-TRADE'
     ) {
-      return `Structure suggests ${this.structuralAction}; chart action is ${this.action}.`;
+      return `Structure ${this.structuralAction} · action ${this.action}`;
     }
     const penalties = drilldownRow(this.paDrilldown, 'signal-gates', 'Penalties');
     if (penalties && this.action === 'NO-TRADE') {
-      return `Entry penalties active — ${penalties.value}`;
+      return `Penalties: ${penalties.value}`;
     }
     return null;
   }
