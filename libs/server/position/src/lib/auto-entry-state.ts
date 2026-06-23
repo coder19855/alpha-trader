@@ -1,5 +1,21 @@
 const runtimeByKey = new Map<string, AutoEntryRuntimeState>();
 
+export interface AutoEntryTraceEvent {
+  at: string;
+  stage:
+    | 'off'
+    | 'watching'
+    | 'signal'
+    | 'blocked'
+    | 'pending'
+    | 'executed'
+    | 'simulated'
+    | 'cooldown';
+  tone: 'neutral' | 'success' | 'warn' | 'error';
+  title: string;
+  detail?: string;
+}
+
 export interface AutoEntryRuntimeState {
   pendingKey: string | null;
   pendingAction: string | null;
@@ -8,6 +24,7 @@ export interface AutoEntryRuntimeState {
   lastExecutedAt: string | null;
   lastExecutionNote: string | null;
   lastEvaluatedAt: string | null;
+  recentEvents: AutoEntryTraceEvent[];
 }
 
 const EMPTY: AutoEntryRuntimeState = {
@@ -18,6 +35,7 @@ const EMPTY: AutoEntryRuntimeState = {
   lastExecutedAt: null,
   lastExecutionNote: null,
   lastEvaluatedAt: null,
+  recentEvents: [],
 };
 
 export function autoEntryStateKey(indexSymbol: string): string {
@@ -37,4 +55,28 @@ export function setAutoEntryRuntimeState(
 
 export function resetAutoEntryRuntimeState(key: string): void {
   runtimeByKey.delete(key);
+}
+
+export function recordAutoEntryTraceEvent(
+  key: string,
+  event: AutoEntryTraceEvent,
+): void {
+  const current = runtimeByKey.get(key) ?? EMPTY;
+  const nextEvents = [...(current.recentEvents ?? [])];
+  const last = nextEvents[nextEvents.length - 1];
+  if (
+    last &&
+    last.stage === event.stage &&
+    last.tone === event.tone &&
+    last.title === event.title &&
+    last.detail === event.detail
+  ) {
+    nextEvents[nextEvents.length - 1] = event;
+  } else {
+    nextEvents.push(event);
+  }
+  runtimeByKey.set(key, {
+    ...current,
+    recentEvents: nextEvents.slice(-8),
+  });
 }

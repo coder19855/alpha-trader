@@ -161,6 +161,9 @@ export interface AutoEntryGuardStatus {
   status: 'off' | 'watching' | 'pending' | 'executed' | 'blocked' | 'simulated';
   message: string;
   lastExecutedAt: string | null;
+  lastEvaluatedAt?: string | null;
+  pendingReason?: string | null;
+  recentEvents?: AutoEntryTraceEvent[];
 }
 
 export interface PositionManagementContext {
@@ -180,6 +183,7 @@ import {
   TradeSetup,
   TradingStyle,
 } from '@alpha-trader/server-shared';
+import type { AutoEntryTraceEvent } from './auto-entry-state.js';
 
 function signalSupportsPosition(
   positionDirection: 'CE-BUY' | 'PE-BUY',

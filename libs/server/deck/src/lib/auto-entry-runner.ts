@@ -20,6 +20,7 @@ import {
   autoEntryStateKey,
   getAutoEntryRuntimeState,
   placeAutoEntryBuy,
+  recordAutoEntryTraceEvent,
   setAutoEntryRuntimeState,
   simulateAutoEntryBuy,
 } from '@alpha-trader/server-position';
@@ -51,6 +52,16 @@ function signalIdentity(pref: AutoEntryPreferenceState, signal: {
     : `preset:${pref.signalProfile}:${signal.action}`;
 }
 
+function appendTrace(
+  runtime: ReturnType<typeof getAutoEntryRuntimeState>,
+  stateKey: string,
+  event: Parameters<typeof recordAutoEntryTraceEvent>[1],
+): void {
+  recordAutoEntryTraceEvent(stateKey, event);
+  runtime.recentEvents = getAutoEntryRuntimeState(stateKey).recentEvents;
+  setAutoEntryRuntimeState(stateKey, runtime);
+}
+
 function buildGuardStatus(params: {
   pref: AutoEntryPreferenceState;
   session: Awaited<ReturnType<typeof loadAutoEntrySession>>;
@@ -78,6 +89,9 @@ function buildGuardStatus(params: {
     status,
     message,
     lastExecutedAt: runtime.lastExecutedAt,
+    lastEvaluatedAt: runtime.lastEvaluatedAt,
+    pendingReason: runtime.pendingReason,
+    recentEvents: runtime.recentEvents,
   };
 }
 
@@ -149,6 +163,13 @@ export async function attachAutoEntryGuard(params: {
   }
 
   if (!pref.enabled) {
+    appendTrace(runtime, stateKey, {
+      at: runtime.lastEvaluatedAt,
+      stage: 'off',
+      tone: 'neutral',
+      title: 'Auto-entry off',
+      detail: 'Enable auto-entry in Positions to start watching for entries.',
+    });
     const guard = buildGuardStatus({
       pref,
       session,
@@ -166,6 +187,13 @@ export async function attachAutoEntryGuard(params: {
     runtime.pendingAction = null;
     runtime.pendingReason = null;
     runtime.confirmationCount = 0;
+    appendTrace(runtime, stateKey, {
+      at: runtime.lastEvaluatedAt,
+      stage: 'blocked',
+      tone: 'warn',
+      title: 'Blocked by open position',
+      detail: 'Close the current index option leg before a new entry can be made.',
+    });
     const guard = buildGuardStatus({
       pref,
       session: await loadAutoEntrySession(fastify),
@@ -180,6 +208,13 @@ export async function attachAutoEntryGuard(params: {
 
   const gate = canAutoEntryToday(pref, session);
   if (!gate.allowed) {
+    appendTrace(runtime, stateKey, {
+      at: runtime.lastEvaluatedAt,
+      stage: 'blocked',
+      tone: 'warn',
+      title: 'Session blocked',
+      detail: gate.reason ?? 'Session blocked for new entries.',
+    });
     const guard = buildGuardStatus({
       pref,
       session,
@@ -204,6 +239,19 @@ export async function attachAutoEntryGuard(params: {
     runtime.pendingAction = null;
     runtime.pendingReason = null;
     runtime.confirmationCount = 0;
+    appendTrace(runtime, stateKey, {
+      at: runtime.lastEvaluatedAt,
+      stage: 'watching',
+      tone: 'neutral',
+      title:
+        pref.signalMode === 'engine'
+          ? 'Watching PA engine'
+          : `Watching preset ${pref.signalProfile}`,
+      detail:
+        pref.signalMode === 'engine'
+          ? `Waiting for engine conviction to reach ${pref.entryThreshold}% or above.`
+          : `Waiting for preset gates on ${pref.signalProfile}.`,
+    });
     const hint =
       pref.signalMode === 'engine'
         ? `Watching engine — need ${pref.entryThreshold}%+ CE/PE signal.`
@@ -231,12 +279,30 @@ export async function attachAutoEntryGuard(params: {
   }
 
   const ready = runtime.confirmationCount >= CONFIRMATIONS_REQUIRED;
+  appendTrace(runtime, stateKey, {
+    at: runtime.lastEvaluatedAt,
+    stage: 'signal',
+    tone: ready ? 'success' : 'neutral',
+    title:
+      runtime.confirmationCount >= CONFIRMATIONS_REQUIRED
+        ? 'Signal confirmed'
+        : 'Signal matched',
+    detail: `${signal.action} · ${signal.reason} · confirmation ${runtime.confirmationCount}/${CONFIRMATIONS_REQUIRED}`,
+  });
+
   const cooldownActive =
     runtime.lastExecutedAt != null &&
     Date.now() - new Date(runtime.lastExecutedAt).getTime() < ENTRY_COOLDOWN_MS;
 
   if (ready && execute && !cooldownActive) {
     if (!pref.dryRun && !pref.armedLive) {
+      appendTrace(runtime, stateKey, {
+        at: runtime.lastEvaluatedAt,
+        stage: 'pending',
+        tone: 'warn',
+        title: 'Waiting for live arm',
+        detail: 'Signal confirmed, but live orders are not armed yet.',
+      });
       const guard = buildGuardStatus({
         pref,
         session,
@@ -274,6 +340,22 @@ export async function attachAutoEntryGuard(params: {
     runtime.pendingReason = null;
     runtime.confirmationCount = 0;
 
+    appendTrace(runtime, stateKey, {
+      at: runtime.lastEvaluatedAt,
+      stage: result.succeeded
+        ? pref.dryRun
+          ? 'simulated'
+          : 'executed'
+        : 'blocked',
+      tone: result.succeeded ? 'success' : 'error',
+      title: result.succeeded
+        ? pref.dryRun
+          ? 'Paper entry simulated'
+          : 'Broker order placed'
+        : 'Order failed',
+      detail: runtime.lastExecutionNote ?? signal.reason,
+    });
+
     if (result.succeeded) {
       if (pref.dryRun) {
         await recordAutoEntryDryRun(fastify);
@@ -297,6 +379,16 @@ export async function attachAutoEntryGuard(params: {
     managementContext.autoEntry = guard;
     setAutoEntryRuntimeState(stateKey, runtime);
     return guard;
+  }
+
+  if (cooldownActive) {
+    appendTrace(runtime, stateKey, {
+      at: runtime.lastEvaluatedAt,
+      stage: 'cooldown',
+      tone: 'warn',
+      title: 'Cooldown active',
+      detail: 'A confirmed entry just executed, so the next order is temporarily blocked.',
+    });
   }
 
   const guard = buildGuardStatus({

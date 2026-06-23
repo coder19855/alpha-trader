@@ -1,13 +1,14 @@
+import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { AutoEntrySnapshot } from '../../core/models/deck.models';
+import { AutoEntrySnapshot, AutoEntryTraceEvent } from '../../core/models/deck.models';
 import { DeckApiService } from '../../core/services/deck-api.service';
 import { NotificationService } from '../../core/services/notification.service';
 
 @Component({
   selector: 'app-auto-entry-panel',
   standalone: true,
-  imports: [FormsModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <section class="auto-exit-panel auto-entry-panel">
       <div class="panel-head">
@@ -38,6 +39,11 @@ import { NotificationService } from '../../core/services/notification.service';
             </p>
           }
         </div>
+      }
+      @if (lastEvaluatedAt()) {
+        <p class="auto-exit-live-status trace-updated">
+          Last evaluated: {{ lastEvaluatedAt() | date: 'shortTime' }}
+        </p>
       }
       @if (snapshot(); as s) {
         <div class="auto-exit-controls">
@@ -173,6 +179,38 @@ import { NotificationService } from '../../core/services/notification.service';
           </p>
         }
       }
+      @if (recentEvents(); as events) {
+        <div class="trace-card">
+          <div class="trace-head">
+            <span>Auto-entry trace</span>
+            <span class="trace-hint">Last {{ events.length }} steps</span>
+          </div>
+          @for (event of events; track event.at + event.title) {
+            <div
+              class="trace-row"
+              [class.success]="event.tone === 'success'"
+              [class.warn]="event.tone === 'warn'"
+              [class.error]="event.tone === 'error'"
+            >
+              <div class="trace-mark"></div>
+              <div class="trace-body">
+                <div class="trace-title-row">
+                  <span class="trace-title">{{ event.title }}</span>
+                  <span class="trace-time">{{ event.at | date: 'shortTime' }}</span>
+                </div>
+                @if (event.detail) {
+                  <p class="trace-detail">{{ event.detail }}</p>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+      @if (pendingReason()) {
+        <p class="auto-exit-live-status muted">
+          Signal reason: {{ pendingReason() }}
+        </p>
+      }
       <p class="auto-exit-live-status muted">
         {{ liveStatus() }}
       </p>
@@ -226,6 +264,80 @@ import { NotificationService } from '../../core/services/notification.service';
       .pending-action strong {
         color: #e8ecf1;
       }
+      .trace-updated {
+        margin-top: 0;
+      }
+      .trace-card {
+        margin: 12px 0 6px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.72);
+      }
+      .trace-head,
+      .trace-title-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+      }
+      .trace-head {
+        margin-bottom: 8px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #cbd5e1;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .trace-hint,
+      .trace-time {
+        color: var(--muted);
+        font-size: 0.68rem;
+        font-weight: 600;
+      }
+      .trace-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 8px 0;
+        border-top: 1px solid rgba(148, 163, 184, 0.08);
+      }
+      .trace-row:first-of-type {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .trace-mark {
+        width: 10px;
+        height: 10px;
+        margin-top: 4px;
+        border-radius: 999px;
+        background: #64748b;
+        flex: 0 0 auto;
+      }
+      .trace-row.success .trace-mark {
+        background: #22c55e;
+      }
+      .trace-row.warn .trace-mark {
+        background: #f59e0b;
+      }
+      .trace-row.error .trace-mark {
+        background: #ef4444;
+      }
+      .trace-body {
+        min-width: 0;
+        flex: 1;
+      }
+      .trace-title {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+      .trace-detail {
+        margin: 4px 0 0;
+        font-size: 0.72rem;
+        line-height: 1.45;
+        color: var(--muted);
+      }
     `,
   ],
 })
@@ -238,6 +350,9 @@ export class AutoEntryPanelComponent implements OnInit {
   readonly confirmationCount = input<number | null | undefined>(null);
   readonly confirmationsRequired = input<number | null | undefined>(null);
   readonly pendingAction = input<string | null | undefined>(null);
+  readonly pendingReason = input<string | null | undefined>(null);
+  readonly lastEvaluatedAt = input<string | null | undefined>(null);
+  readonly recentEvents = input<AutoEntryTraceEvent[] | null | undefined>([]);
   readonly saved = output<AutoEntrySnapshot>();
   readonly snapshot = signal<AutoEntrySnapshot | null>(null);
 

@@ -230,7 +230,10 @@ export interface DeckLiveTick {
       confirmationCount?: number;
       confirmationsRequired?: number;
       pendingAction?: string | null;
+      pendingReason?: string | null;
       lastExecutedAt?: string | null;
+      lastEvaluatedAt?: string | null;
+      recentEvents?: AutoEntryTraceEvent[];
     };
   };
   patternInsights?: Array<{
@@ -362,6 +365,22 @@ export interface AutoEntrySnapshot {
     greenDayMinR: number;
   };
   warning?: string;
+}
+
+export interface AutoEntryTraceEvent {
+  at: string;
+  stage:
+    | 'off'
+    | 'watching'
+    | 'signal'
+    | 'blocked'
+    | 'pending'
+    | 'executed'
+    | 'simulated'
+    | 'cooldown';
+  tone: 'neutral' | 'success' | 'warn' | 'error';
+  title: string;
+  detail?: string;
 }
 
 export interface MarketNewsItem {

@@ -68,7 +68,9 @@ export {
   getAutoEntryRuntimeState,
   setAutoEntryRuntimeState,
   resetAutoEntryRuntimeState,
+  recordAutoEntryTraceEvent,
   type AutoEntryRuntimeState,
+  type AutoEntryTraceEvent,
 } from './lib/auto-entry-state.js';
 
 export type { AutoEntryGuardStatus } from './lib/position-monitor.js';
