@@ -108,6 +108,16 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
           class="tab-panel"
           [class.active]="ctx.activeTab() === 'signal'"
         >
+          <section class="signal-blend-banner" aria-label="Blended signal score">
+            <span class="signal-blend-label">Blended score</span>
+            <span class="signal-blend-value">
+              {{ data.weightedBaseConviction ?? data.lanes.combinedPercent }}%
+            </span>
+            <span class="signal-blend-breakdown">
+              PA {{ data.lanes.priceActionPercent }}% · Option
+              {{ data.lanes.optionPercent }}%
+            </span>
+          </section>
           <nav class="signal-subtabs" aria-label="Signal views">
             <button
               type="button"
@@ -652,6 +662,34 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
         align-items: center;
         gap: 6px;
         margin-bottom: 12px;
+      }
+      .signal-blend-banner {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 10px;
+        padding: 10px 12px;
+        border: 1px solid rgba(167, 139, 250, 0.28);
+        border-radius: 12px;
+        background: linear-gradient(90deg, rgba(167, 139, 250, 0.12), transparent);
+        color: var(--text);
+        flex-wrap: wrap;
+      }
+      .signal-blend-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .signal-blend-value {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #c4b5fd;
+      }
+      .signal-blend-breakdown {
+        font-size: 0.72rem;
+        color: var(--muted);
       }
       .signal-subtab-spacer {
         flex: 1;
