@@ -1,21 +1,28 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { OptionChainPollService } from '../../core/services/option-chain-poll.service';
+import { toOptionComponentGauges } from '../../core/models/option-chain.models';
 import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timestamp';
+import { BipolarListComponent } from '../bipolar-list/bipolar-list.component';
 import { OptionChainReadoutHelpComponent } from '../option-chain-readout-help/option-chain-readout-help.component';
 import { OptionChainWidgetsComponent } from '../option-chain-widgets/option-chain-widgets.component';
 import { OptionGaugeComponent } from '../option-gauge/option-gauge.component';
 import { OptionGuardDashboardComponent } from '../option-guard-dashboard/option-guard-dashboard.component';
+import { OptionSignalBriefComponent } from '../option-signal-brief/option-signal-brief.component';
+
+type OcSignalSubTab = 'overview' | 'flow' | 'guards' | 'brief';
 
 @Component({
   selector: 'app-option-chain-signal-panel',
   standalone: true,
   imports: [
     CommonModule,
+    BipolarListComponent,
     OptionChainReadoutHelpComponent,
     OptionChainWidgetsComponent,
     OptionGaugeComponent,
     OptionGuardDashboardComponent,
+    OptionSignalBriefComponent,
   ],
   template: `
     <app-option-chain-readout-help />
@@ -57,16 +64,77 @@ import { OptionGuardDashboardComponent } from '../option-guard-dashboard/option-
         </p>
       </section>
 
-      <app-option-gauge [reading]="gaugeReading()" [conviction]="oc.conviction" />
-      <app-option-chain-widgets [data]="oc" />
-      <app-option-guard-dashboard [guardData]="oc.guard" />
+      <nav class="signal-subtabs oc-signal-subtabs" aria-label="Option chain views">
+        <button
+          type="button"
+          class="signal-subtab"
+          [class.active]="ocSubTab() === 'overview'"
+          (click)="ocSubTab.set('overview')"
+        >
+          Overview
+        </button>
+        <button
+          type="button"
+          class="signal-subtab"
+          [class.active]="ocSubTab() === 'flow'"
+          (click)="ocSubTab.set('flow')"
+        >
+          Flow
+        </button>
+        <button
+          type="button"
+          class="signal-subtab"
+          [class.active]="ocSubTab() === 'guards'"
+          (click)="ocSubTab.set('guards')"
+        >
+          Guards
+        </button>
+        <button
+          type="button"
+          class="signal-subtab"
+          [class.active]="ocSubTab() === 'brief'"
+          (click)="ocSubTab.set('brief')"
+        >
+          Brief
+        </button>
+      </nav>
 
-      <div class="oc-meta">
-        <span>Score {{ oc.score | number: '1.0-0' }}</span>
-        @if (oc.confidence?.percent != null) {
-          <span>Confidence {{ oc.confidence!.percent }}%</span>
-        }
-      </div>
+      @if (ocSubTab() === 'overview') {
+        <div class="oc-signal-subpanel">
+          <app-option-gauge [reading]="gaugeReading()" [conviction]="oc.conviction" />
+          <app-option-chain-widgets [data]="oc" />
+          <div class="oc-meta">
+            <span>Score {{ oc.score | number: '1.0-0' }}</span>
+            @if (oc.confidence?.percent != null) {
+              <span>Confidence {{ oc.confidence!.percent }}%</span>
+            }
+          </div>
+        </div>
+      } @else if (ocSubTab() === 'flow') {
+        <div class="oc-signal-subpanel">
+          <p class="oc-panel-hint">
+            Bipolar scale: <strong>−1</strong> bearish · <strong>0</strong> flat ·
+            <strong>+1</strong> bullish.
+          </p>
+          <div class="component-list">
+            <app-bipolar-list
+              [components]="flowComponents()"
+              variant="option"
+            />
+          </div>
+        </div>
+      } @else if (ocSubTab() === 'guards') {
+        <div class="oc-signal-subpanel">
+          <app-option-guard-dashboard [guardData]="oc.guard" />
+        </div>
+      } @else {
+        <div class="oc-signal-subpanel">
+          <app-option-signal-brief
+            [sessionKey]="oc.symbol"
+            [data]="oc"
+          />
+        </div>
+      }
     } @else if (!poll.loading() && !poll.error()) {
       <p class="oc-empty">No option chain data yet. Use refresh to fetch.</p>
     }
@@ -89,6 +157,38 @@ import { OptionGuardDashboardComponent } from '../option-guard-dashboard/option-
       :host ::ng-deep .gauge-zone.pe {
         background: linear-gradient(90deg, var(--oc-put-soft), transparent);
         color: var(--oc-put);
+      }
+      .signal-subtabs {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .signal-subtab {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .oc-signal-subtabs .signal-subtab.active {
+        color: var(--option);
+        border-color: rgba(34, 211, 238, 0.45);
+        background: rgba(34, 211, 238, 0.12);
+      }
+      .oc-signal-subpanel {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .oc-panel-hint {
+        margin: 0 0 10px;
+        font-size: 0.66rem;
+        color: var(--muted);
+        line-height: 1.4;
       }
       .oc-error {
         color: #f87171;
@@ -141,6 +241,7 @@ import { OptionGuardDashboardComponent } from '../option-guard-dashboard/option-
 export class OptionChainSignalPanelComponent {
   readonly poll = inject(OptionChainPollService);
   protected readonly formatFetchedAt = formatSignalCalculatedAt;
+  readonly ocSubTab = signal<OcSignalSubTab>('overview');
 
   readonly gaugeReading = computed(() => {
     const oc = this.poll.data();
@@ -155,6 +256,11 @@ export class OptionChainSignalPanelComponent {
       percent: oc.conviction,
       label,
     };
+  });
+
+  readonly flowComponents = computed(() => {
+    const rows = this.poll.data()?.componentRows ?? [];
+    return toOptionComponentGauges(rows);
   });
 
   signalLabel(signal: string): string {

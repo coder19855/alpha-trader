@@ -37,7 +37,7 @@ interface InsightChip {
                   [attr.cy]="alignRingCenter"
                   [attr.r]="alignRingRadius"
                   fill="none"
-                  stroke-width="6"
+                  stroke-width="7"
                 />
                 <circle
                   class="pa-align-ring-fill"
@@ -46,7 +46,7 @@ interface InsightChip {
                   [attr.cy]="alignRingCenter"
                   [attr.r]="alignRingRadius"
                   fill="none"
-                  stroke-width="6"
+                  stroke-width="7"
                   stroke-linecap="round"
                   [attr.stroke-dasharray]="alignDash()"
                   [attr.transform]="'rotate(-90 ' + alignRingCenter + ' ' + alignRingCenter + ')'"
@@ -215,8 +215,8 @@ interface InsightChip {
 export class PaSignalInsightsComponent {
   readonly sparkWidth = 280;
   readonly sparkHeight = 44;
-  readonly alignRingSize = 80;
-  readonly alignRingRadius = 31;
+  readonly alignRingSize = 104;
+  readonly alignRingRadius = 40;
   readonly alignRingCenter = this.alignRingSize / 2;
 
   @Input() view: PaInsightView = 'overview';

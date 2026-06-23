@@ -18,6 +18,7 @@ import { PaGaugeComponent } from '../../shared/pa-gauge/pa-gauge.component';
 import { PaSignalInsightsComponent } from '../../shared/pa-signal-insights/pa-signal-insights.component';
 import { PaTradeSetupComponent } from '../../shared/pa-trade-setup/pa-trade-setup.component';
 import { PaComponentSignalsComponent } from '../../shared/pa-component-signals/pa-component-signals.component';
+import { PaSignalBriefComponent } from '../../shared/pa-signal-brief/pa-signal-brief.component';
 import { DeckGaugeReading } from '../../core/models/deck.models';
 import { MarketRegimeComponent } from '../../shared/market-regime/market-regime.component';
 import { VetoBreakupComponent } from '../../shared/veto-breakup/veto-breakup.component';
@@ -30,7 +31,7 @@ import { SignalReadoutHelpComponent } from '../../shared/signal-readout-help/sig
 import { ComponentsHelpComponent } from '../../shared/components-help/components-help.component';
 import { PositionSizingComponent } from '../../shared/position-sizing/position-sizing.component';
 
-type PaSignalSubTab = 'overview' | 'timeframes' | 'context';
+type PaSignalSubTab = 'brief' | 'overview' | 'timeframes' | 'context';
 
 @Component({
   selector: 'app-replay-deck',
@@ -44,6 +45,7 @@ type PaSignalSubTab = 'overview' | 'timeframes' | 'context';
     PaSignalInsightsComponent,
     PaTradeSetupComponent,
     PaComponentSignalsComponent,
+    PaSignalBriefComponent,
     BipolarListComponent,
     PaDrilldownComponent,
     VetoBreakupComponent,
@@ -162,6 +164,14 @@ type PaSignalSubTab = 'overview' | 'timeframes' | 'context';
             >
               Context
             </button>
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="paSubTab() === 'brief'"
+              (click)="paSubTab.set('brief')"
+            >
+              Brief
+            </button>
           </nav>
 
           @if (paSubTab() === 'overview') {
@@ -229,7 +239,7 @@ type PaSignalSubTab = 'overview' | 'timeframes' | 'context';
                 "
               />
             </div>
-          } @else {
+          } @else if (paSubTab() === 'context') {
             <div class="pa-signal-subpanel">
               <app-pa-signal-insights
                 view="context"
@@ -244,6 +254,31 @@ type PaSignalSubTab = 'overview' | 'timeframes' | 'context';
                 [convictionSeries]="replayConvictionSeries(data)"
                 [reading]="scrubbedPaReading(data)"
                 [marketRegime]="data.marketRegime"
+              />
+            </div>
+          } @else {
+            <div class="pa-signal-subpanel">
+              <app-pa-signal-brief
+                [trackHistory]="false"
+                [sessionKey]="data.symbol + ':' + data.sessionDate"
+                [signalAt]="scrubbedSignalAt()"
+                [action]="scrubbed()?.action ?? data.gauges.priceAction.label"
+                [structuralAction]="scrubbed()?.structuralAction"
+                [conviction]="scrubbed()?.conviction ?? 0"
+                [entryThreshold]="data.entryThreshold"
+                [chartVetoed]="!!scrubbed()?.vetoed"
+                [vetoReason]="scrubbed()?.vetoReason"
+                [lastPrice]="scrubbed()?.spot"
+                [paDrilldown]="scrubbedPaDrilldown(data)"
+                [tradeSetup]="scrubbed()?.tradeSetup"
+                [marketRegime]="data.marketRegime"
+                [patternInsights]="scrubbed()?.patternInsights ?? data.patternInsights"
+                [reading]="scrubbedPaReading(data)"
+                [primaryTimeframe]="
+                  scrubbed()?.paDrilldown?.primaryTimeframe ??
+                  scrubbedPaDrilldown(data)?.primaryTimeframe ??
+                  '15m'
+                "
               />
             </div>
           }
@@ -483,6 +518,14 @@ export class ReplayDeckComponent implements OnInit {
       hour: '2-digit',
       minute: '2-digit',
     });
+  }
+
+  scrubbedSignalAt(): string {
+    const t = this.scrubbed()?.t;
+    if (t != null && Number.isFinite(t)) {
+      return new Date(t).toISOString();
+    }
+    return new Date().toISOString();
   }
 
   scrubbedPaReading(data: DeckReplayPayload): DeckGaugeReading {

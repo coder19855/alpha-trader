@@ -31,6 +31,7 @@ import { PaGaugeComponent } from '../../shared/pa-gauge/pa-gauge.component';
 import { PaSignalInsightsComponent } from '../../shared/pa-signal-insights/pa-signal-insights.component';
 import { PaTradeSetupComponent } from '../../shared/pa-trade-setup/pa-trade-setup.component';
 import { PaComponentSignalsComponent } from '../../shared/pa-component-signals/pa-component-signals.component';
+import { PaSignalBriefComponent } from '../../shared/pa-signal-brief/pa-signal-brief.component';
 import { PositionsListComponent } from '../../shared/positions-list/positions-list.component';
 import { AutoExitPanelComponent } from '../../shared/auto-exit-panel/auto-exit-panel.component';
 import { AutoEntryPanelComponent } from '../../shared/auto-entry-panel/auto-entry-panel.component';
@@ -52,7 +53,7 @@ import { patchMultiTfSpotCandles } from '../../core/utils/live-candle-patch';
 import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timestamp';
 
 type SignalSubTab = 'priceAction' | 'optionChain';
-type PaSignalSubTab = 'overview' | 'timeframes' | 'context';
+type PaSignalSubTab = 'brief' | 'overview' | 'timeframes' | 'context';
 type ComponentsSubTab = 'priceAction' | 'optionChain';
 
 @Component({
@@ -68,6 +69,7 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
     PaSignalInsightsComponent,
     PaTradeSetupComponent,
     PaComponentSignalsComponent,
+    PaSignalBriefComponent,
     BipolarListComponent,
     PaDrilldownComponent,
     VetoBreakupComponent,
@@ -211,6 +213,14 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
             >
               Context
             </button>
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="paSubTab() === 'brief'"
+              (click)="paSubTab.set('brief')"
+            >
+              Brief
+            </button>
           </nav>
 
           @if (paSubTab() === 'overview') {
@@ -275,7 +285,7 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
                 "
               />
             </div>
-          } @else {
+          } @else if (paSubTab() === 'context') {
             <div class="pa-signal-subpanel">
               <app-pa-signal-insights
                 view="context"
@@ -292,6 +302,31 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
                 [convictionSeries]="data.convictionSeries"
                 [reading]="data.gauges.priceAction"
                 [marketRegime]="data.marketRegime"
+              />
+            </div>
+          } @else {
+            <div class="pa-signal-subpanel">
+              <app-pa-signal-brief
+                [sessionKey]="data.symbol ?? ctx.symbol()"
+                [signalAt]="data.signalCalculatedAt ?? data.asOf"
+                [action]="data.action"
+                [structuralAction]="data.structuralAction"
+                [conviction]="data.conviction"
+                [entryThreshold]="data.entryThreshold"
+                [bias]="data.bias"
+                [chartVetoed]="!!data.chartVetoed"
+                [vetoReason]="data.vetoReason"
+                [tfAligned]="data.tfAligned"
+                [tfAlignedTotal]="data.tfAlignedTotal"
+                [lastPrice]="data.lastPrice"
+                [paDrilldown]="data.paDrilldown"
+                [tradeSetup]="data.tradeSetup"
+                [marketRegime]="data.marketRegime"
+                [patternInsights]="data.patternInsights"
+                [reading]="data.gauges.priceAction"
+                [primaryTimeframe]="
+                  data.primaryTimeframe ?? data.paDrilldown?.primaryTimeframe ?? '15m'
+                "
               />
             </div>
           }
