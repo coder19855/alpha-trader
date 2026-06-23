@@ -65,38 +65,48 @@ type OcSignalSubTab = 'overview' | 'flow' | 'guards' | 'brief';
       </section>
 
       <nav class="signal-subtabs oc-signal-subtabs" aria-label="Option chain views">
-        <button
-          type="button"
-          class="signal-subtab"
-          [class.active]="ocSubTab() === 'overview'"
-          (click)="ocSubTab.set('overview')"
-        >
-          Overview
-        </button>
-        <button
-          type="button"
-          class="signal-subtab"
-          [class.active]="ocSubTab() === 'flow'"
-          (click)="ocSubTab.set('flow')"
-        >
-          Flow
-        </button>
-        <button
-          type="button"
-          class="signal-subtab"
-          [class.active]="ocSubTab() === 'guards'"
-          (click)="ocSubTab.set('guards')"
-        >
-          Guards
-        </button>
-        <button
-          type="button"
-          class="signal-subtab"
-          [class.active]="ocSubTab() === 'brief'"
-          (click)="ocSubTab.set('brief')"
-        >
-          Brief
-        </button>
+        <div class="seg-tabs" role="tablist">
+          <button
+            type="button"
+            class="seg-tab"
+            role="tab"
+            [attr.aria-selected]="ocSubTab() === 'overview'"
+            [class.active]="ocSubTab() === 'overview'"
+            (click)="ocSubTab.set('overview')"
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            class="seg-tab"
+            role="tab"
+            [attr.aria-selected]="ocSubTab() === 'flow'"
+            [class.active]="ocSubTab() === 'flow'"
+            (click)="ocSubTab.set('flow')"
+          >
+            Flow
+          </button>
+          <button
+            type="button"
+            class="seg-tab"
+            role="tab"
+            [attr.aria-selected]="ocSubTab() === 'guards'"
+            [class.active]="ocSubTab() === 'guards'"
+            (click)="ocSubTab.set('guards')"
+          >
+            Guards
+          </button>
+          <button
+            type="button"
+            class="seg-tab"
+            role="tab"
+            [attr.aria-selected]="ocSubTab() === 'brief'"
+            [class.active]="ocSubTab() === 'brief'"
+            (click)="ocSubTab.set('brief')"
+          >
+            Brief
+          </button>
+        </div>
       </nav>
 
       @if (ocSubTab() === 'overview') {

@@ -26,6 +26,17 @@ export interface DeckStrategyPayload {
   strategies: DeckStrategyItem[];
   priceActionStrategies?: DeckStrategyItem[];
   optionStrategies?: DeckStrategyItem[];
+  /**
+   * Live option context for the Options strategy view. Distinguishes the
+   * Options tab from the PA tab: when an option overlay is fresh it carries the
+   * live IV regime and option-flow bias; otherwise hasLiveOverlay is false so
+   * the UI can be honest that the view is PA-derived (Fyers has no option WS).
+   */
+  optionContext?: {
+    ivRegime?: string;
+    optionBias?: string;
+    hasLiveOverlay: boolean;
+  };
   replayNote?: string;
 }
 
@@ -54,6 +65,8 @@ type DecisionLike = {
     reason?: string;
     executionHint?: string;
   }>;
+  optionFlow?: { bias?: string };
+  optionOverlay?: { status?: string; ivRegime?: string };
 };
 
 export function buildPaRecommendedStrategies(
@@ -266,6 +279,15 @@ export function extractDeckStrategyPayload(
     decision.conviction,
   );
 
+  const optionBias = decision.optionFlow?.bias;
+  const ivRegime = decision.optionOverlay?.ivRegime;
+  const hasLiveOverlay = decision.optionOverlay?.status === 'fresh';
+  const optionContext: DeckStrategyPayload['optionContext'] = {
+    ivRegime: ivRegime || undefined,
+    optionBias: optionBias || undefined,
+    hasLiveOverlay,
+  };
+
   return {
     action: decision.action,
     bias: decision.bias,
@@ -286,6 +308,7 @@ export function extractDeckStrategyPayload(
     strategies: optionStrategies,
     priceActionStrategies,
     optionStrategies,
+    optionContext,
     replayNote: opts?.replayNote,
   };
 }

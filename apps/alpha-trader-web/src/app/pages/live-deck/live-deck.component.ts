@@ -109,22 +109,28 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
           [class.active]="ctx.activeTab() === 'signal'"
         >
           <nav class="signal-subtabs" aria-label="Signal views">
-            <button
-              type="button"
-              class="signal-subtab"
-              [class.active]="signalSubTab() === 'priceAction'"
-              (click)="signalSubTab.set('priceAction')"
-            >
-              Price action
-            </button>
-            <button
-              type="button"
-              class="signal-subtab"
-              [class.active]="signalSubTab() === 'optionChain'"
-              (click)="signalSubTab.set('optionChain')"
-            >
-              Option chain
-            </button>
+            <div class="seg-tabs" role="tablist">
+              <button
+                type="button"
+                class="seg-tab"
+                role="tab"
+                [attr.aria-selected]="signalSubTab() === 'priceAction'"
+                [class.active]="signalSubTab() === 'priceAction'"
+                (click)="signalSubTab.set('priceAction')"
+              >
+                Price action
+              </button>
+              <button
+                type="button"
+                class="seg-tab"
+                role="tab"
+                [attr.aria-selected]="signalSubTab() === 'optionChain'"
+                [class.active]="signalSubTab() === 'optionChain'"
+                (click)="signalSubTab.set('optionChain')"
+              >
+                Option chain
+              </button>
+            </div>
             @if (signalSubTab() === 'optionChain') {
               <span class="signal-subtab-spacer"></span>
               <span class="oc-poll-hint">{{ optionPollLabel() }}</span>
@@ -189,38 +195,48 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
           </section>
 
           <nav class="signal-subtabs pa-signal-subtabs" aria-label="Price action views">
-            <button
-              type="button"
-              class="signal-subtab"
-              [class.active]="paSubTab() === 'overview'"
-              (click)="paSubTab.set('overview')"
-            >
-              Overview
-            </button>
-            <button
-              type="button"
-              class="signal-subtab"
-              [class.active]="paSubTab() === 'timeframes'"
-              (click)="paSubTab.set('timeframes')"
-            >
-              Timeframes
-            </button>
-            <button
-              type="button"
-              class="signal-subtab"
-              [class.active]="paSubTab() === 'context'"
-              (click)="paSubTab.set('context')"
-            >
-              Context
-            </button>
-            <button
-              type="button"
-              class="signal-subtab"
-              [class.active]="paSubTab() === 'brief'"
-              (click)="paSubTab.set('brief')"
-            >
-              Brief
-            </button>
+            <div class="seg-tabs seg-tabs--pa" role="tablist">
+              <button
+                type="button"
+                class="seg-tab"
+                role="tab"
+                [attr.aria-selected]="paSubTab() === 'overview'"
+                [class.active]="paSubTab() === 'overview'"
+                (click)="paSubTab.set('overview')"
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                class="seg-tab"
+                role="tab"
+                [attr.aria-selected]="paSubTab() === 'timeframes'"
+                [class.active]="paSubTab() === 'timeframes'"
+                (click)="paSubTab.set('timeframes')"
+              >
+                Timeframes
+              </button>
+              <button
+                type="button"
+                class="seg-tab"
+                role="tab"
+                [attr.aria-selected]="paSubTab() === 'context'"
+                [class.active]="paSubTab() === 'context'"
+                (click)="paSubTab.set('context')"
+              >
+                Context
+              </button>
+              <button
+                type="button"
+                class="seg-tab"
+                role="tab"
+                [attr.aria-selected]="paSubTab() === 'brief'"
+                [class.active]="paSubTab() === 'brief'"
+                (click)="paSubTab.set('brief')"
+              >
+                Brief
+              </button>
+            </div>
           </nav>
 
           @if (paSubTab() === 'overview') {
@@ -342,22 +358,28 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
           <section class="component-panel">
             <app-components-help />
             <nav class="signal-subtabs" aria-label="Component views">
-              <button
-                type="button"
-                class="signal-subtab"
-                [class.active]="componentsSubTab() === 'priceAction'"
-                (click)="componentsSubTab.set('priceAction')"
-              >
-                Price action
-              </button>
-              <button
-                type="button"
-                class="signal-subtab"
-                [class.active]="componentsSubTab() === 'optionChain'"
-                (click)="componentsSubTab.set('optionChain')"
-              >
-                Option chain
-              </button>
+              <div class="seg-tabs" role="tablist">
+                <button
+                  type="button"
+                  class="seg-tab"
+                  role="tab"
+                  [attr.aria-selected]="componentsSubTab() === 'priceAction'"
+                  [class.active]="componentsSubTab() === 'priceAction'"
+                  (click)="componentsSubTab.set('priceAction')"
+                >
+                  Price action
+                </button>
+                <button
+                  type="button"
+                  class="seg-tab"
+                  role="tab"
+                  [attr.aria-selected]="componentsSubTab() === 'optionChain'"
+                  [class.active]="componentsSubTab() === 'optionChain'"
+                  (click)="componentsSubTab.set('optionChain')"
+                >
+                  Option chain
+                </button>
+              </div>
             </nav>
             @if (componentsSubTab() === 'priceAction') {
               <div class="panel-head">
@@ -692,29 +714,9 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
         text-transform: none;
         letter-spacing: 0;
       }
-      .signal-subtab {
-        border: 1px solid var(--border);
-        background: rgba(255, 255, 255, 0.03);
-        color: var(--muted);
-        border-radius: 999px;
-        padding: 6px 12px;
-        font-size: 0.72rem;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .signal-subtab.active {
-        color: var(--option);
-        border-color: rgba(34, 211, 238, 0.4);
-        background: rgba(34, 211, 238, 0.1);
-      }
       .pa-signal-subtabs {
         margin-top: 2px;
         margin-bottom: 10px;
-      }
-      .pa-signal-subtabs .signal-subtab.active {
-        color: #c4b5fd;
-        border-color: rgba(167, 139, 250, 0.45);
-        background: rgba(167, 139, 250, 0.12);
       }
       .pa-signal-subpanel {
         display: flex;

@@ -174,6 +174,11 @@ export interface DeckStrategyPayload {
     reason: string;
     executionHint?: string;
   }>;
+  optionContext?: {
+    ivRegime?: string;
+    optionBias?: string;
+    hasLiveOverlay: boolean;
+  };
   replayNote?: string;
 }
 

@@ -18,10 +18,12 @@ import { DeckStrategyPayload } from '../../core/models/deck.models';
           </p>
         </article>
       } @else {
-        <div class="strategy-tabs" role="tablist" aria-label="Strategy views">
+        <div class="seg-tabs" role="tablist" aria-label="Strategy views">
           <button
             type="button"
-            class="strategy-tab-btn"
+            class="seg-tab"
+            role="tab"
+            [attr.aria-selected]="activeTab() === 'pa'"
             [class.active]="activeTab() === 'pa'"
             (click)="activeTab.set('pa')"
           >
@@ -29,7 +31,9 @@ import { DeckStrategyPayload } from '../../core/models/deck.models';
           </button>
           <button
             type="button"
-            class="strategy-tab-btn"
+            class="seg-tab"
+            role="tab"
+            [attr.aria-selected]="activeTab() === 'options'"
             [class.active]="activeTab() === 'options'"
             (click)="activeTab.set('options')"
           >
@@ -228,6 +232,28 @@ import { DeckStrategyPayload } from '../../core/models/deck.models';
                 </span>
               </div>
 
+              <div class="strategy-oc-context">
+                @if (ivRegimeLabel()) {
+                  <span class="strategy-oc-chip">IV · {{ ivRegimeLabel() }}</span>
+                }
+                @if (optionBiasLabel()) {
+                  <span class="strategy-oc-chip">Flow · {{ optionBiasLabel() }}</span>
+                }
+                <span
+                  class="strategy-oc-chip"
+                  [class.live]="hasLiveOverlay()"
+                  [class.derived]="!hasLiveOverlay()"
+                >
+                  {{ hasLiveOverlay() ? 'Live overlay' : 'PA-derived' }}
+                </span>
+              </div>
+              @if (!hasLiveOverlay()) {
+                <p class="strategy-oc-note">
+                  No live option overlay — structures below are derived from
+                  price-action direction &amp; conviction, not live IV / OI.
+                </p>
+              }
+
               <div class="strategy-conviction-meter" aria-hidden="true">
                 <div class="strategy-conviction-track">
                   <div
@@ -388,31 +414,41 @@ import { DeckStrategyPayload } from '../../core/models/deck.models';
         padding: 4px 2px 8px;
       }
 
-      .strategy-tabs {
-        display: inline-flex;
+      .strategy-oc-context {
+        display: flex;
+        flex-wrap: wrap;
         gap: 6px;
-        padding: 4px;
-        border-radius: 999px;
-        border: 1px solid var(--border);
-        background: color-mix(in srgb, var(--surface) 88%, var(--bg));
-        width: fit-content;
+        margin: 8px 0 2px;
       }
 
-      .strategy-tab-btn {
-        border: 0;
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-size: 0.68rem;
+      .strategy-oc-chip {
+        font-size: 0.58rem;
         font-weight: 700;
+        letter-spacing: 0.03em;
+        padding: 3px 8px;
+        border-radius: 999px;
         color: var(--muted);
-        background: transparent;
-        cursor: pointer;
+        border: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 85%, var(--bg));
       }
 
-      .strategy-tab-btn.active {
-        color: var(--text);
-        background: color-mix(in srgb, var(--option) 16%, transparent);
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--option) 25%, transparent);
+      .strategy-oc-chip.live {
+        color: var(--option);
+        border-color: color-mix(in srgb, var(--option) 40%, transparent);
+        background: color-mix(in srgb, var(--option) 12%, transparent);
+      }
+
+      .strategy-oc-chip.derived {
+        color: #fde68a;
+        border-color: color-mix(in srgb, #fbbf24 35%, transparent);
+        background: color-mix(in srgb, #fbbf24 10%, transparent);
+      }
+
+      .strategy-oc-note {
+        margin: 6px 0 2px;
+        font-size: 0.62rem;
+        line-height: 1.45;
+        color: var(--muted);
       }
 
       .strategy-empty {
@@ -561,6 +597,19 @@ export class StrategyPanelComponent {
     this.strategy?.optionStrategies?.length
       ? this.strategy.optionStrategies
       : this.strategy?.strategies ?? [];
+
+  readonly hasLiveOverlay = () =>
+    Boolean(this.strategy?.optionContext?.hasLiveOverlay);
+
+  ivRegimeLabel(): string {
+    return this.strategy?.optionContext?.ivRegime?.trim() ?? '';
+  }
+
+  optionBiasLabel(): string {
+    const bias = this.strategy?.optionContext?.optionBias?.trim();
+    if (!bias || bias.toLowerCase() === 'neutral') return '';
+    return bias;
+  }
 
   actionPillClass(action: string): string {
     if (action === 'CE-BUY') return 'action-ce';

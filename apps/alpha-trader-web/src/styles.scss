@@ -64,6 +64,73 @@ html.web-layout .deck-page {
   gap: 32px;
 }
 
+/* ------------------------------------------------------------------ *
+ * Segmented pill tabs — shared tab treatment used across the app
+ * (Strategy panel, signal subtabs, chart timeframe, chart style toggle,
+ * benchmark results). Accent color is themeable via --seg-accent so each
+ * context can keep its color language while sharing one visual design.
+ *   .seg-tabs            rounded pill-group container
+ *   .seg-tab(.active)    individual pill
+ *   --pa modifier        price-action purple accent
+ *   --fill modifier      buttons stretch to fill the row (flex:1)
+ *   --compact modifier   tighter padding for dense rows (timeframes)
+ * ------------------------------------------------------------------ */
+.seg-tabs {
+  --seg-accent: var(--option);
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+  width: fit-content;
+}
+
+.seg-tabs.seg-tabs--pa {
+  --seg-accent: #a78bfa;
+}
+
+.seg-tabs.seg-tabs--fill {
+  display: flex;
+  width: 100%;
+}
+
+.seg-tab {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.seg-tabs--fill .seg-tab {
+  flex: 1;
+  text-align: center;
+}
+
+.seg-tabs--compact .seg-tab {
+  padding: 6px 10px;
+  font-size: 0.64rem;
+}
+
+.seg-tab:hover:not(.active) {
+  color: var(--text);
+}
+
+.seg-tab.active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--seg-accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--seg-accent) 25%, transparent);
+}
+
 html.web-layout .deck-page > .tab-panel {
   display: none;
 }

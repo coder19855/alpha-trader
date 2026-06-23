@@ -140,38 +140,48 @@ type PaSignalSubTab = 'brief' | 'overview' | 'timeframes' | 'context';
           </section>
 
           <nav class="signal-subtabs pa-signal-subtabs" aria-label="Price action views">
-            <button
-              type="button"
-              class="signal-subtab"
-              [class.active]="paSubTab() === 'overview'"
-              (click)="paSubTab.set('overview')"
-            >
-              Overview
-            </button>
-            <button
-              type="button"
-              class="signal-subtab"
-              [class.active]="paSubTab() === 'timeframes'"
-              (click)="paSubTab.set('timeframes')"
-            >
-              Timeframes
-            </button>
-            <button
-              type="button"
-              class="signal-subtab"
-              [class.active]="paSubTab() === 'context'"
-              (click)="paSubTab.set('context')"
-            >
-              Context
-            </button>
-            <button
-              type="button"
-              class="signal-subtab"
-              [class.active]="paSubTab() === 'brief'"
-              (click)="paSubTab.set('brief')"
-            >
-              Brief
-            </button>
+            <div class="seg-tabs seg-tabs--pa" role="tablist">
+              <button
+                type="button"
+                class="seg-tab"
+                role="tab"
+                [attr.aria-selected]="paSubTab() === 'overview'"
+                [class.active]="paSubTab() === 'overview'"
+                (click)="paSubTab.set('overview')"
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                class="seg-tab"
+                role="tab"
+                [attr.aria-selected]="paSubTab() === 'timeframes'"
+                [class.active]="paSubTab() === 'timeframes'"
+                (click)="paSubTab.set('timeframes')"
+              >
+                Timeframes
+              </button>
+              <button
+                type="button"
+                class="seg-tab"
+                role="tab"
+                [attr.aria-selected]="paSubTab() === 'context'"
+                [class.active]="paSubTab() === 'context'"
+                (click)="paSubTab.set('context')"
+              >
+                Context
+              </button>
+              <button
+                type="button"
+                class="seg-tab"
+                role="tab"
+                [attr.aria-selected]="paSubTab() === 'brief'"
+                [class.active]="paSubTab() === 'brief'"
+                (click)="paSubTab.set('brief')"
+              >
+                Brief
+              </button>
+            </div>
           </nav>
 
           @if (paSubTab() === 'overview') {
@@ -450,29 +460,9 @@ type PaSignalSubTab = 'brief' | 'overview' | 'timeframes' | 'context';
         gap: 6px;
         margin-bottom: 12px;
       }
-      .signal-subtab {
-        border: 1px solid var(--border);
-        background: rgba(255, 255, 255, 0.03);
-        color: var(--muted);
-        border-radius: 999px;
-        padding: 6px 12px;
-        font-size: 0.72rem;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .signal-subtab.active {
-        color: var(--option);
-        border-color: rgba(34, 211, 238, 0.4);
-        background: rgba(34, 211, 238, 0.1);
-      }
       .pa-signal-subtabs {
         margin-top: 2px;
         margin-bottom: 10px;
-      }
-      .pa-signal-subtabs .signal-subtab.active {
-        color: #c4b5fd;
-        border-color: rgba(167, 139, 250, 0.45);
-        background: rgba(167, 139, 250, 0.12);
       }
       .pa-signal-subpanel {
         display: flex;
