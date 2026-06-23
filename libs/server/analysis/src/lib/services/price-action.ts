@@ -8,7 +8,10 @@ import {
   HISTORY_LOOKBACK_DAYS,
   MTF_SCORE_WEIGHTS,
 } from '@alpha-trader/server-shared';
-import { detectChartPattern } from '../technical-analysis/chart-patterns.js';
+import {
+  detectChartPattern,
+  stampChartPatternTimes,
+} from '../technical-analysis/chart-patterns.js';
 import { detectCandlestickPattern } from '../technical-analysis/candlestick-patterns.js';
 import { analyzeSessionBias } from '../technical-analysis/session-bias.js';
 import { analyzeTrendQuality } from '../technical-analysis/trend-quality.js';
@@ -282,23 +285,32 @@ export default async function technicalAnalysisRoute(fastify: FastifyInstance) {
         activeStyle === TradingStyle.Intraday &&
         CONFLUENCE_ENHANCEMENTS.ENABLED_FOR_INTRADAY;
 
-      const chartPattern5m = detectChartPattern(
+      const chartPattern5m = stampChartPatternTimes(
+        detectChartPattern(
+          candles5m,
+          swings5m,
+          sr5m.support,
+          sr5m.resistance,
+        ),
         candles5m,
-        swings5m,
-        sr5m.support,
-        sr5m.resistance,
       );
-      const chartPattern15m = detectChartPattern(
+      const chartPattern15m = stampChartPatternTimes(
+        detectChartPattern(
+          candles15m,
+          swings15m,
+          sr15m.support,
+          sr15m.resistance,
+        ),
         candles15m,
-        swings15m,
-        sr15m.support,
-        sr15m.resistance,
       );
-      const chartPattern1h = detectChartPattern(
+      const chartPattern1h = stampChartPatternTimes(
+        detectChartPattern(
+          candles1h,
+          swings1h,
+          sr1h.support,
+          sr1h.resistance,
+        ),
         candles1h,
-        swings1h,
-        sr1h.support,
-        sr1h.resistance,
       );
       const chartBoostFor = (boost: number) =>
         enhancementsEnabled && CONFLUENCE_ENHANCEMENTS.CHART_PATTERN_SCORE_ENABLED

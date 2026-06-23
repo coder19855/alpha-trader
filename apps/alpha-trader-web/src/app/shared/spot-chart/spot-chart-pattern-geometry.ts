@@ -8,6 +8,13 @@ export interface SpotCandle {
   c: number;
 }
 
+export interface PatternPivot {
+  index: number;
+  price: number;
+  kind: 'high' | 'low';
+  t?: number;
+}
+
 export interface PatternInsight {
   timeframe: string;
   pattern: string;
@@ -17,11 +24,12 @@ export interface PatternInsight {
   biasLabel?: string;
   type?: 'chart' | 'candlestick';
   neckline?: number;
+  points?: PatternPivot[];
 }
 
 export interface PatternDrawOp {
   id: string;
-  kind: 'polyline' | 'polygon' | 'hline' | 'marker' | 'text';
+  kind: 'polyline' | 'polygon' | 'hline' | 'marker' | 'text' | 'dot';
   points: Array<{ t: number; price: number }>;
   color: string;
   fill?: string;
@@ -112,7 +120,7 @@ export function resolvePatternColor(pattern?: string, tone?: string): string {
 
 type Pivot = { index: number; price: number; kind: 'high' | 'low' };
 
-function findSwingLows(candles: SpotCandle[], window = 2): Pivot[] {
+function findSwingLows(candles: SpotCandle[], window = 1): Pivot[] {
   const swings: Pivot[] = [];
   for (let i = window; i < candles.length - window; i += 1) {
     const low = candles[i].l;
@@ -128,7 +136,7 @@ function findSwingLows(candles: SpotCandle[], window = 2): Pivot[] {
   return swings;
 }
 
-function findSwingHighs(candles: SpotCandle[], window = 2): Pivot[] {
+function findSwingHighs(candles: SpotCandle[], window = 1): Pivot[] {
   const swings: Pivot[] = [];
   for (let i = window; i < candles.length - window; i += 1) {
     const high = candles[i].h;
@@ -150,6 +158,41 @@ function candlePoint(candles: SpotCandle[], index: number): { t: number; price: 
 
 function pivotPoint(candles: SpotCandle[], pivot: Pivot): { t: number; price: number } {
   return { t: candles[pivot.index].t, price: pivot.price };
+}
+
+function resolveServerCoords(
+  candles: SpotCandle[],
+  points?: PatternPivot[],
+): Array<{ t: number; price: number }> {
+  if (!points?.length) return [];
+  const out: Array<{ t: number; price: number }> = [];
+  for (const pt of points) {
+    if (pt.t != null && Number.isFinite(pt.t)) {
+      out.push({ t: pt.t, price: pt.price });
+      continue;
+    }
+    if (pt.index >= 0 && pt.index < candles.length) {
+      out.push({ t: candles[pt.index].t, price: pt.price });
+    }
+  }
+  return out;
+}
+
+function addPivotDots(
+  ops: PatternDrawOp[],
+  id: string,
+  coords: Array<{ t: number; price: number }>,
+  color: string,
+): void {
+  coords.forEach((coord, i) => {
+    ops.push({
+      id: `${id}-dot-${i}`,
+      kind: 'dot',
+      points: [coord],
+      color,
+      strokeWidth: 2,
+    });
+  });
 }
 
 function lineBetween(
@@ -215,6 +258,116 @@ function addNecklineOp(
   });
 }
 
+function buildFromServerPoints(
+  insight: PatternInsight,
+  candles: SpotCandle[],
+  normalized: string,
+  color: string,
+  neckline?: number,
+): PatternDrawOp[] | null {
+  const coords = resolveServerCoords(candles, insight.points);
+  if (coords.length < 2) return null;
+
+  const ops: PatternDrawOp[] = [];
+
+  if (
+    normalized.includes('double_top') ||
+    normalized.includes('double_bottom') ||
+    normalized.includes('head_and_shoulders') ||
+    normalized.includes('inverse_head') ||
+    normalized.includes('trendline_break')
+  ) {
+    ops.push({
+      id: 'server-outline',
+      kind: 'polyline',
+      points: coords,
+      color,
+      strokeWidth: 2,
+      label: insight.pattern,
+    });
+    addPivotDots(ops, 'server-outline', coords, color);
+    if (Number.isFinite(neckline)) addNecklineOp(ops, 'server-neck', candles, neckline!, color);
+    return ops;
+  }
+
+  if (normalized.includes('wedge') || normalized.includes('triangle')) {
+    if (coords.length >= 4) {
+      ops.push({
+        id: 'server-upper',
+        kind: 'polyline',
+        points: [coords[0], coords[1]],
+        color,
+        strokeWidth: 2,
+      });
+      ops.push({
+        id: 'server-lower',
+        kind: 'polyline',
+        points: [coords[2], coords[3]],
+        color,
+        strokeWidth: 2,
+        label: insight.pattern,
+      });
+      addPivotDots(ops, 'server-boundary', coords.slice(0, 4), color);
+      if (Number.isFinite(neckline)) addNecklineOp(ops, 'server-neck', candles, neckline!, color);
+      return ops;
+    }
+  }
+
+  if (normalized.includes('flag') && coords.length >= 6) {
+    ops.push({
+      id: 'server-pole',
+      kind: 'polyline',
+      points: [coords[0], coords[1]],
+      color,
+      strokeWidth: 2,
+    });
+    ops.push({
+      id: 'server-box',
+      kind: 'polygon',
+      points: coords.slice(2, 6),
+      color,
+      fill: `${color}22`,
+      strokeWidth: 1.5,
+      label: insight.pattern,
+    });
+    if (Number.isFinite(neckline)) addNecklineOp(ops, 'server-neck', candles, neckline!, color);
+    return ops;
+  }
+
+  if (normalized.includes('range_breakout') && coords.length >= 4) {
+    ops.push({
+      id: 'server-range-high',
+      kind: 'polyline',
+      points: [coords[0], coords[1]],
+      color,
+      strokeWidth: 1.5,
+      dashed: true,
+    });
+    ops.push({
+      id: 'server-range-low',
+      kind: 'polyline',
+      points: [coords[2], coords[3]],
+      color,
+      strokeWidth: 1.5,
+      dashed: true,
+      label: insight.pattern,
+    });
+    return ops;
+  }
+
+  ops.push({
+    id: 'server-generic',
+    kind: 'polyline',
+    points: coords,
+    color,
+    strokeWidth: 2,
+    label: insight.pattern,
+  });
+  addPivotDots(ops, 'server-generic', coords, color);
+  if (Number.isFinite(neckline)) addNecklineOp(ops, 'server-neck', candles, neckline!, color);
+  return ops;
+}
+
 export function buildChartPatternOps(
   insight: PatternInsight,
   candles: SpotCandle[],
@@ -225,6 +378,10 @@ export function buildChartPatternOps(
   const color = resolvePatternColor(insight.pattern, insight.tone);
   const normalized = normalizePatternName(insight.pattern);
   const neckline = insight.neckline ?? fallbackNeckline;
+
+  const fromServer = buildFromServerPoints(insight, candles, normalized, color, neckline);
+  if (fromServer?.length) return fromServer;
+
   const ops: PatternDrawOp[] = [];
   const highs = findSwingHighs(candles);
   const lows = findSwingLows(candles);
@@ -232,14 +389,16 @@ export function buildChartPatternOps(
   if (normalized.includes('double_top') && highs.length >= 2) {
     const h1 = highs[highs.length - 2];
     const h2 = highs[highs.length - 1];
+    const peaks = [pivotPoint(candles, h1), pivotPoint(candles, h2)];
     ops.push({
       id: 'dt-peaks',
       kind: 'polyline',
-      points: [pivotPoint(candles, h1), pivotPoint(candles, h2)],
+      points: peaks,
       color,
       strokeWidth: 2,
       label: insight.pattern,
     });
+    addPivotDots(ops, 'dt-peaks', peaks, color);
     if (Number.isFinite(neckline)) addNecklineOp(ops, 'dt-neck', candles, neckline!, color);
     return ops;
   }
@@ -247,14 +406,16 @@ export function buildChartPatternOps(
   if (normalized.includes('double_bottom') && lows.length >= 2) {
     const l1 = lows[lows.length - 2];
     const l2 = lows[lows.length - 1];
+    const troughs = [pivotPoint(candles, l1), pivotPoint(candles, l2)];
     ops.push({
       id: 'db-troughs',
       kind: 'polyline',
-      points: [pivotPoint(candles, l1), pivotPoint(candles, l2)],
+      points: troughs,
       color,
       strokeWidth: 2,
       label: insight.pattern,
     });
+    addPivotDots(ops, 'db-troughs', troughs, color);
     if (Number.isFinite(neckline)) addNecklineOp(ops, 'db-neck', candles, neckline!, color);
     return ops;
   }
@@ -263,18 +424,20 @@ export function buildChartPatternOps(
     const left = highs[highs.length - 3];
     const head = highs[highs.length - 2];
     const right = highs[highs.length - 1];
+    const outline = [
+      pivotPoint(candles, left),
+      pivotPoint(candles, head),
+      pivotPoint(candles, right),
+    ];
     ops.push({
       id: 'hs-outline',
       kind: 'polyline',
-      points: [
-        pivotPoint(candles, left),
-        pivotPoint(candles, head),
-        pivotPoint(candles, right),
-      ],
+      points: outline,
       color,
       strokeWidth: 2,
       label: insight.pattern,
     });
+    addPivotDots(ops, 'hs-outline', outline, color);
     if (Number.isFinite(neckline)) addNecklineOp(ops, 'hs-neck', candles, neckline!, color);
     return ops;
   }
@@ -283,18 +446,20 @@ export function buildChartPatternOps(
     const left = lows[lows.length - 3];
     const head = lows[lows.length - 2];
     const right = lows[lows.length - 1];
+    const outline = [
+      pivotPoint(candles, left),
+      pivotPoint(candles, head),
+      pivotPoint(candles, right),
+    ];
     ops.push({
       id: 'ihs-outline',
       kind: 'polyline',
-      points: [
-        pivotPoint(candles, left),
-        pivotPoint(candles, head),
-        pivotPoint(candles, right),
-      ],
+      points: outline,
       color,
       strokeWidth: 2,
       label: insight.pattern,
     });
+    addPivotDots(ops, 'ihs-outline', outline, color);
     if (Number.isFinite(neckline)) addNecklineOp(ops, 'ihs-neck', candles, neckline!, color);
     return ops;
   }
@@ -384,14 +549,16 @@ export function buildChartPatternOps(
 
   const pivots = [...highs, ...lows].sort((a, b) => a.index - b.index).slice(-5);
   if (pivots.length >= 2) {
+    const generic = pivots.map((p) => pivotPoint(candles, p));
     ops.push({
       id: 'generic-outline',
       kind: 'polyline',
-      points: pivots.map((p) => pivotPoint(candles, p)),
+      points: generic,
       color,
       strokeWidth: 2,
       label: insight.pattern,
     });
+    addPivotDots(ops, 'generic-outline', generic, color);
     if (Number.isFinite(neckline)) addNecklineOp(ops, 'generic-neck', candles, neckline!, color);
   }
 

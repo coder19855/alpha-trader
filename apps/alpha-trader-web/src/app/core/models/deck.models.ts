@@ -245,6 +245,12 @@ export interface DeckLiveTick {
     biasLabel?: string;
     type?: 'chart' | 'candlestick';
     neckline?: number;
+    points?: Array<{
+      index: number;
+      price: number;
+      kind: 'high' | 'low';
+      t?: number;
+    }>;
   }>;
   chartPatternNeckline?: number;
   strategyRecommendation?: DeckStrategyPayload;

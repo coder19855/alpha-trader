@@ -870,6 +870,18 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
         .filter((p): p is { x: number; y: number } => p != null);
       if (!projected.length) continue;
 
+      if (op.kind === 'dot' && projected[0]) {
+        const circle = document.createElementNS(ns, 'circle');
+        circle.setAttribute('cx', String(projected[0].x));
+        circle.setAttribute('cy', String(projected[0].y));
+        circle.setAttribute('r', '4');
+        circle.setAttribute('fill', op.color);
+        circle.setAttribute('stroke', '#0f172a');
+        circle.setAttribute('stroke-width', '1');
+        svg.appendChild(circle);
+        continue;
+      }
+
       if (op.kind === 'marker' && projected[0]) {
         const g = document.createElementNS(ns, 'g');
         const { x, y } = projected[0];

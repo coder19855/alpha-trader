@@ -65,4 +65,29 @@ describe('spot-chart-pattern-geometry', () => {
     );
     expect(ops.length).toBeGreaterThan(0);
   });
+
+  it('draws swing connectivity from server-provided pivots', () => {
+    const ops = buildChartPatternOps(
+      {
+        timeframe: '15m',
+        pattern: 'head and shoulders',
+        tone: 'bear',
+        label: 'Chart Pattern',
+        type: 'chart',
+        status: 'forming',
+        neckline: 24_520,
+        points: [
+          { index: 10, price: 24_540, kind: 'high', t: candles[10].t },
+          { index: 18, price: 24_560, kind: 'high', t: candles[18].t },
+          { index: 26, price: 24_538, kind: 'high', t: candles[26].t },
+        ],
+      },
+      candles,
+    );
+    const outline = ops.find((op) => op.id === 'server-outline');
+    expect(outline?.kind).toBe('polyline');
+    expect(outline?.points).toHaveLength(3);
+    expect(ops.some((op) => op.kind === 'dot')).toBe(true);
+    expect(ops.some((op) => op.kind === 'hline' && op.label === 'Neckline')).toBe(true);
+  });
 });

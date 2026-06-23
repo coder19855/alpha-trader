@@ -238,6 +238,12 @@ type PatternInsightRow = {
   type: 'chart' | 'candlestick';
   biasLabel?: string;
   neckline?: number;
+  points?: Array<{
+    index: number;
+    price: number;
+    kind: 'high' | 'low';
+    t?: number;
+  }>;
 };
 
 function pushChartPatternInsight(
@@ -248,6 +254,12 @@ function pushChartPatternInsight(
     direction?: string;
     status?: string;
     neckline?: number;
+    points?: Array<{
+      index: number;
+      price: number;
+      kind: 'high' | 'low';
+      t?: number;
+    }>;
   } | null | undefined,
 ): void {
   const pattern = raw?.pattern;
@@ -265,6 +277,7 @@ function pushChartPatternInsight(
       raw?.neckline != null && Number.isFinite(raw.neckline)
         ? raw.neckline
         : undefined,
+    points: raw?.points?.length ? raw.points : undefined,
   });
 }
 
@@ -277,6 +290,12 @@ export function patternInsightsFromTimelinePoint(p: any): Array<PatternInsightRo
         direction?: string;
         status?: string;
         neckline?: number;
+        points?: Array<{
+          index: number;
+          price: number;
+          kind: 'high' | 'low';
+          t?: number;
+        }>;
       }>
     | undefined;
   if (chartPatterns) {
@@ -333,6 +352,12 @@ export function extractPatternInsightsFromPriceAction(
         direction?: string;
         status?: string;
         neckline?: number;
+        points?: Array<{
+          index: number;
+          price: number;
+          kind: 'high' | 'low';
+          t?: number;
+        }>;
       }
     >;
   };

@@ -1,6 +1,62 @@
 import { FyersAPI } from 'fyers-api-v3';
-import { ChartPatternId, ChartPatternResult } from '@alpha-trader/server-shared';
-import { Swing } from '@alpha-trader/server-shared';
+import {
+  ChartPatternId,
+  ChartPatternPivot,
+  ChartPatternResult,
+  Swing,
+} from '@alpha-trader/server-shared';
+
+function pivot(
+  index: number,
+  price: number,
+  kind: 'high' | 'low',
+): ChartPatternPivot {
+  return { index, price, kind };
+}
+
+function wedgeCornerPoints(
+  candleLen: number,
+  earlyHigh: number,
+  lateHigh: number,
+  earlyLow: number,
+  lateLow: number,
+  window = 21,
+): ChartPatternPivot[] {
+  const startIdx = Math.max(0, candleLen - window);
+  const endIdx = Math.max(0, candleLen - 2);
+  return [
+    pivot(startIdx, earlyHigh, 'high'),
+    pivot(endIdx, lateHigh, 'high'),
+    pivot(startIdx, earlyLow, 'low'),
+    pivot(endIdx, lateLow, 'low'),
+  ];
+}
+
+function candleTimeMs(
+  candles: FyersAPI.Candle[],
+  index: number,
+): number | undefined {
+  const row = candles[index];
+  if (!row) return undefined;
+  const raw = Number(row[0]);
+  if (!Number.isFinite(raw)) return undefined;
+  return raw > 1e12 ? Math.floor(raw) : Math.floor(raw * 1000);
+}
+
+/** Attach epoch-ms timestamps to pattern pivots for the chart overlay. */
+export function stampChartPatternTimes(
+  pattern: ChartPatternResult,
+  candles: FyersAPI.Candle[],
+): ChartPatternResult {
+  if (!pattern.points?.length) return pattern;
+  return {
+    ...pattern,
+    points: pattern.points.map((pt) => ({
+      ...pt,
+      t: candleTimeMs(candles, pt.index),
+    })),
+  };
+}
 
 const NONE: ChartPatternResult = {
   pattern: 'none',
@@ -95,6 +151,12 @@ function detectHeadAndShoulders(
       ? Math.min(...lowsBetween.map((l) => l.price))
       : Math.min(left.price, right.price) - tol * 2;
 
+  const points = [
+    pivot(left.index, left.price, 'high'),
+    pivot(head.index, head.price, 'high'),
+    pivot(right.index, right.price, 'high'),
+  ];
+
   if (lastClose < neckline) {
     return {
       pattern: 'head_and_shoulders',
@@ -102,6 +164,7 @@ function detectHeadAndShoulders(
       scoreBoost: -0.12,
       status: 'confirmed',
       neckline,
+      points,
     };
   }
 
@@ -111,6 +174,7 @@ function detectHeadAndShoulders(
     scoreBoost: -0.05,
     status: 'forming',
     neckline,
+    points,
   };
 }
 
@@ -140,6 +204,12 @@ function detectInverseHeadAndShoulders(
       ? Math.max(...highsBetween.map((h) => h.price))
       : Math.max(left.price, right.price) + tol * 2;
 
+  const points = [
+    pivot(left.index, left.price, 'low'),
+    pivot(head.index, head.price, 'low'),
+    pivot(right.index, right.price, 'low'),
+  ];
+
   if (lastClose > neckline) {
     return {
       pattern: 'inverse_head_and_shoulders',
@@ -147,6 +217,7 @@ function detectInverseHeadAndShoulders(
       scoreBoost: 0.12,
       status: 'confirmed',
       neckline,
+      points,
     };
   }
 
@@ -156,6 +227,7 @@ function detectInverseHeadAndShoulders(
     scoreBoost: 0.05,
     status: 'forming',
     neckline,
+    points,
   };
 }
 
@@ -181,6 +253,11 @@ function detectDoubleTop(
       ? Math.min(...lowsBetween.map((l) => l.price))
       : Math.min(h1.price, h2.price) - tol * 2;
 
+  const points = [
+    pivot(h1.index, h1.price, 'high'),
+    pivot(h2.index, h2.price, 'high'),
+  ];
+
   if (lastClose < neckline) {
     return {
       pattern: 'double_top',
@@ -188,6 +265,7 @@ function detectDoubleTop(
       scoreBoost: -0.1,
       status: 'confirmed',
       neckline,
+      points,
     };
   }
 
@@ -197,6 +275,7 @@ function detectDoubleTop(
     scoreBoost: -0.04,
     status: 'forming',
     neckline,
+    points,
   };
 }
 
@@ -222,6 +301,11 @@ function detectDoubleBottom(
       ? Math.max(...highsBetween.map((h) => h.price))
       : Math.max(l1.price, l2.price) + tol * 2;
 
+  const points = [
+    pivot(l1.index, l1.price, 'low'),
+    pivot(l2.index, l2.price, 'low'),
+  ];
+
   if (lastClose > neckline) {
     return {
       pattern: 'double_bottom',
@@ -229,6 +313,7 @@ function detectDoubleBottom(
       scoreBoost: 0.1,
       status: 'confirmed',
       neckline,
+      points,
     };
   }
 
@@ -238,6 +323,7 @@ function detectDoubleBottom(
     scoreBoost: 0.04,
     status: 'forming',
     neckline,
+    points,
   };
 }
 
@@ -268,6 +354,7 @@ export function detectWedge(candles: FyersAPI.Candle[]): ChartPatternResult | nu
       scoreBoost: confirmed ? -0.11 : -0.07,
       status: confirmed ? 'confirmed' : 'forming',
       neckline,
+      points: wedgeCornerPoints(candles.length, earlyHigh, lateHigh, earlyLow, lateLow),
     };
   }
 
@@ -285,6 +372,7 @@ export function detectWedge(candles: FyersAPI.Candle[]): ChartPatternResult | nu
       scoreBoost: confirmed ? 0.11 : 0.07,
       status: confirmed ? 'confirmed' : 'forming',
       neckline,
+      points: wedgeCornerPoints(candles.length, earlyHigh, lateHigh, earlyLow, lateLow),
     };
   }
 
@@ -317,6 +405,20 @@ export function detectFlagPennant(
   const consHigh = Math.max(...consolidation.map((c) => c[2]));
   const consLow = Math.min(...consolidation.map((c) => c[3]));
 
+  const len = candles.length;
+  const consStart = len - 9;
+  const consEnd = len - 2;
+  const poleStart = len - 25;
+  const poleEnd = consStart;
+  const flagPoints = [
+    pivot(poleStart, candles[poleStart][4], 'low'),
+    pivot(poleEnd, candles[poleEnd][4], 'high'),
+    pivot(consStart, consHigh, 'high'),
+    pivot(consEnd, consHigh, 'high'),
+    pivot(consEnd, consLow, 'low'),
+    pivot(consStart, consLow, 'low'),
+  ];
+
   if (impulseMove > impulseAvg * 2) {
     const confirmed = brokeAbove(lastClose, consHigh);
     return {
@@ -325,6 +427,7 @@ export function detectFlagPennant(
       scoreBoost: confirmed ? 0.12 : 0.08,
       status: confirmed ? 'confirmed' : 'forming',
       neckline: consHigh,
+      points: flagPoints,
     };
   }
 
@@ -336,6 +439,7 @@ export function detectFlagPennant(
       scoreBoost: confirmed ? -0.12 : -0.08,
       status: confirmed ? 'confirmed' : 'forming',
       neckline: consLow,
+      points: flagPoints,
     };
   }
 
@@ -361,6 +465,15 @@ export function detectTriangle(
   const highsFalling = lateHigh < earlyHigh * 0.998;
   const lowsRising = lateLow > earlyLow * 1.002;
 
+  const trianglePoints = wedgeCornerPoints(
+    candles.length,
+    earlyHigh,
+    lateHigh,
+    earlyLow,
+    lateLow,
+    16,
+  );
+
   if (highsFalling && lowsRising) {
     if (brokeAbove(lastClose, lateHigh)) {
       return {
@@ -369,6 +482,7 @@ export function detectTriangle(
         scoreBoost: 0.08,
         status: 'confirmed',
         neckline: lateHigh,
+        points: trianglePoints,
       };
     }
     if (brokeBelow(lastClose, lateLow)) {
@@ -378,6 +492,7 @@ export function detectTriangle(
         scoreBoost: -0.08,
         status: 'confirmed',
         neckline: lateLow,
+        points: trianglePoints,
       };
     }
     return {
@@ -385,6 +500,7 @@ export function detectTriangle(
       direction: 'neutral',
       scoreBoost: 0,
       status: 'forming',
+      points: trianglePoints,
     };
   }
 
@@ -401,6 +517,7 @@ export function detectTriangle(
       scoreBoost: confirmed ? -0.1 : -0.06,
       status: confirmed ? 'confirmed' : 'forming',
       neckline,
+      points: trianglePoints,
     };
   }
 
@@ -417,6 +534,7 @@ export function detectTriangle(
       scoreBoost: confirmed ? 0.1 : 0.06,
       status: confirmed ? 'confirmed' : 'forming',
       neckline,
+      points: trianglePoints,
     };
   }
 
@@ -443,12 +561,22 @@ function detectRangeBreakout(
   const last = candles[candles.length - 1];
   const close = last[4];
 
+  const rangeStart = candles.length - 12;
+  const rangeEnd = candles.length - 2;
+  const rangePoints = [
+    pivot(rangeStart, resistance, 'high'),
+    pivot(rangeEnd, resistance, 'high'),
+    pivot(rangeStart, support, 'low'),
+    pivot(rangeEnd, support, 'low'),
+  ];
+
   if (close > resistance + rangeWidth * 0.05) {
     return {
       pattern: 'range_breakout_bull',
       direction: 'bullish',
       scoreBoost: 0.09,
       status: 'confirmed',
+      points: rangePoints,
     };
   }
 
@@ -458,6 +586,7 @@ function detectRangeBreakout(
       direction: 'bearish',
       scoreBoost: -0.09,
       status: 'confirmed',
+      points: rangePoints,
     };
   }
 
@@ -486,6 +615,11 @@ function detectTrendlineBreak(
           direction: 'bearish',
           scoreBoost: -0.07,
           status: 'confirmed',
+          points: [
+            pivot(l1.index, l1.price, 'low'),
+            pivot(l2.index, l2.price, 'low'),
+            pivot(lastIdx, projected, 'low'),
+          ],
         };
       }
     }
@@ -503,6 +637,11 @@ function detectTrendlineBreak(
           direction: 'bullish',
           scoreBoost: 0.07,
           status: 'confirmed',
+          points: [
+            pivot(h1.index, h1.price, 'high'),
+            pivot(h2.index, h2.price, 'high'),
+            pivot(lastIdx, projected, 'high'),
+          ],
         };
       }
     }

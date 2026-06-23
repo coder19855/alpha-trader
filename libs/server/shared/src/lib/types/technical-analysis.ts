@@ -42,6 +42,14 @@ export type ChartPatternDirection = 'bullish' | 'bearish' | 'neutral';
 
 export type PatternStatus = 'forming' | 'confirmed';
 
+export interface ChartPatternPivot {
+  index: number;
+  price: number;
+  kind: 'high' | 'low';
+  /** Epoch ms — filled when serializing with candle timestamps */
+  t?: number;
+}
+
 export interface ChartPatternResult {
   pattern: ChartPatternId;
   direction: ChartPatternDirection;
@@ -49,6 +57,8 @@ export interface ChartPatternResult {
   status?: PatternStatus;
   /** Neckline / trigger level for reversal patterns */
   neckline?: number;
+  /** Swing / boundary points used to detect this pattern (for chart overlay). */
+  points?: ChartPatternPivot[];
 }
 
 export type AtrTrend = 'rising' | 'falling' | 'flat';

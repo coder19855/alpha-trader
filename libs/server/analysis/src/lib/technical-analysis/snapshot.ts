@@ -5,7 +5,7 @@ import {
   CONFLUENCE_ENHANCEMENTS,
   MTF_SCORE_WEIGHTS,
 } from '@alpha-trader/server-shared';
-import { detectChartPattern } from './chart-patterns.js';
+import { detectChartPattern, stampChartPatternTimes } from './chart-patterns.js';
 import { detectCandlestickPattern } from './candlestick-patterns.js';
 import { analyzeSessionBias } from './session-bias.js';
 import { analyzeTrendQuality } from './trend-quality.js';
@@ -208,27 +208,36 @@ export function buildPriceActionSnapshot(
   };
   const chartPattern5m = benchmarkReplay
     ? emptyChartPattern
-    : detectChartPattern(
+    : stampChartPatternTimes(
+        detectChartPattern(
+          candles5m,
+          swings5m,
+          sr5m.support,
+          sr5m.resistance,
+        ),
         candles5m,
-        swings5m,
-        sr5m.support,
-        sr5m.resistance,
       );
   const chartPattern15m = benchmarkReplay
     ? emptyChartPattern
-    : detectChartPattern(
+    : stampChartPatternTimes(
+        detectChartPattern(
+          candles15m,
+          swings15m,
+          sr15m.support,
+          sr15m.resistance,
+        ),
         candles15m,
-        swings15m,
-        sr15m.support,
-        sr15m.resistance,
       );
   const chartPattern1h = benchmarkReplay
     ? emptyChartPattern
-    : detectChartPattern(
+    : stampChartPatternTimes(
+        detectChartPattern(
+          candles1h,
+          swings1h,
+          sr1h.support,
+          sr1h.resistance,
+        ),
         candles1h,
-        swings1h,
-        sr1h.support,
-        sr1h.resistance,
       );
 
   const chartBoostFor = (boost: number) =>
