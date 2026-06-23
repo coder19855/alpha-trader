@@ -41,6 +41,43 @@ export interface PaDrilldown {
   sections: PaDrilldownSection[];
 }
 
+export interface DeckTradeTakeProfit {
+  rr: string;
+  multiplier: number;
+  price: number;
+}
+
+export interface DeckTradeSetup {
+  entry: number;
+  stopLoss: number;
+  rawStopLoss: number;
+  risk: number;
+  takeProfits: DeckTradeTakeProfit[];
+  atrUsed: number;
+  stopAdjusted: boolean;
+  stopAdjustReason?: string;
+}
+
+export interface DeckTfComponentSignals {
+  structure: number;
+  breakout: number;
+  retest: number;
+  volume: number;
+  fakeout: number;
+  trendBias: number;
+  bos: number;
+  choch: number;
+  liquiditySweep: number;
+  adx: number;
+  recentMomentum: number;
+  rsi: number;
+  macd: number;
+  emaTrend: number;
+  bollinger: number;
+}
+
+export type DeckComponentSignals = Record<'5m' | '15m' | '1h', DeckTfComponentSignals>;
+
 export interface VetoBreakupItem {
   id: string;
   label: string;
@@ -258,6 +295,9 @@ export interface DeckLiveTick {
   }>;
   chartPatternNeckline?: number;
   strategyRecommendation?: DeckStrategyPayload;
+  tradeSetup?: DeckTradeSetup | null;
+  componentSignals?: DeckComponentSignals;
+  primaryTimeframe?: string;
 }
 
 export interface DeckReplayPoint {
@@ -277,6 +317,8 @@ export interface DeckReplayPoint {
   patternInsights?: DeckLiveTick['patternInsights'];
   paDrilldown?: PaDrilldown;
   paComponents?: DeckComponentGauge[];
+  tradeSetup?: DeckTradeSetup | null;
+  componentSignals?: DeckComponentSignals;
   chartPatternNeckline?: number;
 }
 

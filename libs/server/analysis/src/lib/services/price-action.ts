@@ -24,6 +24,7 @@ import { ResponseStatus } from '@alpha-trader/server-shared';
 import { parseVetoModeQuery } from '@alpha-trader/server-shared';
 import { TradingStyle } from '@alpha-trader/server-shared';
 import { patchLiveHistoryCandles } from '@alpha-trader/server-market-data';
+import { buildTradeSetup } from '../technical-analysis/timeline-utils.js';
 
 export default async function technicalAnalysisRoute(fastify: FastifyInstance) {
   fastify.get('/api/technical-analysis', async (request, reply) => {
@@ -243,6 +244,20 @@ export default async function technicalAnalysisRoute(fastify: FastifyInstance) {
       const adx5m = fastify.technicalAnalysisPlugin.calculateADX(candles5m);
       const adx15m = fastify.technicalAnalysisPlugin.calculateADX(candles15m);
       const adx1h = fastify.technicalAnalysisPlugin.calculateADX(candles1h);
+
+      const ta = fastify.technicalAnalysisPlugin;
+      const rsi5m = ta.calculateRSI(candles5m);
+      const rsi15m = ta.calculateRSI(candles15m);
+      const rsi1h = ta.calculateRSI(candles1h);
+      const macd5m = ta.calculateMACDHistogram(candles5m);
+      const macd15m = ta.calculateMACDHistogram(candles15m);
+      const macd1h = ta.calculateMACDHistogram(candles1h);
+      const emaTrend5m = ta.calculateEMATrend(candles5m);
+      const emaTrend15m = ta.calculateEMATrend(candles15m);
+      const emaTrend1h = ta.calculateEMATrend(candles1h);
+      const bollinger5m = ta.calculateBollingerSignal(candles5m);
+      const bollinger15m = ta.calculateBollingerSignal(candles15m);
+      const bollinger1h = ta.calculateBollingerSignal(candles1h);
 
       const fakeout5m = fastify.technicalAnalysisPlugin.detectFakeout(
         candles5m,
@@ -531,6 +546,31 @@ export default async function technicalAnalysisRoute(fastify: FastifyInstance) {
         ms1h,
       );
 
+      const tradeSetup = buildTradeSetup(
+        confluentSignal.action,
+        confluentSignal.entry,
+        confluentSignal.stopLoss,
+        primaryAtr,
+      );
+
+      const momentumDecay =
+        confluentSignal.momentumDecay &&
+        confluentSignal.confidenceBeforeDecay !== undefined
+          ? {
+              decayPercent: +(
+                confluentSignal.momentumDecay.decayPercent * 100
+              ).toFixed(1),
+              reasons: confluentSignal.momentumDecay.reasons,
+              confidenceBefore: confluentSignal.confidenceBeforeDecay,
+              confidenceAfter: confluentSignal.vetoedByDecay
+                ? 0
+                : confluentSignal.confidence,
+              minConfidenceRequired: confluentSignal.minConfidenceAfterDecay,
+              structuralAction: confluentSignal.structuralAction,
+              vetoedByDecay: confluentSignal.vetoedByDecay,
+            }
+          : undefined;
+
       reply.send({
         symbol,
         lastPrice: primaryLastPrice,
@@ -553,6 +593,61 @@ export default async function technicalAnalysisRoute(fastify: FastifyInstance) {
           '5m': candlestick5m.pattern,
           '15m': candlestick15m.pattern,
           '1h': candlestick1h.pattern,
+        },
+        tradeSetup,
+        momentumDecay,
+        componentSignals: {
+          '5m': {
+            structure: ms5m,
+            breakout: breakout5m,
+            retest: ta.detectRetest(candles5m, sr5m.support, sr5m.resistance),
+            volume: vol5m,
+            fakeout: fakeout5m,
+            trendBias: trendBias5m,
+            bos: bos5m,
+            choch: choch5m,
+            liquiditySweep: ls5m,
+            adx: adx5m,
+            recentMomentum: recentMomentum5m,
+            rsi: +rsi5m.toFixed(1),
+            macd: +macd5m.toFixed(3),
+            emaTrend: emaTrend5m,
+            bollinger: bollinger5m,
+          },
+          '15m': {
+            structure: ms15m,
+            breakout: breakout15m,
+            retest: ta.detectRetest(candles15m, sr15m.support, sr15m.resistance),
+            volume: vol15m,
+            fakeout: fakeout15m,
+            trendBias: trendBias15m,
+            bos: bos15m,
+            choch: choch15m,
+            liquiditySweep: ls15m,
+            adx: adx15m,
+            recentMomentum: recentMomentum15m,
+            rsi: +rsi15m.toFixed(1),
+            macd: +macd15m.toFixed(3),
+            emaTrend: emaTrend15m,
+            bollinger: bollinger15m,
+          },
+          '1h': {
+            structure: ms1h,
+            breakout: breakout1h,
+            retest: ta.detectRetest(candles1h, sr1h.support, sr1h.resistance),
+            volume: vol1h,
+            fakeout: fakeout1h,
+            trendBias: trendBias1h,
+            bos: bos1h,
+            choch: choch1h,
+            liquiditySweep: ls1h,
+            adx: adx1h,
+            recentMomentum: recentMomentum1h,
+            rsi: +rsi1h.toFixed(1),
+            macd: +macd1h.toFixed(3),
+            emaTrend: emaTrend1h,
+            bollinger: bollinger1h,
+          },
         },
         confluence: {
           mtfScore: +mtfScore.toFixed(3),

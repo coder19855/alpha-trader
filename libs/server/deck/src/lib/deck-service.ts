@@ -49,6 +49,7 @@ import {
   buildTradeGuidanceForPa,
   extractDeckStrategyPayload,
 } from './deck-strategy.js';
+import { extractDeckPaExtras } from './deck-pa-extras.js';
 import { resolveDeckAlignmentCount } from './deck-tf-alignment.js';
 import { resolveDeckMarketRegime, type DeckMarketRegime } from './market-regime.js';
 import { syncTradeJournalFromPositions } from '@alpha-trader/server-preferences';
@@ -123,6 +124,9 @@ export interface DeckLiveStreamTick {
   patternInsights?: ReturnType<typeof extractPatternInsightsFromPriceAction>;
   chartPatternNeckline?: number;
   strategyRecommendation?: ReturnType<typeof extractDeckStrategyPayload>;
+  tradeSetup?: ReturnType<typeof extractDeckPaExtras>['tradeSetup'];
+  componentSignals?: ReturnType<typeof extractDeckPaExtras>['componentSignals'];
+  primaryTimeframe?: string;
 }
 
 export interface DeckLivePayload extends Omit<DeckLiveStreamTick, 'type'> {
@@ -420,6 +424,7 @@ function buildStreamTickParts(
     vetoMode: params.vetoMode,
   });
 
+  const paExtras = extractDeckPaExtras(params.decision);
   const calculatedAt = new Date().toISOString();
   return {
     type: 'tick',
@@ -462,6 +467,9 @@ function buildStreamTickParts(
     chartPatternNeckline:
       rawPrice?.confluenceContext?.chartPatternNeckline ?? undefined,
     strategyRecommendation: extractDeckStrategyPayload(params.decision),
+    tradeSetup: paExtras.tradeSetup,
+    componentSignals: paExtras.componentSignals,
+    primaryTimeframe: paExtras.primaryTimeframe,
   };
 }
 

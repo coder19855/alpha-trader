@@ -412,6 +412,7 @@ export function timelineToConvictionSeries(
       vetoBreakup: extractVetoBreakup({ action: p.signal?.action ?? 'NO-TRADE', conviction: p.signal?.confidence ?? 0 } as any, vetoMode, 'blend'),
       liveSynced: false,
       tradeSetup: p.tradeSetup,
+      componentSignals: p.componentSignals,
       levels: p.levels,
       confluenceContext: p.confluenceContext,
       candlestick: p.candlestick,

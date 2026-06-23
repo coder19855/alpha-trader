@@ -16,6 +16,8 @@ import { EventListComponent } from '../../shared/event-list/event-list.component
 import { PaDrilldownComponent } from '../../shared/pa-drilldown/pa-drilldown.component';
 import { PaGaugeComponent } from '../../shared/pa-gauge/pa-gauge.component';
 import { PaSignalInsightsComponent } from '../../shared/pa-signal-insights/pa-signal-insights.component';
+import { PaTradeSetupComponent } from '../../shared/pa-trade-setup/pa-trade-setup.component';
+import { PaComponentSignalsComponent } from '../../shared/pa-component-signals/pa-component-signals.component';
 import { DeckGaugeReading } from '../../core/models/deck.models';
 import { MarketRegimeComponent } from '../../shared/market-regime/market-regime.component';
 import { VetoBreakupComponent } from '../../shared/veto-breakup/veto-breakup.component';
@@ -38,6 +40,8 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
     LoaderComponent,
     PaGaugeComponent,
     PaSignalInsightsComponent,
+    PaTradeSetupComponent,
+    PaComponentSignalsComponent,
     BipolarListComponent,
     PaDrilldownComponent,
     VetoBreakupComponent,
@@ -143,6 +147,16 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
             [convictionSeries]="replayConvictionSeries(data)"
             [reading]="scrubbedPaReading(data)"
             [marketRegime]="data.marketRegime"
+          />
+
+          <app-pa-trade-setup [setup]="scrubbed()?.tradeSetup" />
+          <app-pa-component-signals
+            [componentSignals]="scrubbed()?.componentSignals"
+            [primaryTimeframe]="
+              scrubbed()?.paDrilldown?.primaryTimeframe ??
+              scrubbedPaDrilldown(data)?.primaryTimeframe ??
+              '15m'
+            "
           />
 
           <app-pa-gauge

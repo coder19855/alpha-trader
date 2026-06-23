@@ -388,6 +388,8 @@ export interface TimelinePoint {
   };
   /** Entry, SL, and RR targets (1:1.5, 1:2.5, 1:4) from the signal at this point */
   tradeSetup?: TradeSetup;
+  /** Per-TF raw detector outputs at this timeline point. */
+  componentSignals?: Record<Timeframe, TfComponentSignals>;
   /** Simulated forward outcome on 5m candles until SL, TP, or window end */
   tradeOutcome: TradeOutcome;
   /**

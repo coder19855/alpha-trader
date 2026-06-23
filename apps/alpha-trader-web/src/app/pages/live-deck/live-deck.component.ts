@@ -29,6 +29,8 @@ import { DeckChartsComponent } from '../../shared/deck-charts/deck-charts.compon
 import { PaDrilldownComponent } from '../../shared/pa-drilldown/pa-drilldown.component';
 import { PaGaugeComponent } from '../../shared/pa-gauge/pa-gauge.component';
 import { PaSignalInsightsComponent } from '../../shared/pa-signal-insights/pa-signal-insights.component';
+import { PaTradeSetupComponent } from '../../shared/pa-trade-setup/pa-trade-setup.component';
+import { PaComponentSignalsComponent } from '../../shared/pa-component-signals/pa-component-signals.component';
 import { PositionsListComponent } from '../../shared/positions-list/positions-list.component';
 import { AutoExitPanelComponent } from '../../shared/auto-exit-panel/auto-exit-panel.component';
 import { AutoEntryPanelComponent } from '../../shared/auto-entry-panel/auto-entry-panel.component';
@@ -63,6 +65,8 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
     LoaderComponent,
     PaGaugeComponent,
     PaSignalInsightsComponent,
+    PaTradeSetupComponent,
+    PaComponentSignalsComponent,
     BipolarListComponent,
     PaDrilldownComponent,
     VetoBreakupComponent,
@@ -195,6 +199,12 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
             [convictionSeries]="data.convictionSeries"
             [reading]="data.gauges.priceAction"
             [marketRegime]="data.marketRegime"
+          />
+
+          <app-pa-trade-setup [setup]="data.tradeSetup" />
+          <app-pa-component-signals
+            [componentSignals]="data.componentSignals"
+            [primaryTimeframe]="data.primaryTimeframe ?? data.paDrilldown?.primaryTimeframe ?? '15m'"
           />
 
           <app-pa-gauge

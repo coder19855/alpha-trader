@@ -363,6 +363,7 @@ export async function computeTechnicalAnalysisTimeline(
       confluenceContext: snapshot.confluenceContext,
       levels: snapshot.levels,
       tradeSetup,
+      componentSignals: snapshot.componentSignals,
       tradeOutcome,
       outcomeVsEnd: calcOutcomeVsEnd(
         tradeSetup?.entry ?? snapshot.lastPrice,
