@@ -81,9 +81,10 @@ export class LiveDeckEffects {
         const stream$ = this.stream.connect(sym, sty).pipe(
           map((event) => {
             if ('type' in event && event.type === 'status') {
+              const isConnected = event.phase === 'connected';
               return DeckUiActions.trackerUpdated({
-                connected: event.phase === 'connecting',
-                live: event.phase !== 'closed',
+                connected: isConnected,
+                live: isConnected,
               });
             }
             if (

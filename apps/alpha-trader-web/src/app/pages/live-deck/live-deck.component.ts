@@ -810,12 +810,13 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       this.stream.connect(symbol, style).subscribe({
         next: (event) => {
           if ('type' in event && event.type === 'status') {
-            this.ctx.updateTracker({
-              connected: event.phase === 'connecting',
-              live: event.phase !== 'closed',
-            });
-            return;
-          }
+        const isConnected = event.phase === 'connected';
+        this.ctx.updateTracker({
+          connected: isConnected,
+          live: isConnected,
+        });
+        return;
+      }
           if (
             'type' in event &&
             (event.type === 'enrichment' ||

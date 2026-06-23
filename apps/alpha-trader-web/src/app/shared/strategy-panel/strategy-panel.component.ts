@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, signal } from '@angular/core';
 import { DeckStrategyPayload } from '../../core/models/deck.models';
 
 @Component({
@@ -18,173 +18,364 @@ import { DeckStrategyPayload } from '../../core/models/deck.models';
           </p>
         </article>
       } @else {
-        <div class="strategy-content">
-          <article class="strategy-card highlight">
-            <div class="strategy-card-head">
-              <h3 class="strategy-card-title">Decision summary</h3>
-              <span class="strategy-mode-pill">PA playbook</span>
-            </div>
+        <div class="strategy-tabs" role="tablist" aria-label="Strategy views">
+          <button
+            type="button"
+            class="strategy-tab-btn"
+            [class.active]="activeTab() === 'pa'"
+            (click)="activeTab.set('pa')"
+          >
+            Price action
+          </button>
+          <button
+            type="button"
+            class="strategy-tab-btn"
+            [class.active]="activeTab() === 'options'"
+            (click)="activeTab.set('options')"
+          >
+            Options
+          </button>
+        </div>
 
-            <div class="strategy-pill-row">
-              <span class="strategy-pill" [class]="actionPillClass(strategy.action)">
-                {{ strategy.action }}
-              </span>
-              <span class="strategy-pill">{{ strategy.bias }}</span>
-              <span
-                class="strategy-pill"
-                [class.good]="strategy.conviction >= enterThreshold()"
-                [class.warn]="strategy.conviction < enterThreshold()"
-              >
-                {{ strategy.conviction }}% conviction
-              </span>
-            </div>
+        @if (activeTab() === 'pa') {
+          <div class="strategy-content">
+            <article class="strategy-card highlight">
+              <div class="strategy-card-head">
+                <h3 class="strategy-card-title">Price action playbook</h3>
+                <span class="strategy-mode-pill">PA</span>
+              </div>
 
-            <div class="strategy-conviction-meter" aria-hidden="true">
-              <div class="strategy-conviction-track">
-                <div
-                  class="strategy-conviction-fill"
-                  [class.at-entry]="strategy.conviction >= enterThreshold()"
-                  [style.width.%]="convictionWidth()"
-                ></div>
-                @if (strategy.tradeGuidance.thresholds) {
+              <div class="strategy-pill-row">
+                <span class="strategy-pill" [class]="actionPillClass(strategy.action)">
+                  {{ strategy.action }}
+                </span>
+                <span class="strategy-pill">{{ strategy.bias }}</span>
+                <span
+                  class="strategy-pill"
+                  [class.good]="strategy.conviction >= enterThreshold()"
+                  [class.warn]="strategy.conviction < enterThreshold()"
+                >
+                  {{ strategy.conviction }}% conviction
+                </span>
+              </div>
+
+              <div class="strategy-conviction-meter" aria-hidden="true">
+                <div class="strategy-conviction-track">
                   <div
-                    class="strategy-conviction-marker"
-                    [style.left.%]="enterThreshold()"
-                    title="Entry threshold"
+                    class="strategy-conviction-fill"
+                    [class.at-entry]="strategy.conviction >= enterThreshold()"
+                    [style.width.%]="convictionWidth()"
                   ></div>
+                  @if (strategy.tradeGuidance.thresholds) {
+                    <div
+                      class="strategy-conviction-marker"
+                      [style.left.%]="enterThreshold()"
+                      title="Entry threshold"
+                    ></div>
+                  }
+                </div>
+                <div class="strategy-conviction-legend">
+                  <span>0%</span>
+                  @if (strategy.tradeGuidance.thresholds) {
+                    <span>Entry {{ strategy.tradeGuidance.thresholds.enter }}%</span>
+                  }
+                  <span>100%</span>
+                </div>
+              </div>
+
+              <div class="strategy-detail-grid">
+                @if (strategy.recommendation) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Recommendation</span>
+                    <span class="strategy-detail-value">{{ strategy.recommendation }}</span>
+                  </div>
+                }
+                @if (strategy.humanSummary) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Summary</span>
+                    <span class="strategy-detail-value">{{ strategy.humanSummary }}</span>
+                  </div>
                 }
               </div>
-              <div class="strategy-conviction-legend">
-                <span>0%</span>
-                @if (strategy.tradeGuidance.thresholds) {
-                  <span>Entry {{ strategy.tradeGuidance.thresholds.enter }}%</span>
+            </article>
+
+            <article class="strategy-card">
+              <div class="strategy-card-head">
+                <h3 class="strategy-card-title">PA guidance</h3>
+              </div>
+
+              <div class="strategy-guidance-badges">
+                <span
+                  class="strategy-consider-badge"
+                  [class.yes]="strategy.tradeGuidance.shouldConsiderTrade"
+                  [class.no]="!strategy.tradeGuidance.shouldConsiderTrade"
+                >
+                  {{ strategy.tradeGuidance.shouldConsiderTrade ? 'Consider trade' : 'Stand aside' }}
+                </span>
+                @if (strategy.suggestedRiskPercent !== null && strategy.suggestedRiskPercent !== undefined) {
+                  <span class="strategy-pill">
+                    Risk {{ strategy.suggestedRiskPercent }}% / trade
+                  </span>
                 }
-                <span>100%</span>
               </div>
-            </div>
 
-            <div class="strategy-detail-grid">
-              @if (strategy.recommendation) {
-                <div class="strategy-detail-row">
-                  <span class="strategy-detail-label">Recommendation</span>
-                  <span class="strategy-detail-value">{{ strategy.recommendation }}</span>
-                </div>
-              }
-              @if (strategy.humanSummary) {
-                <div class="strategy-detail-row">
-                  <span class="strategy-detail-label">Summary</span>
-                  <span class="strategy-detail-value">{{ strategy.humanSummary }}</span>
-                </div>
-              }
-            </div>
-          </article>
-
-          <article class="strategy-card">
-            <div class="strategy-card-head">
-              <h3 class="strategy-card-title">Trade guidance</h3>
-            </div>
-
-            <div class="strategy-guidance-badges">
-              <span
-                class="strategy-consider-badge"
-                [class.yes]="strategy.tradeGuidance.shouldConsiderTrade"
-                [class.no]="!strategy.tradeGuidance.shouldConsiderTrade"
-              >
-                {{ strategy.tradeGuidance.shouldConsiderTrade ? 'Consider trade' : 'Stand aside' }}
-              </span>
-              @if (strategy.suggestedRiskPercent !== null && strategy.suggestedRiskPercent !== undefined) {
-                <span class="strategy-pill">
-                  Risk {{ strategy.suggestedRiskPercent }}% / trade
-                </span>
-              }
-            </div>
-
-            <div class="strategy-detail-grid">
-              <div class="strategy-detail-row">
-                <span class="strategy-detail-label">Size</span>
-                <span class="strategy-detail-value">
-                  {{ strategy.tradeGuidance.sizeRecommendation }}
-                </span>
-              </div>
-              @if (strategy.tradeGuidance.notes) {
-                <div class="strategy-detail-row">
-                  <span class="strategy-detail-label">Notes</span>
-                  <span class="strategy-detail-value">{{ strategy.tradeGuidance.notes }}</span>
-                </div>
-              }
-              @if (strategy.tradeGuidance.thresholds) {
-                <div class="strategy-detail-row">
-                  <span class="strategy-detail-label">Thresholds</span>
-                  <span class="strategy-detail-value">
-                    <span class="strategy-threshold-chips">
-                      <span class="strategy-threshold-chip">
-                        Enter {{ strategy.tradeGuidance.thresholds.enter }}%
-                      </span>
-                      <span class="strategy-threshold-chip">
-                        Strong {{ strategy.tradeGuidance.thresholds.strong }}%
-                      </span>
-                      <span class="strategy-threshold-chip warn">
-                        Caution &lt;{{ strategy.tradeGuidance.thresholds.cautionBelow }}%
-                      </span>
-                    </span>
-                  </span>
-                </div>
-              }
-              @if (strategy.tradeGuidance.scoringWeights) {
-                <div class="strategy-detail-row">
-                  <span class="strategy-detail-label">Weights</span>
-                  <span class="strategy-detail-value">
-                    PA {{ weightPct(strategy.tradeGuidance.scoringWeights.priceAction) }}%
-                    · Option {{ weightPct(strategy.tradeGuidance.scoringWeights.optionFlow) }}%
-                  </span>
-                </div>
-              }
-              @for (note of strategy.riskNotes ?? []; track note) {
-                <div class="strategy-detail-row">
-                  <span class="strategy-detail-label">Risk note</span>
-                  <span class="strategy-detail-value">{{ note }}</span>
-                </div>
-              }
-            </div>
-          </article>
-
-          <article class="strategy-card">
-            <div class="strategy-card-head">
-              <h3 class="strategy-card-title">
-                Recommended strategies ({{ strategy.strategies.length }})
-              </h3>
-            </div>
-
-            @if (!strategy.strategies.length) {
               <div class="strategy-detail-grid">
                 <div class="strategy-detail-row">
-                  <span class="strategy-detail-label">Status</span>
+                  <span class="strategy-detail-label">Size</span>
                   <span class="strategy-detail-value">
-                    No strategies ranked for the current regime.
+                    {{ strategy.tradeGuidance.sizeRecommendation }}
                   </span>
                 </div>
-              </div>
-            } @else {
-              @for (item of strategy.strategies; track item.strategy; let i = $index) {
-                <div class="strategy-item">
-                  <div class="strategy-item-head">
-                    <span class="strategy-item-name">{{ i + 1 }}. {{ item.strategy }}</span>
-                    <span class="strategy-score">{{ item.confidenceScore }}%</span>
+                @if (strategy.tradeGuidance.notes) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Notes</span>
+                    <span class="strategy-detail-value">{{ strategy.tradeGuidance.notes }}</span>
                   </div>
-                  @if (item.risk) {
-                    <div class="strategy-risk" [class.low]="isLowRisk(item.risk)">
-                      {{ item.risk }}
+                }
+                @if (strategy.tradeGuidance.thresholds) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Thresholds</span>
+                    <span class="strategy-detail-value">
+                      <span class="strategy-threshold-chips">
+                        <span class="strategy-threshold-chip">
+                          Enter {{ strategy.tradeGuidance.thresholds.enter }}%
+                        </span>
+                        <span class="strategy-threshold-chip">
+                          Strong {{ strategy.tradeGuidance.thresholds.strong }}%
+                        </span>
+                        <span class="strategy-threshold-chip warn">
+                          Caution &lt;{{ strategy.tradeGuidance.thresholds.cautionBelow }}%
+                        </span>
+                      </span>
+                    </span>
+                  </div>
+                }
+                @if (strategy.tradeGuidance.scoringWeights) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Weights</span>
+                    <span class="strategy-detail-value">
+                      PA {{ weightPct(strategy.tradeGuidance.scoringWeights.priceAction) }}%
+                      · Option {{ weightPct(strategy.tradeGuidance.scoringWeights.optionFlow) }}%
+                    </span>
+                  </div>
+                }
+                @for (note of strategy.riskNotes ?? []; track note) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Risk note</span>
+                    <span class="strategy-detail-value">{{ note }}</span>
+                  </div>
+                }
+              </div>
+            </article>
+
+            <article class="strategy-card">
+              <div class="strategy-card-head">
+                <h3 class="strategy-card-title">
+                  PA strategies ({{ strategy.priceActionStrategies?.length ?? strategy.strategies.length }})
+                </h3>
+                <span class="strategy-mode-pill">PA setups</span>
+              </div>
+
+              @if (!paStrategies().length) {
+                <div class="strategy-detail-grid">
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Status</span>
+                    <span class="strategy-detail-value">
+                      No PA strategies ranked for the current regime.
+                    </span>
+                  </div>
+                </div>
+              } @else {
+                @for (item of paStrategies(); track item.strategy; let i = $index) {
+                  <div class="strategy-item">
+                    <div class="strategy-item-head">
+                      <span class="strategy-item-name">{{ i + 1 }}. {{ item.strategy }}</span>
+                      <span class="strategy-score">{{ item.confidenceScore }}%</span>
                     </div>
-                  }
-                  <div class="strategy-body">{{ item.reason }}</div>
-                  @if (item.executionHint) {
-                    <div class="strategy-body">Execution: {{ item.executionHint }}</div>
+                    @if (item.risk) {
+                      <div class="strategy-risk" [class.low]="isLowRisk(item.risk)">
+                        {{ item.risk }}
+                      </div>
+                    }
+                    <div class="strategy-body">{{ item.reason }}</div>
+                    @if (item.executionHint) {
+                      <div class="strategy-body">Execution: {{ item.executionHint }}</div>
+                    }
+                  </div>
+                }
+              }
+            </article>
+          </div>
+        } @else {
+          <div class="strategy-content">
+            <article class="strategy-card highlight">
+              <div class="strategy-card-head">
+                <h3 class="strategy-card-title">Options playbook</h3>
+                <span class="strategy-mode-pill">Options</span>
+              </div>
+
+              <div class="strategy-pill-row">
+                <span class="strategy-pill" [class]="actionPillClass(strategy.action)">
+                  {{ strategy.action }}
+                </span>
+                <span class="strategy-pill">{{ strategy.bias }}</span>
+                <span
+                  class="strategy-pill"
+                  [class.good]="strategy.conviction >= enterThreshold()"
+                  [class.warn]="strategy.conviction < enterThreshold()"
+                >
+                  {{ strategy.conviction }}% conviction
+                </span>
+              </div>
+
+              <div class="strategy-conviction-meter" aria-hidden="true">
+                <div class="strategy-conviction-track">
+                  <div
+                    class="strategy-conviction-fill"
+                    [class.at-entry]="strategy.conviction >= enterThreshold()"
+                    [style.width.%]="convictionWidth()"
+                  ></div>
+                  @if (strategy.tradeGuidance.thresholds) {
+                    <div
+                      class="strategy-conviction-marker"
+                      [style.left.%]="enterThreshold()"
+                      title="Entry threshold"
+                    ></div>
                   }
                 </div>
+                <div class="strategy-conviction-legend">
+                  <span>0%</span>
+                  @if (strategy.tradeGuidance.thresholds) {
+                    <span>Entry {{ strategy.tradeGuidance.thresholds.enter }}%</span>
+                  }
+                  <span>100%</span>
+                </div>
+              </div>
+
+              <div class="strategy-detail-grid">
+                @if (strategy.recommendation) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Market view</span>
+                    <span class="strategy-detail-value">{{ strategy.recommendation }}</span>
+                  </div>
+                }
+                @if (strategy.humanSummary) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Context</span>
+                    <span class="strategy-detail-value">{{ strategy.humanSummary }}</span>
+                  </div>
+                }
+              </div>
+            </article>
+
+            <article class="strategy-card">
+              <div class="strategy-card-head">
+                <h3 class="strategy-card-title">Options guidance</h3>
+              </div>
+
+              <div class="strategy-guidance-badges">
+                <span
+                  class="strategy-consider-badge"
+                  [class.yes]="strategy.tradeGuidance.shouldConsiderTrade"
+                  [class.no]="!strategy.tradeGuidance.shouldConsiderTrade"
+                >
+                  {{ strategy.tradeGuidance.shouldConsiderTrade ? 'Option idea active' : 'Wait for setup' }}
+                </span>
+                @if (strategy.suggestedRiskPercent !== null && strategy.suggestedRiskPercent !== undefined) {
+                  <span class="strategy-pill">
+                    Risk {{ strategy.suggestedRiskPercent }}% / trade
+                  </span>
+                }
+              </div>
+
+              <div class="strategy-detail-grid">
+                <div class="strategy-detail-row">
+                  <span class="strategy-detail-label">Structure</span>
+                  <span class="strategy-detail-value">
+                    {{ strategy.tradeGuidance.sizeRecommendation }}
+                  </span>
+                </div>
+                @if (strategy.tradeGuidance.notes) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Notes</span>
+                    <span class="strategy-detail-value">{{ strategy.tradeGuidance.notes }}</span>
+                  </div>
+                }
+                @if (strategy.tradeGuidance.thresholds) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Thresholds</span>
+                    <span class="strategy-detail-value">
+                      <span class="strategy-threshold-chips">
+                        <span class="strategy-threshold-chip">
+                          Enter {{ strategy.tradeGuidance.thresholds.enter }}%
+                        </span>
+                        <span class="strategy-threshold-chip">
+                          Strong {{ strategy.tradeGuidance.thresholds.strong }}%
+                        </span>
+                        <span class="strategy-threshold-chip warn">
+                          Caution &lt;{{ strategy.tradeGuidance.thresholds.cautionBelow }}%
+                        </span>
+                      </span>
+                    </span>
+                  </div>
+                }
+                @if (strategy.tradeGuidance.scoringWeights) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Weights</span>
+                    <span class="strategy-detail-value">
+                      PA {{ weightPct(strategy.tradeGuidance.scoringWeights.priceAction) }}%
+                      · Option {{ weightPct(strategy.tradeGuidance.scoringWeights.optionFlow) }}%
+                    </span>
+                  </div>
+                }
+                @for (note of strategy.riskNotes ?? []; track note) {
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Risk note</span>
+                    <span class="strategy-detail-value">{{ note }}</span>
+                  </div>
+                }
+              </div>
+            </article>
+
+            <article class="strategy-card">
+              <div class="strategy-card-head">
+                <h3 class="strategy-card-title">
+                  Option strategies ({{ strategy.optionStrategies?.length ?? strategy.strategies.length }})
+                </h3>
+                <span class="strategy-mode-pill">Structures</span>
+              </div>
+
+              @if (!optionStrategies().length) {
+                <div class="strategy-detail-grid">
+                  <div class="strategy-detail-row">
+                    <span class="strategy-detail-label">Status</span>
+                    <span class="strategy-detail-value">
+                      No option structures ranked for the current regime.
+                    </span>
+                  </div>
+                </div>
+              } @else {
+                @for (item of optionStrategies(); track item.strategy; let i = $index) {
+                  <div class="strategy-item">
+                    <div class="strategy-item-head">
+                      <span class="strategy-item-name">{{ i + 1 }}. {{ item.strategy }}</span>
+                      <span class="strategy-score">{{ item.confidenceScore }}%</span>
+                    </div>
+                    @if (item.risk) {
+                      <div class="strategy-risk" [class.low]="isLowRisk(item.risk)">
+                        {{ item.risk }}
+                      </div>
+                    }
+                    <div class="strategy-body">{{ item.reason }}</div>
+                    @if (item.executionHint) {
+                      <div class="strategy-body">Execution: {{ item.executionHint }}</div>
+                    }
+                  </div>
+                }
               }
-            }
-          </article>
-        </div>
+            </article>
+          </div>
+        }
       }
     </section>
   `,
@@ -195,6 +386,33 @@ import { DeckStrategyPayload } from '../../core/models/deck.models';
         flex-direction: column;
         gap: 10px;
         padding: 4px 2px 8px;
+      }
+
+      .strategy-tabs {
+        display: inline-flex;
+        gap: 6px;
+        padding: 4px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+        width: fit-content;
+      }
+
+      .strategy-tab-btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: var(--muted);
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .strategy-tab-btn.active {
+        color: var(--text);
+        background: color-mix(in srgb, var(--option) 16%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--option) 25%, transparent);
       }
 
       .strategy-empty {
@@ -331,6 +549,18 @@ import { DeckStrategyPayload } from '../../core/models/deck.models';
 })
 export class StrategyPanelComponent {
   @Input() strategy: DeckStrategyPayload | null | undefined;
+
+  readonly activeTab = signal<'pa' | 'options'>('pa');
+
+  readonly paStrategies = () =>
+    this.strategy?.priceActionStrategies?.length
+      ? this.strategy.priceActionStrategies
+      : this.strategy?.strategies ?? [];
+
+  readonly optionStrategies = () =>
+    this.strategy?.optionStrategies?.length
+      ? this.strategy.optionStrategies
+      : this.strategy?.strategies ?? [];
 
   actionPillClass(action: string): string {
     if (action === 'CE-BUY') return 'action-ce';

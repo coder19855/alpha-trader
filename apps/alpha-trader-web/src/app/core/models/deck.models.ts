@@ -123,6 +123,20 @@ export interface DeckStrategyPayload {
     reason: string;
     executionHint?: string;
   }>;
+  priceActionStrategies?: Array<{
+    strategy: string;
+    risk?: string;
+    confidenceScore: number;
+    reason: string;
+    executionHint?: string;
+  }>;
+  optionStrategies?: Array<{
+    strategy: string;
+    risk?: string;
+    confidenceScore: number;
+    reason: string;
+    executionHint?: string;
+  }>;
   replayNote?: string;
 }
 

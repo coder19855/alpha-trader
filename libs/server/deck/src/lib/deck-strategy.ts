@@ -24,6 +24,8 @@ export interface DeckStrategyPayload {
   riskNotes?: string[];
   suggestedRiskPercent?: number;
   strategies: DeckStrategyItem[];
+  priceActionStrategies?: DeckStrategyItem[];
+  optionStrategies?: DeckStrategyItem[];
   replayNote?: string;
 }
 
@@ -153,7 +155,7 @@ export function extractDeckStrategyPayload(
   opts?: { replayNote?: string },
 ): DeckStrategyPayload {
   const guidance = decision.tradeGuidance ?? {};
-  const strategies = (decision.recommendedStrategies ?? [])
+  const optionStrategies = (decision.recommendedStrategies ?? [])
     .map((strat, index) => ({
       strategy: String(strat.strategy ?? 'Strategy'),
       risk: strat.risk ? String(strat.risk) : undefined,
@@ -166,6 +168,10 @@ export function extractDeckStrategyPayload(
       executionHint: strat.executionHint?.trim() || undefined,
     }))
     .sort((a, b) => b.confidenceScore - a.confidenceScore);
+  const priceActionStrategies = buildPaRecommendedStrategies(
+    decision.action,
+    decision.conviction,
+  );
 
   return {
     action: decision.action,
@@ -184,7 +190,9 @@ export function extractDeckStrategyPayload(
     },
     riskNotes: decision.risk?.notes,
     suggestedRiskPercent: decision.risk?.suggestedRiskPercent,
-    strategies,
+    strategies: optionStrategies,
+    priceActionStrategies,
+    optionStrategies,
     replayNote: opts?.replayNote,
   };
 }
