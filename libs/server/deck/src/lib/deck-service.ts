@@ -24,6 +24,7 @@ import {
   FlowMode,
   FYERS_OPTION_INDEX_SYMBOLS,
   PriceActionResponse,
+  type OptionMetricsResponse,
   TechnicalAnalysisTimelineResponse,
   TradeDecisionAlertPayload,
   TradingStyle,
@@ -226,6 +227,27 @@ function resolveLiveIndexPrice(
   return resolveLiveIndexQuote(fastify, indexSymbol, fallback).ltp;
 }
 
+function toOptionComponentRows(
+  metrics: OptionMetricsResponse | null | undefined,
+): Array<{
+  id?: string;
+  name: string;
+  score: number;
+  interpretation?: string;
+  weightage?: number;
+  humanExplanation?: string;
+}> {
+  if (!metrics?.explanations) return [];
+  return Object.entries(metrics.explanations).map(([id, exp]) => ({
+    id,
+    name: exp.name ?? id,
+    score: Number.isFinite(exp.score ?? NaN) ? Number(exp.score) : 0,
+    interpretation: exp.interpretation,
+    weightage: exp.weightage,
+    humanExplanation: exp.meaning,
+  }));
+}
+
 function mergeSpotSeriesWithStream(
   timelineSeries: DeckSpotPoint[],
   streamSeries: DeckSpotPoint[],
@@ -255,7 +277,18 @@ type DeckDecision = TradeDecisionAlertPayload & {
       vetoReason?: string;
     };
   };
-  optionFlow?: { bias: string; overallScore?: number; components?: unknown[] };
+  optionFlow?: {
+    bias: string;
+    overallScore?: number;
+    components?: Array<{
+      id?: string;
+      name: string;
+      score: number;
+      interpretation?: string;
+      weightage?: number;
+      humanExplanation?: string;
+    }>;
+  };
   optionOverlay?: {
     status: OptionOverlayStatus;
     ageMs: number | null;
@@ -372,9 +405,7 @@ async function buildDeckDecision(
       ? {
           bias: optionMetrics.bias,
           overallScore: optionMetrics.score,
-          components: optionMetrics.components
-            ? [optionMetrics.components]
-            : [],
+          components: toOptionComponentRows(optionMetrics),
         }
       : {
           bias: 'neutral',

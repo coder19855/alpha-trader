@@ -376,6 +376,27 @@ export function extractPatternInsightsFromPriceAction(
   });
 }
 
+function normalizeOptionSnapshotComponents(snapshot: any) {
+  if (!snapshot) return [];
+  if (Array.isArray(snapshot.componentRows)) {
+    return snapshot.componentRows;
+  }
+  if (snapshot.explanations && typeof snapshot.explanations === 'object') {
+    return Object.entries(snapshot.explanations).map(([id, exp]: any) => ({
+      id,
+      name: exp.name ?? id,
+      score: Number.isFinite(exp.score) ? exp.score : 0,
+      interpretation: exp.interpretation,
+      weightage: exp.weightage,
+      humanExplanation: exp.meaning,
+    }));
+  }
+  if (Array.isArray(snapshot.components)) {
+    return snapshot.components;
+  }
+  return [];
+}
+
 export function timelineToConvictionSeries(
   points: Array<any>,
   style: TradingStyle,
@@ -388,7 +409,9 @@ export function timelineToConvictionSeries(
     const optionNeedle = computeReplayOptionNeedle(p as any, primaryTf as any);
     const paNeedle = computePaNeedleFromConviction(p.signal?.confidence ?? 0, p.timeframeScores?.[primaryTf] ?? 0);
     const whatIf = computeWhatIfForTimelinePoint(p, paNeedle);
-    const optionComponents = optionSnapshots.length ? buildOptionComponentGauges(optionSnapshots[0].components ?? []) : [];
+    const optionComponents = optionSnapshots.length
+      ? buildOptionComponentGauges(normalizeOptionSnapshotComponents(optionSnapshots[0]))
+      : [];
     return {
       t: p.asOf,
       spot: p.spot ?? 0,

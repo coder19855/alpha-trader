@@ -75,6 +75,19 @@ export async function fetchOptionMetricsSnapshot(
       ivRegime: computed.ivRegime,
       confidence: computed.confidence,
       components: computed.components,
+      explanations: Object.fromEntries(
+        Object.entries(computed.explanations).map(([key, exp]) => [
+          key,
+          {
+            name: exp.name,
+            score: exp.score ?? undefined,
+            interpretation: exp.interpretation,
+            meaning: exp.meaning,
+            weightage: exp.weightage,
+            focus: exp.focus,
+          },
+        ]),
+      ),
     };
   } catch (err) {
     fastify.log?.warn?.({ err, symbol }, 'option overlay snapshot failed');
