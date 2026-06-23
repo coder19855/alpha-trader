@@ -386,6 +386,11 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
           <app-auto-entry-panel
             [guardStatus]="data.managementContext?.autoEntry?.status"
             [guardMessage]="data.managementContext?.autoEntry?.message"
+            [confirmationCount]="data.managementContext?.autoEntry?.confirmationCount"
+            [confirmationsRequired]="
+              data.managementContext?.autoEntry?.confirmationsRequired
+            "
+            [pendingAction]="data.managementContext?.autoEntry?.pendingAction"
           />
           <app-auto-exit-panel
             [guardStatus]="data.managementContext?.autoExit?.status"

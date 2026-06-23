@@ -21,6 +21,24 @@ import { NotificationService } from '../../core/services/notification.service';
         <strong>MARKET buy</strong> orders on index options after signal confirm.
         Use <strong>dry-run</strong> first to paper-trade without broker orders.
       </p>
+      @if (confirmationCount() != null) {
+        <div class="confirmation-card">
+          <div class="confirmation-row">
+            <span class="confirmation-label">Confirmations</span>
+            <span class="confirmation-value">
+              {{ confirmationCount() }} / {{ confirmationsRequired() ?? 2 }}
+            </span>
+          </div>
+          <p class="confirmation-note">
+            Two consecutive confirmations are required before the server places the order.
+          </p>
+          @if (pendingAction()) {
+            <p class="confirmation-note pending-action">
+              Pending signal: <strong>{{ pendingAction() }}</strong>
+            </p>
+          }
+        </div>
+      }
       @if (snapshot(); as s) {
         <div class="auto-exit-controls">
           <label class="auto-exit-toggle">
@@ -174,6 +192,40 @@ import { NotificationService } from '../../core/services/notification.service';
       .live-arm-toggle input:disabled + span {
         opacity: 0.55;
       }
+      .confirmation-card {
+        margin: 10px 0 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(34, 211, 238, 0.22);
+        background: rgba(34, 211, 238, 0.06);
+      }
+      .confirmation-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+      .confirmation-label {
+        color: var(--muted);
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 700;
+      }
+      .confirmation-value {
+        color: #a5f3fc;
+        font-size: 0.95rem;
+        font-weight: 800;
+      }
+      .confirmation-note {
+        margin: 6px 0 0;
+        font-size: 0.7rem;
+        line-height: 1.4;
+        color: var(--muted);
+      }
+      .pending-action strong {
+        color: #e8ecf1;
+      }
     `,
   ],
 })
@@ -183,6 +235,9 @@ export class AutoEntryPanelComponent implements OnInit {
 
   readonly guardStatus = input<string | null | undefined>(null);
   readonly guardMessage = input<string | null | undefined>(null);
+  readonly confirmationCount = input<number | null | undefined>(null);
+  readonly confirmationsRequired = input<number | null | undefined>(null);
+  readonly pendingAction = input<string | null | undefined>(null);
   readonly saved = output<AutoEntrySnapshot>();
   readonly snapshot = signal<AutoEntrySnapshot | null>(null);
 
