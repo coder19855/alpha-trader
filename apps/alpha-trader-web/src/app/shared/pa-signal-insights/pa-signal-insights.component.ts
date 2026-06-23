@@ -23,41 +23,8 @@ interface InsightChip {
   standalone: true,
   template: `
     <section class="pa-signal-insights" aria-label="Price action quick reads">
-      @if (showOverview() && (chips().length || tfAligned != null)) {
+      @if (showOverview() && chips().length) {
         <div class="pa-insight-hero">
-          @if (tfAligned != null) {
-            <div class="pa-insight-align-ring" [attr.title]="'Timeframes sharing primary direction'">
-              <svg
-                [attr.viewBox]="'0 0 ' + alignRingSize + ' ' + alignRingSize"
-                aria-hidden="true"
-              >
-                <circle
-                  class="pa-align-ring-bg"
-                  [attr.cx]="alignRingCenter"
-                  [attr.cy]="alignRingCenter"
-                  [attr.r]="alignRingRadius"
-                  fill="none"
-                  stroke-width="7"
-                />
-                <circle
-                  class="pa-align-ring-fill"
-                  [class]="'tone-' + alignTone()"
-                  [attr.cx]="alignRingCenter"
-                  [attr.cy]="alignRingCenter"
-                  [attr.r]="alignRingRadius"
-                  fill="none"
-                  stroke-width="7"
-                  stroke-linecap="round"
-                  [attr.stroke-dasharray]="alignDash()"
-                  [attr.transform]="'rotate(-90 ' + alignRingCenter + ' ' + alignRingCenter + ')'"
-                />
-              </svg>
-              <div class="pa-align-ring-label">
-                <span class="pa-align-ring-value">{{ tfAligned }}/{{ tfAlignedTotal ?? 3 }}</span>
-                <span class="pa-align-ring-caption">TF align</span>
-              </div>
-            </div>
-          }
           @if (chips().length) {
             <div class="pa-insight-chips">
               @for (chip of chips(); track chip.id) {
@@ -126,6 +93,48 @@ interface InsightChip {
       }
 
       @if (showTimeframes() && tfSnapshots().length) {
+        @if (tfAligned != null) {
+          <div class="pa-insight-card pa-insight-align-card">
+            <div class="pa-insight-card-head">
+              <span class="pa-insight-card-title">TF alignment</span>
+              <span class="pa-insight-spark-meta">
+                {{ tfAligned }}/{{ tfAlignedTotal ?? 3 }} aligned
+              </span>
+            </div>
+            <div class="pa-insight-align-ring" [attr.title]="'Timeframes sharing primary direction'">
+              <svg
+                [attr.viewBox]="'0 0 ' + alignRingSize + ' ' + alignRingSize"
+                aria-hidden="true"
+              >
+                <circle
+                  class="pa-align-ring-bg"
+                  [attr.cx]="alignRingCenter"
+                  [attr.cy]="alignRingCenter"
+                  [attr.r]="alignRingRadius"
+                  fill="none"
+                  stroke-width="8"
+                />
+                <circle
+                  class="pa-align-ring-fill"
+                  [class]="'tone-' + alignTone()"
+                  [attr.cx]="alignRingCenter"
+                  [attr.cy]="alignRingCenter"
+                  [attr.r]="alignRingRadius"
+                  fill="none"
+                  stroke-width="8"
+                  stroke-linecap="round"
+                  [attr.stroke-dasharray]="alignDash()"
+                  [attr.transform]="'rotate(-90 ' + alignRingCenter + ' ' + alignRingCenter + ')'"
+                />
+              </svg>
+              <div class="pa-align-ring-label">
+                <span class="pa-align-ring-value">{{ tfAligned }}</span>
+                <span class="pa-align-ring-caption">of {{ tfAlignedTotal ?? 3 }}</span>
+              </div>
+            </div>
+          </div>
+        }
+
         <div class="pa-insight-card">
           <span class="pa-insight-card-title">Timeframe snapshot</span>
           <div class="pa-insight-tf-grid">
@@ -215,8 +224,8 @@ interface InsightChip {
 export class PaSignalInsightsComponent {
   readonly sparkWidth = 280;
   readonly sparkHeight = 44;
-  readonly alignRingSize = 104;
-  readonly alignRingRadius = 40;
+  readonly alignRingSize = 144;
+  readonly alignRingRadius = 56;
   readonly alignRingCenter = this.alignRingSize / 2;
 
   @Input() view: PaInsightView = 'overview';
