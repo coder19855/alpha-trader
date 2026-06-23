@@ -15,6 +15,8 @@ import { DeckChartsComponent } from '../../shared/deck-charts/deck-charts.compon
 import { EventListComponent } from '../../shared/event-list/event-list.component';
 import { PaDrilldownComponent } from '../../shared/pa-drilldown/pa-drilldown.component';
 import { PaGaugeComponent } from '../../shared/pa-gauge/pa-gauge.component';
+import { PaSignalInsightsComponent } from '../../shared/pa-signal-insights/pa-signal-insights.component';
+import { DeckGaugeReading } from '../../core/models/deck.models';
 import { MarketRegimeComponent } from '../../shared/market-regime/market-regime.component';
 import { VetoBreakupComponent } from '../../shared/veto-breakup/veto-breakup.component';
 import { VetoStripComponent } from '../../shared/veto-strip/veto-strip.component';
@@ -35,6 +37,7 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
     MatProgressSpinnerModule,
     LoaderComponent,
     PaGaugeComponent,
+    PaSignalInsightsComponent,
     BipolarListComponent,
     PaDrilldownComponent,
     VetoBreakupComponent,
@@ -119,11 +122,31 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
               @if (scrubbed()?.vetoed) {
                 <span class="settings-preview-tag">Vetoed</span>
               }
+              @if (scrubbed()?.whatIfAction && scrubbed()!.whatIfAction !== scrubbed()!.action) {
+                <span class="settings-preview-tag">
+                  What-if {{ scrubbed()!.whatIfAction }} · {{ scrubbed()!.whatIfConviction }}%
+                </span>
+              }
             </p>
             <app-market-regime [regime]="data.marketRegime" />
           </section>
+
+          <app-pa-signal-insights
+            [action]="scrubbed()?.action ?? data.gauges.priceAction.label"
+            [structuralAction]="scrubbed()?.structuralAction"
+            [vetoReason]="scrubbed()?.vetoReason"
+            [chartVetoed]="!!scrubbed()?.vetoed"
+            [conviction]="scrubbed()?.conviction ?? 0"
+            [entryThreshold]="data.entryThreshold"
+            [paDrilldown]="scrubbedPaDrilldown(data)"
+            [patternInsights]="scrubbed()?.patternInsights ?? data.patternInsights"
+            [convictionSeries]="replayConvictionSeries(data)"
+            [reading]="scrubbedPaReading(data)"
+            [marketRegime]="data.marketRegime"
+          />
+
           <app-pa-gauge
-            [reading]="data.gauges.priceAction"
+            [reading]="scrubbedPaReading(data)"
             [paPercent]="
               scrubbed()?.paPercent ?? data.gauges.priceAction.percent
             "
@@ -166,13 +189,13 @@ import { PositionSizingComponent } from '../../shared/position-sizing/position-s
             </p>
             <div class="component-list">
               <app-bipolar-list
-                [components]="data.priceActionComponents ?? []"
+                [components]="scrubbedPaComponents(data)"
                 variant="priceAction"
               />
             </div>
             @if (drilldownOpen()) {
               <div class="pa-drilldown">
-                <app-pa-drilldown [drilldown]="data.paDrilldown" />
+                <app-pa-drilldown [drilldown]="scrubbedPaDrilldown(data)" />
               </div>
             }
           </section>
@@ -341,6 +364,36 @@ export class ReplayDeckComponent implements OnInit {
       hour: '2-digit',
       minute: '2-digit',
     });
+  }
+
+  scrubbedPaReading(data: DeckReplayPayload): DeckGaugeReading {
+    const point = this.scrubbed();
+    const base = data.gauges.priceAction;
+    if (!point) return base;
+    const value = Number.isFinite(point.paNeedle) ? point.paNeedle : base.value;
+    return {
+      value,
+      percent: point.paPercent ?? base.percent,
+      label: value >= 0.35 ? 'CE' : value <= -0.35 ? 'PE' : 'FLAT',
+      ghost: base.ghost ?? null,
+    };
+  }
+
+  scrubbedPaDrilldown(data: DeckReplayPayload) {
+    return this.scrubbed()?.paDrilldown ?? data.paDrilldown;
+  }
+
+  scrubbedPaComponents(data: DeckReplayPayload) {
+    return this.scrubbed()?.paComponents ?? data.priceActionComponents ?? [];
+  }
+
+  replayConvictionSeries(data: DeckReplayPayload) {
+    return data.replayPoints.map((point) => ({
+      t: point.t,
+      option: point.optionPercent,
+      priceAction: point.paPercent,
+      combined: point.conviction,
+    }));
   }
 
   hasVetoBlock(data: DeckReplayPayload): boolean {

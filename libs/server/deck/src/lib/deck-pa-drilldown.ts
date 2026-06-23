@@ -150,6 +150,15 @@ function marketContextSection(ctx: ConfluenceContext | undefined): PaDrilldownSe
       value: `${ctx.session.phase} — ${ctx.session.label}`,
       tone: ctx.session.phase === 'midday' ? 'warn' : 'neutral',
     });
+    const bias = ctx.session.directionalBias;
+    if (Number.isFinite(bias)) {
+      const sign = bias >= 0 ? '+' : '';
+      rows.push({
+        label: 'Session bias',
+        value: `${sign}${bias.toFixed(2)} · gate ×${ctx.session.confluenceMultiplier.toFixed(2)}`,
+        tone: bias > 0.2 ? 'positive' : bias < -0.2 ? 'negative' : 'neutral',
+      });
+    }
   }
   if (ctx.volatility) {
     const v = ctx.volatility;
@@ -169,6 +178,14 @@ function marketContextSection(ctx: ConfluenceContext | undefined): PaDrilldownSe
       value: `${tq.label} · bull ${tq.bullish.toFixed(2)} / bear ${tq.bearish.toFixed(2)}`,
       tone: tq.label === 'weak' || tq.label === 'choppy' ? 'warn' : 'positive',
     });
+    const drivers = tq.components;
+    if (drivers) {
+      rows.push({
+        label: 'Trend drivers',
+        value: `ADX ${drivers.adx.toFixed(1)} · slope ${drivers.slope15m.toFixed(2)} · struct ${drivers.structure.toFixed(2)} · EMA ${drivers.emaDistance.toFixed(2)}`,
+        tone: tq.label === 'weak' || tq.label === 'choppy' ? 'warn' : 'neutral',
+      });
+    }
   }
   if (ctx.chartPattern && ctx.chartPattern !== 'none') {
     const status =
@@ -277,13 +294,21 @@ export function buildPaDrilldown(input: PaDrilldownBuildInput): PaDrilldown {
   if (market) sections.push(market);
 
   if (input.levels && (input.levels.support || input.levels.resistance)) {
+    const levelRows: PaDrilldownRow[] = [
+      { label: 'Support', value: fmtNum(input.levels.support, 2) },
+      { label: 'Resistance', value: fmtNum(input.levels.resistance, 2) },
+    ];
+    const pd = input.structureElements?.previousDayHL?.[input.primaryTimeframe];
+    if (pd?.pdHigh != null && Number.isFinite(pd.pdHigh)) {
+      levelRows.push({ label: 'PDH', value: fmtNum(pd.pdHigh, 2) });
+    }
+    if (pd?.pdLow != null && Number.isFinite(pd.pdLow)) {
+      levelRows.push({ label: 'PDL', value: fmtNum(pd.pdLow, 2) });
+    }
     sections.push({
       id: 'levels',
       title: 'Levels',
-      rows: [
-        { label: 'Support', value: fmtNum(input.levels.support, 2) },
-        { label: 'Resistance', value: fmtNum(input.levels.resistance, 2) },
-      ],
+      rows: levelRows,
     });
   }
 

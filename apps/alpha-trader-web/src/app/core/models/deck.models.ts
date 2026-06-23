@@ -160,6 +160,7 @@ export interface DeckLiveTick {
   paBaseConviction?: number;
   tfAligned?: number;
   tfAlignedTotal?: number;
+  structuralAction?: string;
   marketRegime?: DeckMarketRegime;
   entryThreshold: number;
   lastPrice: number;
@@ -270,10 +271,12 @@ export interface DeckReplayPoint {
   optionNeedle: number;
   vetoed: boolean;
   vetoReason?: string;
+  structuralAction?: string;
   whatIfAction: string;
   whatIfConviction: number;
   patternInsights?: DeckLiveTick['patternInsights'];
   paDrilldown?: PaDrilldown;
+  paComponents?: DeckComponentGauge[];
   chartPatternNeckline?: number;
 }
 

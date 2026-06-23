@@ -23,7 +23,12 @@ import { DeckMarketRegime } from '../../core/models/deck.models';
             <span class="market-regime-confirm">confirming {{ regime!.rawKind }}…</span>
           }
         </span>
-        <span class="market-regime-hint">{{ regime!.hint }}</span>
+        <span class="market-regime-hint">
+          {{ regime!.hint }}
+          @if (regime!.pollsInRegime && regime!.pollsInRegime > 1) {
+            <span class="market-regime-polls"> · {{ regime!.pollsInRegime }} polls</span>
+          }
+        </span>
       </div>
     }
   `,

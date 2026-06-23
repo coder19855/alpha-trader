@@ -28,6 +28,7 @@ import { BipolarListComponent } from '../../shared/bipolar-list/bipolar-list.com
 import { DeckChartsComponent } from '../../shared/deck-charts/deck-charts.component';
 import { PaDrilldownComponent } from '../../shared/pa-drilldown/pa-drilldown.component';
 import { PaGaugeComponent } from '../../shared/pa-gauge/pa-gauge.component';
+import { PaSignalInsightsComponent } from '../../shared/pa-signal-insights/pa-signal-insights.component';
 import { PositionsListComponent } from '../../shared/positions-list/positions-list.component';
 import { AutoExitPanelComponent } from '../../shared/auto-exit-panel/auto-exit-panel.component';
 import { AutoEntryPanelComponent } from '../../shared/auto-entry-panel/auto-entry-panel.component';
@@ -61,6 +62,7 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
     MatProgressSpinnerModule,
     LoaderComponent,
     PaGaugeComponent,
+    PaSignalInsightsComponent,
     BipolarListComponent,
     PaDrilldownComponent,
     VetoBreakupComponent,
@@ -178,6 +180,22 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
             </p>
             <app-market-regime [regime]="data.marketRegime" />
           </section>
+
+          <app-pa-signal-insights
+            [action]="data.action"
+            [structuralAction]="data.structuralAction"
+            [vetoReason]="data.vetoReason"
+            [chartVetoed]="!!data.chartVetoed"
+            [conviction]="data.conviction"
+            [entryThreshold]="data.entryThreshold"
+            [tfAligned]="data.tfAligned"
+            [tfAlignedTotal]="data.tfAlignedTotal"
+            [paDrilldown]="data.paDrilldown"
+            [patternInsights]="data.patternInsights"
+            [convictionSeries]="data.convictionSeries"
+            [reading]="data.gauges.priceAction"
+            [marketRegime]="data.marketRegime"
+          />
 
           <app-pa-gauge
             [reading]="data.gauges.priceAction"
