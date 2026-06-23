@@ -111,6 +111,16 @@ import { NotificationService } from '../../core/services/notification.service';
                 (ngModelChange)="patch({ entryThreshold: $event })"
               />
             </label>
+
+            <label class="auto-exit-toggle">
+              <input
+                type="checkbox"
+                [disabled]="!s.enabled"
+                [ngModel]="s.ignoreChartVeto"
+                (ngModelChange)="patch({ ignoreChartVeto: $event })"
+              />
+              <span>Ignore chart veto (enter even when PA veto is active)</span>
+            </label>
           }
 
           @if (s.signalMode === 'single') {

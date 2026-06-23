@@ -43,6 +43,7 @@ import { ComponentsHelpComponent } from '../../shared/components-help/components
 import { PositionSizingComponent } from '../../shared/position-sizing/position-sizing.component';
 import { OptionChainSignalPanelComponent } from '../../shared/option-chain-signal-panel/option-chain-signal-panel.component';
 import { OptionChainPollService } from '../../core/services/option-chain-poll.service';
+import { DeckReloadService } from '../../core/services/deck-reload.service';
 import { toOptionComponentGauges } from '../../core/models/option-chain.models';
 import { patchMultiTfSpotCandles } from '../../core/utils/live-candle-patch';
 import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timestamp';
@@ -574,11 +575,13 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
 export class LiveDeckComponent implements OnInit, OnDestroy {
   readonly ctx = inject(DeckContextService);
   readonly optionPoll = inject(OptionChainPollService);
+  private readonly deckReload = inject(DeckReloadService);
   private readonly deckApi = inject(DeckApiService);
   private readonly stream = inject(DeckStreamService);
   private readonly notify = inject(NotificationService);
   private readonly deckAlerts = inject(DeckAlertService);
   private sub: Subscription | null = null;
+  private reloadSub: Subscription | null = null;
   private pendingChartPatch: Partial<DeckLiveTick> | null = null;
 
   readonly tick = signal<DeckLiveTick | null>(null);
@@ -600,6 +603,8 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       const style = this.ctx.style();
       this.reload(symbol, style);
     });
+
+    this.reloadSub = this.deckReload.requested.subscribe(() => this.forceReconnect());
 
     effect(() => {
       const tab = this.ctx.activeTab();
@@ -638,6 +643,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
+    this.reloadSub?.unsubscribe();
     this.optionPoll.stop();
   }
 
@@ -650,7 +656,22 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
 
   retry(): void {
     this.error.set(null);
-    this.reload(this.ctx.symbol(), this.ctx.style());
+    this.forceReconnect();
+  }
+
+  private forceReconnect(): void {
+    const symbol = this.ctx.symbol();
+    const style = this.ctx.style();
+    this.reload(symbol, style);
+    this.refreshOptionChain(symbol, style);
+  }
+
+  private refreshOptionChain(symbol: string, style: TradingStyle): void {
+    this.optionPoll.prefetch({
+      symbol,
+      style,
+      paAction: this.tick()?.action,
+    });
   }
 
   onSymbolChange(symbol: string): void {
@@ -737,7 +758,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     }
     if (Number.isFinite(data.chartPatternNeckline)) {
       overlays.push({
-        id: 'pattern',
+        id: 'chartPattern',
         label: pattern?.pattern ? `${this.displayPatternName(pattern.pattern)} neckline` : 'Neckline',
         price: data.chartPatternNeckline!,
         color: patternColor,
@@ -823,6 +844,9 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
           connected: isConnected,
           live: isConnected,
         });
+        if (isConnected || event.phase === 'disconnected') {
+          this.deckReload.markFinished();
+        }
         return;
       }
           if (
@@ -846,6 +870,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
           }
         },
         error: (err: Error) => {
+          this.deckReload.markFinished();
           this.ctx.updateTracker({ connected: false, live: false });
           if (!this.tick()) {
             const message = err.message || 'Stream failed';

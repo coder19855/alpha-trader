@@ -2887,7 +2887,7 @@ body.flow-option-only .flow-pa-lane {
 
 .chart-layer-toggles {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 6px;
   width: 100%;
   margin: 0 0 8px;
@@ -2960,6 +2960,14 @@ body.flow-option-only .flow-pa-lane {
   border-radius: 50%;
   background: var(--layer-color);
   box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.25);
+}
+
+.chart-layer-swatch.candle {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid var(--layer-color);
 }
 
 .chart-layer-label {

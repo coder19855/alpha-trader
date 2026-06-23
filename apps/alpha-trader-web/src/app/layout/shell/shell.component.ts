@@ -29,6 +29,8 @@ import {
   NSE_SESSION_LABEL,
 } from '../../core/utils/market-hours';
 import { AlertSoundService } from '../../core/services/alert-sound.service';
+import { DeckReloadService } from '../../core/services/deck-reload.service';
+import { NotificationService } from '../../core/services/notification.service';
 import { ToastStackComponent } from '../../shared/toast-stack/toast-stack.component';
 
 interface AppNavItem {
@@ -54,8 +56,10 @@ interface AppNavItem {
 })
 export class ShellComponent implements OnInit, OnDestroy {
   readonly ctx = inject(DeckContextService);
+  readonly deckReload = inject(DeckReloadService);
   readonly themes = inject(ThemeService);
   private readonly deckApi = inject(DeckApiService);
+  private readonly notify = inject(NotificationService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly alertSounds = inject(AlertSoundService);
@@ -128,6 +132,14 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   login(): void {
     this.auth.startBrowserLogin(this.router.url || '/');
+  }
+
+  reloadDeck(): void {
+    if (this.ctx.appView() !== 'live') {
+      this.notify.info('Open Live deck to reconnect the stream.');
+      return;
+    }
+    this.deckReload.request();
   }
 
   toggleNav(): void {

@@ -1,0 +1,419 @@
+export type ChartTf = '5m' | '15m' | '1h';
+
+export interface SpotCandle {
+  t: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+}
+
+export interface PatternInsight {
+  timeframe: string;
+  pattern: string;
+  tone: string;
+  label: string;
+  status?: string;
+  biasLabel?: string;
+  type?: 'chart' | 'candlestick';
+  neckline?: number;
+}
+
+export interface PatternDrawOp {
+  id: string;
+  kind: 'polyline' | 'polygon' | 'hline' | 'marker' | 'text';
+  points: Array<{ t: number; price: number }>;
+  color: string;
+  fill?: string;
+  dashed?: boolean;
+  label?: string;
+  strokeWidth?: number;
+  markerBullish?: boolean;
+}
+
+function normalizePatternName(pattern: string): string {
+  return pattern.toLowerCase().replace(/\s+/g, '_');
+}
+
+export function isValidChartPattern(insight: PatternInsight): boolean {
+  if (insight.type === 'candlestick' || insight.label === 'Candlestick') return false;
+  if (insight.type && insight.type !== 'chart' && insight.label !== 'Chart Pattern') {
+    return false;
+  }
+  const name = normalizePatternName(insight.pattern);
+  if (!name || name === 'none') return false;
+  if (insight.status && !['forming', 'confirmed'].includes(insight.status)) return false;
+  return true;
+}
+
+/** Up to two valid chart-pattern insights for the active timeframe (geometry uses those candles). */
+export function selectChartPatternsToPlot(
+  insights: PatternInsight[],
+  activeTf: ChartTf,
+  max = 2,
+): PatternInsight[] {
+  return insights
+    .filter(isValidChartPattern)
+    .filter((row) => row.timeframe === activeTf)
+    .sort((a, b) => patternRecencyRank(b) - patternRecencyRank(a))
+    .slice(0, max);
+}
+
+function patternRecencyRank(insight: PatternInsight): number {
+  let rank = 0;
+  if (insight.status === 'confirmed') rank += 2;
+  else if (insight.status === 'forming') rank += 1;
+  return rank;
+}
+
+export function candlestickInsightForTf(
+  insights: PatternInsight[],
+  activeTf: ChartTf,
+): PatternInsight | null {
+  return (
+    insights.find(
+      (row) =>
+        (row.type === 'candlestick' || row.label === 'Candlestick') &&
+        row.timeframe === activeTf &&
+        row.pattern &&
+        !/^none$/i.test(row.pattern),
+    ) ?? null
+  );
+}
+
+export function resolvePatternColor(pattern?: string, tone?: string): string {
+  const normalized = normalizePatternName(pattern ?? '');
+  if (
+    normalized.includes('double_top') ||
+    normalized.includes('head_and_shoulders') ||
+    normalized.includes('rising_wedge') ||
+    normalized.includes('bear_flag') ||
+    normalized.includes('descending') ||
+    normalized.includes('range_breakout_bear') ||
+    normalized.includes('trendline_break_bear')
+  ) {
+    return '#ef4444';
+  }
+  if (
+    normalized.includes('double_bottom') ||
+    normalized.includes('inverse_head') ||
+    normalized.includes('falling_wedge') ||
+    normalized.includes('bull_flag') ||
+    normalized.includes('ascending') ||
+    normalized.includes('range_breakout_bull') ||
+    normalized.includes('trendline_break_bull')
+  ) {
+    return '#22c55e';
+  }
+  if ((tone ?? '').toLowerCase() === 'bear') return '#fb923c';
+  if ((tone ?? '').toLowerCase() === 'bull') return '#4ade80';
+  return '#a78bfa';
+}
+
+type Pivot = { index: number; price: number; kind: 'high' | 'low' };
+
+function findSwingLows(candles: SpotCandle[], window = 2): Pivot[] {
+  const swings: Pivot[] = [];
+  for (let i = window; i < candles.length - window; i += 1) {
+    const low = candles[i].l;
+    let isSwing = true;
+    for (let j = 1; j <= window; j += 1) {
+      if (candles[i - j].l <= low || candles[i + j].l <= low) {
+        isSwing = false;
+        break;
+      }
+    }
+    if (isSwing) swings.push({ index: i, price: low, kind: 'low' });
+  }
+  return swings;
+}
+
+function findSwingHighs(candles: SpotCandle[], window = 2): Pivot[] {
+  const swings: Pivot[] = [];
+  for (let i = window; i < candles.length - window; i += 1) {
+    const high = candles[i].h;
+    let isSwing = true;
+    for (let j = 1; j <= window; j += 1) {
+      if (candles[i - j].h >= high || candles[i + j].h >= high) {
+        isSwing = false;
+        break;
+      }
+    }
+    if (isSwing) swings.push({ index: i, price: high, kind: 'high' });
+  }
+  return swings;
+}
+
+function candlePoint(candles: SpotCandle[], index: number): { t: number; price: number } {
+  return { t: candles[index].t, price: candles[index].c };
+}
+
+function pivotPoint(candles: SpotCandle[], pivot: Pivot): { t: number; price: number } {
+  return { t: candles[pivot.index].t, price: pivot.price };
+}
+
+function lineBetween(
+  candles: SpotCandle[],
+  fromIdx: number,
+  fromPrice: number,
+  toIdx: number,
+  toPrice: number,
+  extendBars = 4,
+): Array<{ t: number; price: number }> {
+  if (!candles.length || fromIdx === toIdx) return [];
+  const slope = (toPrice - fromPrice) / (toIdx - fromIdx);
+  const start = Math.max(0, Math.min(fromIdx, toIdx) - extendBars);
+  const end = Math.min(candles.length - 1, Math.max(fromIdx, toIdx) + extendBars);
+  const points: Array<{ t: number; price: number }> = [];
+  for (let i = start; i <= end; i += 1) {
+    const price = fromPrice + slope * (i - fromIdx);
+    points.push({ t: candles[i].t, price: +price.toFixed(2) });
+  }
+  return points;
+}
+
+function boxFromWindow(
+  candles: SpotCandle[],
+  startIdx: number,
+  endIdx: number,
+): Array<{ t: number; price: number }> {
+  const slice = candles.slice(startIdx, endIdx + 1);
+  if (!slice.length) return [];
+  const high = Math.max(...slice.map((c) => c.h));
+  const low = Math.min(...slice.map((c) => c.l));
+  const t0 = slice[0].t;
+  const t1 = slice[slice.length - 1].t;
+  return [
+    { t: t0, price: high },
+    { t: t1, price: high },
+    { t: t1, price: low },
+    { t: t0, price: low },
+  ];
+}
+
+function addNecklineOp(
+  ops: PatternDrawOp[],
+  id: string,
+  candles: SpotCandle[],
+  neckline: number,
+  color: string,
+): void {
+  if (!Number.isFinite(neckline) || !candles.length) return;
+  const start = candles[Math.max(0, candles.length - 28)].t;
+  const end = candles[candles.length - 1].t;
+  ops.push({
+    id,
+    kind: 'hline',
+    points: [
+      { t: start, price: neckline },
+      { t: end, price: neckline },
+    ],
+    color,
+    dashed: true,
+    label: 'Neckline',
+    strokeWidth: 1.5,
+  });
+}
+
+export function buildChartPatternOps(
+  insight: PatternInsight,
+  candles: SpotCandle[],
+  fallbackNeckline?: number,
+): PatternDrawOp[] {
+  if (!candles.length) return [];
+
+  const color = resolvePatternColor(insight.pattern, insight.tone);
+  const normalized = normalizePatternName(insight.pattern);
+  const neckline = insight.neckline ?? fallbackNeckline;
+  const ops: PatternDrawOp[] = [];
+  const highs = findSwingHighs(candles);
+  const lows = findSwingLows(candles);
+
+  if (normalized.includes('double_top') && highs.length >= 2) {
+    const h1 = highs[highs.length - 2];
+    const h2 = highs[highs.length - 1];
+    ops.push({
+      id: 'dt-peaks',
+      kind: 'polyline',
+      points: [pivotPoint(candles, h1), pivotPoint(candles, h2)],
+      color,
+      strokeWidth: 2,
+      label: insight.pattern,
+    });
+    if (Number.isFinite(neckline)) addNecklineOp(ops, 'dt-neck', candles, neckline!, color);
+    return ops;
+  }
+
+  if (normalized.includes('double_bottom') && lows.length >= 2) {
+    const l1 = lows[lows.length - 2];
+    const l2 = lows[lows.length - 1];
+    ops.push({
+      id: 'db-troughs',
+      kind: 'polyline',
+      points: [pivotPoint(candles, l1), pivotPoint(candles, l2)],
+      color,
+      strokeWidth: 2,
+      label: insight.pattern,
+    });
+    if (Number.isFinite(neckline)) addNecklineOp(ops, 'db-neck', candles, neckline!, color);
+    return ops;
+  }
+
+  if (normalized.includes('head_and_shoulders') && highs.length >= 3) {
+    const left = highs[highs.length - 3];
+    const head = highs[highs.length - 2];
+    const right = highs[highs.length - 1];
+    ops.push({
+      id: 'hs-outline',
+      kind: 'polyline',
+      points: [
+        pivotPoint(candles, left),
+        pivotPoint(candles, head),
+        pivotPoint(candles, right),
+      ],
+      color,
+      strokeWidth: 2,
+      label: insight.pattern,
+    });
+    if (Number.isFinite(neckline)) addNecklineOp(ops, 'hs-neck', candles, neckline!, color);
+    return ops;
+  }
+
+  if (normalized.includes('inverse_head') && lows.length >= 3) {
+    const left = lows[lows.length - 3];
+    const head = lows[lows.length - 2];
+    const right = lows[lows.length - 1];
+    ops.push({
+      id: 'ihs-outline',
+      kind: 'polyline',
+      points: [
+        pivotPoint(candles, left),
+        pivotPoint(candles, head),
+        pivotPoint(candles, right),
+      ],
+      color,
+      strokeWidth: 2,
+      label: insight.pattern,
+    });
+    if (Number.isFinite(neckline)) addNecklineOp(ops, 'ihs-neck', candles, neckline!, color);
+    return ops;
+  }
+
+  if (normalized.includes('wedge') && candles.length >= 20) {
+    const window = candles.slice(-20);
+    const early = window.slice(0, 8);
+    const late = window.slice(-8);
+    const earlyHigh = Math.max(...early.map((c) => c.h));
+    const lateHigh = Math.max(...late.map((c) => c.h));
+    const earlyLow = Math.min(...early.map((c) => c.l));
+    const lateLow = Math.min(...late.map((c) => c.l));
+    const startIdx = candles.length - 20;
+    const midIdx = candles.length - 10;
+    const endIdx = candles.length - 1;
+    ops.push({
+      id: 'wedge-upper',
+      kind: 'polyline',
+      points: lineBetween(candles, startIdx, earlyHigh, endIdx, lateHigh, 2),
+      color,
+      strokeWidth: 2,
+    });
+    ops.push({
+      id: 'wedge-lower',
+      kind: 'polyline',
+      points: lineBetween(candles, startIdx, earlyLow, midIdx, lateLow, 2),
+      color,
+      strokeWidth: 2,
+      label: insight.pattern,
+    });
+    if (Number.isFinite(neckline)) addNecklineOp(ops, 'wedge-neck', candles, neckline!, color);
+    return ops;
+  }
+
+  if (normalized.includes('triangle') && candles.length >= 16) {
+    const window = candles.slice(-16);
+    const early = window.slice(0, 5);
+    const late = window.slice(-5);
+    const earlyHigh = Math.max(...early.map((c) => c.h));
+    const lateHigh = Math.max(...late.map((c) => c.h));
+    const earlyLow = Math.min(...early.map((c) => c.l));
+    const lateLow = Math.min(...late.map((c) => c.l));
+    const startIdx = candles.length - 16;
+    const endIdx = candles.length - 1;
+    ops.push({
+      id: 'tri-upper',
+      kind: 'polyline',
+      points: lineBetween(candles, startIdx, earlyHigh, endIdx, lateHigh, 1),
+      color,
+      strokeWidth: 2,
+    });
+    ops.push({
+      id: 'tri-lower',
+      kind: 'polyline',
+      points: lineBetween(candles, startIdx, earlyLow, endIdx, lateLow, 1),
+      color,
+      strokeWidth: 2,
+      label: insight.pattern,
+    });
+    return ops;
+  }
+
+  if (normalized.includes('flag') && candles.length >= 24) {
+    const consStart = candles.length - 10;
+    const consEnd = candles.length - 2;
+    const poleStart = candles.length - 24;
+    const poleEnd = consStart;
+    ops.push({
+      id: 'flag-pole',
+      kind: 'polyline',
+      points: [candlePoint(candles, poleStart), candlePoint(candles, poleEnd)],
+      color,
+      strokeWidth: 2,
+    });
+    ops.push({
+      id: 'flag-box',
+      kind: 'polygon',
+      points: boxFromWindow(candles, consStart, consEnd),
+      color,
+      fill: `${color}22`,
+      strokeWidth: 1.5,
+      label: insight.pattern,
+    });
+    if (Number.isFinite(neckline)) addNecklineOp(ops, 'flag-neck', candles, neckline!, color);
+    return ops;
+  }
+
+  const pivots = [...highs, ...lows].sort((a, b) => a.index - b.index).slice(-5);
+  if (pivots.length >= 2) {
+    ops.push({
+      id: 'generic-outline',
+      kind: 'polyline',
+      points: pivots.map((p) => pivotPoint(candles, p)),
+      color,
+      strokeWidth: 2,
+      label: insight.pattern,
+    });
+    if (Number.isFinite(neckline)) addNecklineOp(ops, 'generic-neck', candles, neckline!, color);
+  }
+
+  return ops;
+}
+
+export function buildCandlestickMarkerOp(
+  insight: PatternInsight,
+  candles: SpotCandle[],
+): PatternDrawOp | null {
+  if (!candles.length) return null;
+  const last = candles[candles.length - 1];
+  const color = resolvePatternColor(insight.pattern, insight.tone);
+  const bullish = insight.tone === 'bull';
+  const markerPrice = bullish ? last.l : last.h;
+  return {
+    id: 'candlestick-marker',
+    kind: 'marker',
+    points: [{ t: last.t, price: markerPrice }],
+    color,
+    label: insight.pattern,
+    strokeWidth: 2,
+    markerBullish: bullish,
+  };
+}

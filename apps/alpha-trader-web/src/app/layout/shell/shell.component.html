@@ -179,6 +179,26 @@
           <div class="topbar-status-row">
             <span class="conn-dot" [class.ok]="ctx.connected()"></span>
             <span>{{ ctx.connected() ? 'Connected' : 'Disconnected' }}</span>
+            @if (ctx.appView() === 'live') {
+              <button
+                type="button"
+                class="deck-reload-btn"
+                [disabled]="deckReload.busy()"
+                [attr.aria-label]="
+                  deckReload.busy()
+                    ? 'Reconnecting'
+                    : 'Reconnect stream and refresh option chain'
+                "
+                [title]="
+                  deckReload.busy()
+                    ? 'Reconnecting…'
+                    : 'Reconnect stream and refresh option chain'
+                "
+                (click)="reloadDeck()"
+              >
+                <mat-icon [class.spinning]="deckReload.busy()">refresh</mat-icon>
+              </button>
+            }
             @if (!session()?.auth?.fyersValid) {
               <span>·</span>
               <button type="button" class="connect-fyers-btn" (click)="login()">

@@ -18,6 +18,8 @@ export interface AutoEntryPreferenceState {
   signalMode: AutoEntrySignalMode;
   signalProfile: string;
   entryThreshold: number;
+  /** When true, engine mode ignores PA chart veto for entry signals. */
+  ignoreChartVeto: boolean;
   lots: number;
   maxEntriesPerDay: number;
   greenDayStop: boolean;
@@ -31,6 +33,7 @@ const DEFAULT_AUTO_ENTRY: AutoEntryPreferenceState = {
   signalMode: 'engine',
   signalProfile: 'engine',
   entryThreshold: 60,
+  ignoreChartVeto: false,
   lots: 1,
   maxEntriesPerDay: 3,
   greenDayStop: false,
@@ -98,6 +101,7 @@ export function normalizeAutoEntryPreference(
     signalMode,
     signalProfile,
     entryThreshold: clampInt(raw?.entryThreshold, 40, 85, 60),
+    ignoreChartVeto: Boolean(raw?.ignoreChartVeto),
     lots: clampInt(raw?.lots, 1, 20, 1),
     maxEntriesPerDay: clampInt(raw?.maxEntriesPerDay, 1, 10, 3),
     greenDayStop: Boolean(raw?.greenDayStop),
@@ -114,6 +118,11 @@ export function describeAutoEntryPreference(
     lines.push(
       `Default engine — enter when PA conviction ≥ ${pref.entryThreshold}% (full conviction gates).`,
     );
+    if (pref.ignoreChartVeto) {
+      lines.push(
+        'Chart veto ignored — entries may fire while PA veto is active (conviction + tradeable action still required).',
+      );
+    }
   } else {
     lines.push(`Fast entry preset: ${pref.signalProfile} (component filters on 5m/15m/1h).`);
   }

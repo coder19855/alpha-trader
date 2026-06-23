@@ -1,7 +1,10 @@
 import { AutoExitDecisionSlice } from '@alpha-trader/server-position';
 import { AutoEntryPreferenceState } from '@alpha-trader/server-preferences';
 import { TradingStyle } from '@alpha-trader/server-shared';
-import { resolveEngineEntryThreshold } from './auto-entry-runner.js';
+import {
+  isEngineEntryBlockedByVeto,
+  resolveEngineEntryThreshold,
+} from './auto-entry-runner.js';
 
 function basePref(
   patch: Partial<AutoEntryPreferenceState> = {},
@@ -17,6 +20,7 @@ function basePref(
     lots: 1,
     maxEntriesPerDay: 3,
     greenDayStop: false,
+    ignoreChartVeto: false,
     ...patch,
   };
 }
@@ -29,6 +33,9 @@ function baseDecision(
     conviction: 55,
     lastPrice: 24_500,
     tradeGuidance: { thresholdsForThisStyle: { enter: 40 } },
+    priceAction: {
+      overallSignal: { vetoReason: 'Double top forming' },
+    },
     ...patch,
   };
 }
@@ -64,5 +71,20 @@ describe('resolveEngineEntryThreshold', () => {
         TradingStyle.Intraday,
       ),
     ).toBe(60);
+  });
+});
+
+describe('isEngineEntryBlockedByVeto', () => {
+  it('blocks engine entries when chart veto is active by default', () => {
+    expect(isEngineEntryBlockedByVeto(basePref(), baseDecision())).toBe(true);
+  });
+
+  it('allows engine entries when ignoreChartVeto is enabled', () => {
+    expect(
+      isEngineEntryBlockedByVeto(
+        basePref({ ignoreChartVeto: true }),
+        baseDecision(),
+      ),
+    ).toBe(false);
   });
 });

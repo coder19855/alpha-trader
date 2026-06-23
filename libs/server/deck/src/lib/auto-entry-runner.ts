@@ -80,12 +80,24 @@ function isNearEngineEntryThreshold(
   );
 }
 
+export function isEngineEntryBlockedByVeto(
+  pref: AutoEntryPreferenceState,
+  decision: AutoExitDecisionSlice,
+): boolean {
+  return (
+    pref.signalMode === 'engine' &&
+    !pref.ignoreChartVeto &&
+    Boolean(resolveChartVetoReason(decision))
+  );
+}
+
 function describeEngineWatchDetail(
   decision: AutoExitDecisionSlice,
   threshold: number,
+  ignoreChartVeto = false,
 ): string {
   const vetoReason = resolveChartVetoReason(decision);
-  if (vetoReason) {
+  if (vetoReason && !ignoreChartVeto) {
     return `Chart veto active — ${vetoReason}`;
   }
   if (!isTradeableAction(decision.action)) {
@@ -166,7 +178,7 @@ async function resolveEntrySignal(
   },
 ): Promise<{ action: HeldDirection; reason: string } | null> {
   if (pref.signalMode === 'engine') {
-    if (resolveChartVetoReason(decision)) return null;
+    if (isEngineEntryBlockedByVeto(pref, decision)) return null;
     if (!isTradeableAction(decision.action)) return null;
     const threshold = resolveEngineEntryThreshold(pref, decision, style);
     if (decision.conviction < threshold) return null;
@@ -323,12 +335,16 @@ export async function attachAutoEntryGuard(params: {
           : `Watching preset ${pref.signalProfile}`,
       detail:
         pref.signalMode === 'engine'
-          ? describeEngineWatchDetail(decision, effectiveEntryThreshold)
+          ? describeEngineWatchDetail(
+              decision,
+              effectiveEntryThreshold,
+              pref.ignoreChartVeto,
+            )
           : `Waiting for preset gates on ${pref.signalProfile}.`,
     });
     const hint =
       pref.signalMode === 'engine'
-        ? `Watching engine — ${describeEngineWatchDetail(decision, effectiveEntryThreshold)}`
+        ? `Watching engine — ${describeEngineWatchDetail(decision, effectiveEntryThreshold, pref.ignoreChartVeto)}`
         : `Watching ${pref.signalProfile} — waiting for preset gates.`;
     const guard = buildGuardStatus({
       ...guardParams,

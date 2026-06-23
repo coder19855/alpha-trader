@@ -243,6 +243,8 @@ export interface DeckLiveTick {
     label: string;
     status?: string;
     biasLabel?: string;
+    type?: 'chart' | 'candlestick';
+    neckline?: number;
   }>;
   chartPatternNeckline?: number;
   strategyRecommendation?: DeckStrategyPayload;
@@ -338,6 +340,7 @@ export interface AutoEntrySnapshot {
   signalMode: AutoEntrySignalMode;
   signalProfile: string;
   entryThreshold: number;
+  ignoreChartVeto: boolean;
   lots: number;
   maxEntriesPerDay: number;
   greenDayStop: boolean;

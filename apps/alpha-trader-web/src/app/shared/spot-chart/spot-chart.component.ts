@@ -21,6 +21,14 @@ import {
   createChart,
 } from 'lightweight-charts';
 import { ChartOverlayLine } from '../../core/models/deck.models';
+import {
+  PatternDrawOp,
+  PatternInsight,
+  buildCandlestickMarkerOp,
+  buildChartPatternOps,
+  candlestickInsightForTf,
+  selectChartPatternsToPlot,
+} from './spot-chart-pattern-geometry';
 
 type Candle = { t: number; o: number; h: number; l: number; c: number };
 type SpotPoint = { t: number; v: number };
@@ -35,7 +43,12 @@ interface IstChartSession {
 @Component({
   selector: 'app-spot-chart',
   standalone: true,
-  template: `<div #container class="chart-host"></div>`,
+  template: `
+    <div class="chart-shell">
+      <div #container class="chart-host"></div>
+      <svg #overlay class="pattern-overlay" aria-hidden="true"></svg>
+    </div>
+  `,
   styles: [
     `
       :host {
@@ -43,7 +56,8 @@ interface IstChartSession {
         width: 100%;
         min-height: 280px;
       }
-      .chart-host {
+      .chart-shell {
+        position: relative;
         width: 100%;
         height: 280px;
         min-height: 280px;
@@ -52,24 +66,30 @@ interface IstChartSession {
         border: 1px solid var(--border);
         background: var(--chart-bg, var(--surface));
       }
+      .chart-host {
+        width: 100%;
+        height: 100%;
+      }
+      .pattern-overlay {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: visible;
+      }
     `,
   ],
 })
 export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   @ViewChild('container', { static: true }) container!: ElementRef<HTMLDivElement>;
+  @ViewChild('overlay', { static: true }) overlay!: ElementRef<SVGSVGElement>;
   @Input() candles: Candle[] = [];
   @Input() spotSeries: SpotPoint[] = [];
   @Input() scrubTime: number | null = null;
   @Input() overlays: ChartOverlayLine[] = [];
   @Input() chartPatternNeckline?: number;
-  @Input() patternInsights: Array<{
-    timeframe: string;
-    pattern: string;
-    tone: string;
-    label: string;
-    status?: string;
-    biasLabel?: string;
-  }> = [];
+  @Input() patternInsights: PatternInsight[] = [];
   @Input() timeframe: '5m' | '15m' | '1h' = '15m';
   @Input() chartStyle: SpotChartStyle = 'candlestick';
   @Input() layers: Record<string, boolean> = {};
@@ -82,7 +102,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
   private ema21Series: ISeriesApi<'Line'> | null = null;
   private supportTrendSeries: ISeriesApi<'Line'> | null = null;
   private resistanceTrendSeries: ISeriesApi<'Line'> | null = null;
-  private patternSeries: ISeriesApi<'Line'> | null = null;
+  private overlayRedrawId: number | null = null;
   private overlayPriceLines: Array<{
     line: IPriceLine;
     series: ISeriesApi<'Candlestick'> | ISeriesApi<'Line'>;
@@ -145,6 +165,10 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       cancelAnimationFrame(this.initRetryId);
       this.initRetryId = null;
     }
+    if (this.overlayRedrawId != null) {
+      cancelAnimationFrame(this.overlayRedrawId);
+      this.overlayRedrawId = null;
+    }
     this.resizeObserver?.disconnect();
     this.intersectionObserver?.disconnect();
     this.destroyChart();
@@ -202,7 +226,6 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.ema21Series = null;
     this.supportTrendSeries = null;
     this.resistanceTrendSeries = null;
-    this.patternSeries = null;
     this.overlayPriceLines = [];
     this.lastDataKey = '';
     this.hasFocusedSession = false;
@@ -272,6 +295,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
       if (range && this.latestLogicalIndex >= 0) {
         this.followLatestViewport = range.to >= this.latestLogicalIndex - 1;
       }
+      this.scheduleOverlayRedraw();
     });
 
     this.candleSeries = this.chart.addSeries(CandlestickSeries, {
@@ -316,13 +340,6 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.resistanceTrendSeries = this.chart.addSeries(LineSeries, {
       color: '#fb923c',
       lineWidth: 1,
-      lineStyle: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-    });
-    this.patternSeries = this.chart.addSeries(LineSeries, {
-      color: '#a78bfa',
-      lineWidth: 2,
       lineStyle: 2,
       priceLineVisible: false,
       lastValueVisible: false,
@@ -416,7 +433,7 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
 
       this.applyOverlayLines(activeSeries);
       this.applyStudyLines(candles);
-      this.applyPatternOverlay(activeSeries, candles, spotSeries);
+      this.scheduleOverlayRedraw(candles, activeSeries);
     } catch (err) {
       console.warn('[spot-chart] render failed', err);
     }
@@ -610,7 +627,6 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.ema21Series?.setData([]);
     this.supportTrendSeries?.setData([]);
     this.resistanceTrendSeries?.setData([]);
-    this.patternSeries?.setData([]);
   }
 
   private applyStudyLines(candles: Candle[]): void {
@@ -661,136 +677,178 @@ export class SpotChartComponent implements AfterViewInit, OnChanges, OnDestroy {
     }
   }
 
-  private applyPatternOverlay(
-    series: ISeriesApi<'Candlestick'> | ISeriesApi<'Line'> | null,
-    candles: Candle[],
-    spotSeries: SpotPoint[],
+  private scheduleOverlayRedraw(
+    candles?: Candle[],
+    series?: ISeriesApi<'Candlestick'> | ISeriesApi<'Line'> | null,
   ): void {
-    if (!series || !this.patternSeries) return;
-
-    const patternEnabled = this.layerOn('pattern');
-    if (!patternEnabled) {
-      this.patternSeries.setData([]);
-      return;
+    if (this.overlayRedrawId != null) {
+      cancelAnimationFrame(this.overlayRedrawId);
     }
-
-    const pattern = this.patternInsights.find(
-      (item) => item.label === 'Chart Pattern' && item.timeframe === this.timeframe,
-    );
-    const patternColor = this.resolvePatternColor(pattern?.pattern, pattern?.tone);
-    const necklineEnabled = Number.isFinite(this.chartPatternNeckline);
-    if (!pattern && !necklineEnabled) {
-      this.patternSeries.setData([]);
-      return;
-    }
-
-    const pivots = this.buildPatternPivots(candles);
-    if (pivots.length < 2) {
-      this.patternSeries.setData([]);
-      return;
-    }
-
-    const points: LineData[] = pivots.map((pivot) => ({
-      time: Math.floor(candles[pivot.index].t / 1000) as Time,
-      value: +pivot.price.toFixed(2),
-    }));
-    this.patternSeries.applyOptions({
-      color: patternColor,
-      lineWidth: 2,
-      lineStyle: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
+    this.overlayRedrawId = requestAnimationFrame(() => {
+      this.overlayRedrawId = null;
+      this.drawPatternOverlay(
+        candles ?? this.normalizeCandles(this.candles),
+        series ??
+          (this.chartStyle === 'candlestick' && this.candleSeries
+            ? this.candleSeries
+            : this.lineSeries),
+      );
     });
-
-    if (pattern?.pattern) {
-      const normalized = pattern.pattern.toLowerCase();
-      if (
-        normalized.includes('double top') ||
-        normalized.includes('head and shoulders') ||
-        normalized.includes('inverse head and shoulders') ||
-        normalized.includes('double bottom') ||
-        normalized.includes('wedge') ||
-        normalized.includes('triangle') ||
-        normalized.includes('flag') ||
-        normalized.includes('pennant')
-      ) {
-        this.patternSeries.setData(points);
-      } else {
-        this.patternSeries.setData(points.slice(-4));
-      }
-    } else {
-      this.patternSeries.setData(points);
-    }
-
   }
 
-  private buildPatternPivots(candles: Candle[]): Array<{ index: number; price: number }> {
-    const highs = this.findSwingHighs(candles, 2).map((p) => ({
-      index: p.index,
-      price: p.price,
-      kind: 'high' as const,
-    }));
-    const lows = this.findSwingLows(candles, 2).map((p) => ({
-      index: p.index,
-      price: p.price,
-      kind: 'low' as const,
-    }));
+  private collectPatternDrawOps(candles: Candle[]): PatternDrawOp[] {
+    const ops: PatternDrawOp[] = [];
+    if (this.layerOn('chartPattern')) {
+      const patterns = selectChartPatternsToPlot(
+        this.patternInsights,
+        this.timeframe,
+        2,
+      );
+      patterns.forEach((insight, index) => {
+        const fallbackNeckline =
+          index === 0 && Number.isFinite(this.chartPatternNeckline)
+            ? this.chartPatternNeckline
+            : undefined;
+        const built = buildChartPatternOps(insight, candles, fallbackNeckline);
+        built.forEach((op) => ops.push({ ...op, id: `${index}-${op.id}` }));
+      });
+    }
 
-    const combined = [...highs, ...lows].sort((a, b) => a.index - b.index);
-    const deduped: Array<{ index: number; price: number; kind: 'high' | 'low' }> = [];
-    for (const pivot of combined) {
-      const prev = deduped[deduped.length - 1];
-      if (!prev) {
-        deduped.push(pivot);
+    if (this.layerOn('candlestick')) {
+      const insight = candlestickInsightForTf(this.patternInsights, this.timeframe);
+      if (insight) {
+        const marker = buildCandlestickMarkerOp(insight, candles);
+        if (marker) ops.push(marker);
+      }
+    }
+
+    return ops;
+  }
+
+  private drawPatternOverlay(
+    candles: Candle[],
+    series: ISeriesApi<'Candlestick'> | ISeriesApi<'Line'> | null,
+  ): void {
+    const svg = this.overlay?.nativeElement;
+    if (!svg || !this.chart || !series || !candles.length) {
+      if (svg) svg.innerHTML = '';
+      return;
+    }
+
+    const { width, height } = svg.getBoundingClientRect();
+    if (width < 2 || height < 2) {
+      svg.innerHTML = '';
+      return;
+    }
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.innerHTML = '';
+
+    const ops = this.collectPatternDrawOps(candles);
+    if (!ops.length) return;
+
+    const ns = 'http://www.w3.org/2000/svg';
+    for (const op of ops) {
+      const projected = op.points
+        .map((point) => this.projectPoint(series, point.t, point.price))
+        .filter((p): p is { x: number; y: number } => p != null);
+      if (!projected.length) continue;
+
+      if (op.kind === 'marker' && projected[0]) {
+        const g = document.createElementNS(ns, 'g');
+        const { x, y } = projected[0];
+        const bullish = op.markerBullish ?? false;
+        const marker = document.createElementNS(ns, 'path');
+        const size = 7;
+        const path = bullish
+          ? `M ${x} ${y + size} L ${x - size} ${y - size} L ${x + size} ${y - size} Z`
+          : `M ${x} ${y - size} L ${x - size} ${y + size} L ${x + size} ${y + size} Z`;
+        marker.setAttribute('d', path);
+        marker.setAttribute('fill', op.color);
+        marker.setAttribute('stroke', '#0f172a');
+        marker.setAttribute('stroke-width', '1');
+        g.appendChild(marker);
+
+        if (op.label) {
+          const label = document.createElementNS(ns, 'text');
+          label.setAttribute('x', String(x));
+          label.setAttribute('y', String(bullish ? y + 22 : y - 14));
+          label.setAttribute('text-anchor', 'middle');
+          label.setAttribute('fill', op.color);
+          label.setAttribute('font-size', '10');
+          label.setAttribute('font-weight', '600');
+          label.textContent = op.label;
+          g.appendChild(label);
+        }
+        svg.appendChild(g);
         continue;
       }
-      if (prev.kind === pivot.kind) {
-        const keep =
-          pivot.kind === 'high'
-            ? pivot.price >= prev.price
-            : pivot.price <= prev.price;
-        if (keep) deduped[deduped.length - 1] = pivot;
-      } else {
-        deduped.push(pivot);
+
+      if (op.kind === 'hline' && projected.length >= 2) {
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('x1', String(projected[0].x));
+        line.setAttribute('y1', String(projected[0].y));
+        line.setAttribute('x2', String(projected[projected.length - 1].x));
+        line.setAttribute('y2', String(projected[projected.length - 1].y));
+        line.setAttribute('stroke', op.color);
+        line.setAttribute('stroke-width', String(op.strokeWidth ?? 1.5));
+        if (op.dashed) line.setAttribute('stroke-dasharray', '6 4');
+        svg.appendChild(line);
+        continue;
+      }
+
+      if (op.kind === 'polygon' && projected.length >= 3) {
+        const polygon = document.createElementNS(ns, 'polygon');
+        polygon.setAttribute(
+          'points',
+          projected.map((p) => `${p.x},${p.y}`).join(' '),
+        );
+        polygon.setAttribute('fill', op.fill ?? `${op.color}22`);
+        polygon.setAttribute('stroke', op.color);
+        polygon.setAttribute('stroke-width', String(op.strokeWidth ?? 1.5));
+        svg.appendChild(polygon);
+        continue;
+      }
+
+      if (projected.length >= 2) {
+        const polyline = document.createElementNS(ns, 'polyline');
+        polyline.setAttribute(
+          'points',
+          projected.map((p) => `${p.x},${p.y}`).join(' '),
+        );
+        polyline.setAttribute('fill', 'none');
+        polyline.setAttribute('stroke', op.color);
+        polyline.setAttribute('stroke-width', String(op.strokeWidth ?? 2));
+        if (op.dashed) polyline.setAttribute('stroke-dasharray', '6 4');
+        svg.appendChild(polyline);
+
+        if (op.label && projected[projected.length - 1]) {
+          const label = document.createElementNS(ns, 'text');
+          const anchor = projected[projected.length - 1];
+          label.setAttribute('x', String(anchor.x + 6));
+          label.setAttribute('y', String(anchor.y - 6));
+          label.setAttribute('fill', op.color);
+          label.setAttribute('font-size', '10');
+          label.setAttribute('font-weight', '600');
+          label.textContent = op.label;
+          svg.appendChild(label);
+        }
       }
     }
-
-    const recent = deduped.slice(-7);
-    const alternating: Array<{ index: number; price: number }> = [];
-    for (const pivot of recent) {
-      const prev = alternating[alternating.length - 1];
-      if (prev && Math.floor(prev.price) === Math.floor(pivot.price)) continue;
-      alternating.push({ index: pivot.index, price: pivot.price });
-    }
-
-    return alternating.length >= 2 ? alternating : [];
   }
 
-  private resolvePatternColor(pattern?: string, tone?: string): string {
-    const normalized = (pattern ?? '').toLowerCase();
-    if (
-      normalized.includes('double top') ||
-      normalized.includes('head and shoulders') ||
-      normalized.includes('rising wedge') ||
-      normalized.includes('bear flag') ||
-      normalized.includes('descending triangle') ||
-      normalized.includes('trendline break bear')
-    ) {
-      return '#ef4444';
+  private projectPoint(
+    series: ISeriesApi<'Candlestick'> | ISeriesApi<'Line'>,
+    tMs: number,
+    price: number,
+  ): { x: number; y: number } | null {
+    if (!this.chart) return null;
+    const time = Math.floor(tMs / 1000) as Time;
+    const x = this.chart.timeScale().timeToCoordinate(time);
+    const y = series.priceToCoordinate(price);
+    if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) {
+      return null;
     }
-    if (
-      normalized.includes('double bottom') ||
-      normalized.includes('inverse head and shoulders') ||
-      normalized.includes('falling wedge') ||
-      normalized.includes('bull flag') ||
-      normalized.includes('ascending triangle') ||
-      normalized.includes('trendline break bull')
-    ) {
-      return '#22c55e';
-    }
-    if ((tone ?? '').toLowerCase() === 'bear') return '#fb923c';
-    if ((tone ?? '').toLowerCase() === 'bull') return '#4ade80';
-    return '#a78bfa';
+    return { x, y };
   }
 
   private computeEmaSeries(candles: Candle[], period: number): LineData[] {

@@ -599,6 +599,11 @@ export default async function technicalAnalysisRoute(fastify: FastifyInstance) {
             '1h': fakeout1h,
           },
         },
+        chartPatterns: {
+          '5m': chartPattern5m,
+          '15m': chartPattern15m,
+          '1h': chartPattern1h,
+        },
         confluenceContext: enhancementsEnabled
           ? {
               chartPattern: chartPatternPrimary.pattern,

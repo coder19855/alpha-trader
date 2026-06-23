@@ -61,12 +61,20 @@ const CHART_LAYER_GROUPS: ChartLayerGroupDef[] = [
     detail: 'Support trend / Resistance trend',
   },
   {
-    id: 'pattern',
-    label: 'Pattern',
+    id: 'chartPattern',
+    label: 'Chart patterns',
     color: '#a78bfa',
     swatch: 'pattern',
-    childIds: ['pattern'],
-    detail: 'Chart pattern / neckline',
+    childIds: ['chartPattern'],
+    detail: 'Up to 2 valid patterns',
+  },
+  {
+    id: 'candlestick',
+    label: 'Candlestick',
+    color: '#fbbf24',
+    swatch: 'candle',
+    childIds: ['candlestick'],
+    detail: 'TF candlestick signal',
   },
 ];
 
@@ -410,8 +418,28 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
     if (id === 'supportTrend' || id === 'resistanceTrend') return candleCount >= 8;
     if (id === 'support') return this.chartOverlays.some((o) => o.id === 'support');
     if (id === 'resistance') return this.chartOverlays.some((o) => o.id === 'resistance');
-    if (id === 'pattern') {
-      return Boolean(this.patternInsights?.length) || Number.isFinite(this.chartPatternNeckline);
+    if (id === 'chartPattern') {
+      return (
+        Boolean(
+          this.patternInsights?.some(
+            (row) =>
+              (row.type === 'chart' || row.label === 'Chart Pattern') &&
+              row.pattern &&
+              !/^none$/i.test(row.pattern),
+          ),
+        ) || Number.isFinite(this.chartPatternNeckline)
+      );
+    }
+    if (id === 'candlestick') {
+      return Boolean(
+        this.patternInsights?.some(
+          (row) =>
+            (row.type === 'candlestick' || row.label === 'Candlestick') &&
+            row.timeframe === this.activeTf() &&
+            row.pattern &&
+            !/^none$/i.test(row.pattern),
+        ),
+      );
     }
     return false;
   }
@@ -449,12 +477,12 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
     const state = this.layerState();
     const overlays = this.chartOverlays.filter((overlay) => state[overlay.id]);
     if (
-      state['pattern'] &&
+      state['chartPattern'] &&
       Number.isFinite(this.chartPatternNeckline) &&
-      !overlays.some((o) => o.id === 'pattern')
+      !overlays.some((o) => o.id === 'chartPattern')
     ) {
       overlays.push({
-        id: 'pattern',
+        id: 'chartPattern',
         label: 'Neckline',
         price: this.chartPatternNeckline!,
         color: '#a78bfa',

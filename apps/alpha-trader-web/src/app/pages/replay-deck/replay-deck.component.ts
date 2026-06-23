@@ -408,7 +408,7 @@ export class ReplayDeckComponent implements OnInit {
     const neckline = point?.chartPatternNeckline;
     if (Number.isFinite(neckline)) {
       overlays.push({
-        id: 'pattern',
+        id: 'chartPattern',
         label: pattern?.pattern ? `${this.displayPatternName(pattern.pattern)} neckline` : 'Neckline',
         price: neckline!,
         color: patternColor,

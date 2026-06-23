@@ -229,7 +229,7 @@ function computeWhatIfForTimelinePoint(
   };
 }
 
-export function patternInsightsFromTimelinePoint(p: any): Array<{
+type PatternInsightRow = {
   timeframe: string;
   pattern: string;
   status: string;
@@ -237,31 +237,62 @@ export function patternInsightsFromTimelinePoint(p: any): Array<{
   label: string;
   type: 'chart' | 'candlestick';
   biasLabel?: string;
-}> {
-  const insights: Array<{
-    timeframe: string;
-    pattern: string;
-    status: string;
-    tone: 'bull' | 'bear' | 'neutral';
-    label: string;
-    type: 'chart' | 'candlestick';
-    biasLabel?: string;
-  }> = [];
+  neckline?: number;
+};
 
-  const chartPattern = p.confluenceContext?.chartPattern;
-  if (chartPattern && chartPattern !== 'none') {
-    const tone = toneForChartDirection(
-      p.confluenceContext?.chartPatternDirection,
-    );
-    insights.push({
-      timeframe: p.primaryTimeframe || '15m',
-      pattern: formatChartPatternDisplayName(String(chartPattern)),
-      status: p.confluenceContext?.chartPatternStatus || 'forming',
-      tone,
-      label: 'Chart Pattern',
-      type: 'chart',
-      biasLabel: classifyPatternBiasLabel(String(chartPattern), tone, 'chart'),
-    });
+function pushChartPatternInsight(
+  insights: PatternInsightRow[],
+  timeframe: string,
+  raw: {
+    pattern?: string;
+    direction?: string;
+    status?: string;
+    neckline?: number;
+  } | null | undefined,
+): void {
+  const pattern = raw?.pattern;
+  if (!pattern || pattern === 'none') return;
+  const tone = toneForChartDirection(raw?.direction);
+  insights.push({
+    timeframe,
+    pattern: formatChartPatternDisplayName(String(pattern)),
+    status: raw?.status || 'forming',
+    tone,
+    label: 'Chart Pattern',
+    type: 'chart',
+    biasLabel: classifyPatternBiasLabel(String(pattern), tone, 'chart'),
+    neckline:
+      raw?.neckline != null && Number.isFinite(raw.neckline)
+        ? raw.neckline
+        : undefined,
+  });
+}
+
+export function patternInsightsFromTimelinePoint(p: any): Array<PatternInsightRow> {
+  const insights: PatternInsightRow[] = [];
+
+  const chartPatterns = p.chartPatterns as
+    | Record<'5m' | '15m' | '1h', {
+        pattern?: string;
+        direction?: string;
+        status?: string;
+        neckline?: number;
+      }>
+    | undefined;
+  if (chartPatterns) {
+    for (const tf of ['5m', '15m', '1h'] as const) {
+      pushChartPatternInsight(insights, tf, chartPatterns[tf]);
+    }
+  } else {
+    const chartPattern = p.confluenceContext?.chartPattern;
+    if (chartPattern && chartPattern !== 'none') {
+      pushChartPatternInsight(insights, p.primaryTimeframe || '15m', {
+        pattern: String(chartPattern),
+        direction: p.confluenceContext?.chartPatternDirection,
+        status: p.confluenceContext?.chartPatternStatus || 'forming',
+        neckline: p.confluenceContext?.chartPatternNeckline,
+      });
+    }
   }
 
   const candles = p.candlestick;
@@ -295,6 +326,15 @@ export function extractPatternInsightsFromPriceAction(
     primaryTimeframe?: string;
     confluenceContext?: unknown;
     candlestick?: Record<string, string>;
+    chartPatterns?: Record<
+      '5m' | '15m' | '1h',
+      {
+        pattern?: string;
+        direction?: string;
+        status?: string;
+        neckline?: number;
+      }
+    >;
   };
   const primaryTf =
     row.primaryTimeframe ||
@@ -307,6 +347,7 @@ export function extractPatternInsightsFromPriceAction(
     primaryTimeframe: primaryTf,
     confluenceContext: row.confluenceContext,
     candlestick: row.candlestick,
+    chartPatterns: row.chartPatterns,
   });
 }
 

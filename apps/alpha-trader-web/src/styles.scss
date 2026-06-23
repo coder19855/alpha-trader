@@ -136,6 +136,47 @@ html.web-layout .deck-page .settings-group {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+.deck-reload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.deck-reload-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.deck-reload-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.deck-reload-btn mat-icon {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+
+.deck-reload-btn mat-icon.spinning {
+  animation: deck-reload-spin 0.8s linear infinite;
+}
+
+@keyframes deck-reload-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .topbar-meta {
   display: flex;
   align-items: center;

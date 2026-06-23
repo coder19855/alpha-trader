@@ -84,6 +84,33 @@ export class OptionChainPollService {
     }
   }
 
+  /** Fetch option chain even when polling is stopped (e.g. shell reconnect). */
+  prefetch(
+    params: Pick<OptionPollContext, 'symbol' | 'style' | 'paAction' | 'moneyness'>,
+    force = true,
+  ): void {
+    this.loading.set(true);
+    this.error.set(null);
+    this.api
+      .fetch({
+        symbol: params.symbol,
+        style: params.style,
+        refresh: force,
+        paAction: params.paAction,
+        moneyness: params.moneyness || undefined,
+      })
+      .subscribe({
+        next: (payload) => {
+          this.data.set(payload);
+          this.loading.set(false);
+        },
+        error: (err) => {
+          this.loading.set(false);
+          this.error.set(readOptionChainError(err));
+        },
+      });
+  }
+
   refresh(force = true): void {
     if (!this.ctx) return;
     this.loading.set(true);
