@@ -22,11 +22,18 @@ import {
   squareOffPartialWatchedIndexLegs,
   squareOffWatchedIndexLegs,
 } from './auto-exit-executor.js';
+import { getOpenPositionsCacheSnapshot } from '@alpha-trader/server-market-data';
+import { OpenPositionMonitorContext } from '@alpha-trader/server-shared';
 import {
   autoExitStateKey,
   getAutoExitRuntimeState,
+  recordAutoExitTraceEvent,
   setAutoExitRuntimeState,
 } from './auto-exit-state.js';
+import {
+  evaluateOptionPremiumStop,
+  resolveHeldLegTelemetry,
+} from './option-premium-exit.js';
 import { resolveHeldPositionTradeSetup } from './held-position-trade-setup.js';
 import { describePositionPolicy } from './position-policy.js';
 import {
@@ -44,6 +51,8 @@ export interface AutoExitGuardPreference {
   signalFlipExit: boolean;
   exitPolicy: BenchmarkExitPolicy;
   positionPolicy: BenchmarkPositionPolicy;
+  optionPremiumExit: boolean;
+  optionPremiumStopPct: number;
 }
 
 export interface AutoExitDecisionSlice {
@@ -64,6 +73,45 @@ export interface AutoExitDecisionSlice {
 }
 
 const EXECUTION_COOLDOWN_MS = 120_000;
+
+function appendExitTrace(
+  runtime: ReturnType<typeof getAutoExitRuntimeState>,
+  stateKey: string,
+  event: Parameters<typeof recordAutoExitTraceEvent>[1],
+): void {
+  recordAutoExitTraceEvent(stateKey, event);
+  runtime.recentEvents = getAutoExitRuntimeState(stateKey).recentEvents;
+}
+
+function resolveHeldPositions(
+  indexSymbol: string,
+  heldDirection: HeldDirection,
+  heldPositions?: OpenPositionMonitorContext[],
+): OpenPositionMonitorContext[] {
+  const source =
+    heldPositions ?? getOpenPositionsCacheSnapshot()?.positions ?? [];
+  return source.filter(
+    (p) =>
+      p.indexSymbol === indexSymbol.trim() && p.direction === heldDirection,
+  );
+}
+
+function formatOptionWatchDetail(
+  spot: number,
+  legs: ReturnType<typeof resolveHeldLegTelemetry>,
+): string {
+  const legNote = legs
+    .map((leg) => {
+      if (leg.ltp == null) return `${leg.optionLabel} LTP —`;
+      const pct =
+        leg.pnlPct != null
+          ? `${leg.pnlPct >= 0 ? '+' : ''}${leg.pnlPct.toFixed(1)}%`
+          : '—';
+      return `${leg.optionLabel} ₹${leg.ltp.toFixed(2)} (${pct})`;
+    })
+    .join(' · ');
+  return `Index ${spot.toFixed(2)}${legNote ? ` · ${legNote}` : ''}`;
+}
 
 function trailStopLabel(hitLevel: string | null | undefined): string | null {
   if (!hitLevel) return null;
@@ -87,6 +135,8 @@ function buildGuardStatus(params: {
   trailStopPrice?: number | null;
   trailStopLabel?: string | null;
   scaleOutNote?: string | null;
+  indexSpot?: number | null;
+  optionLegs?: AutoExitGuardStatus['optionLegs'];
 }): AutoExitGuardStatus {
   const confirmationsRequired = 1 + params.pref.retestCount;
   return {
@@ -94,18 +144,24 @@ function buildGuardStatus(params: {
     retestCount: params.pref.retestCount,
     exitPolicy: params.pref.exitPolicy,
     positionPolicy: params.pref.positionPolicy,
+    optionPremiumExit: params.pref.optionPremiumExit,
+    optionPremiumStopPct: params.pref.optionPremiumStopPct,
     confirmationsRequired,
     confirmationCount: params.runtime.confirmationCount,
     pendingHitLevel: params.runtime.pendingHitLevel,
     peakR: params.runtime.peakR > 0 ? +params.runtime.peakR.toFixed(3) : null,
+    indexSpot: params.indexSpot ?? null,
     trailFloorPrice: params.trailFloorPrice ?? null,
     trailFloorR: params.trailFloorR ?? null,
     trailStopPrice: params.trailStopPrice ?? null,
     trailStopLabel: params.trailStopLabel ?? null,
     scaleOutNote: params.scaleOutNote ?? null,
+    optionLegs: params.optionLegs,
     status: params.status,
     message: params.message,
     lastExecutedAt: params.runtime.lastExecutedAt,
+    lastEvaluatedAt: params.runtime.lastEvaluatedAt,
+    recentEvents: params.runtime.recentEvents,
   };
 }
 
@@ -286,6 +342,7 @@ export async function attachAutoExitGuard(params: {
   managementContext: PositionManagementContext;
   pref: AutoExitGuardPreference;
   entrySpot?: number | null;
+  heldPositions?: OpenPositionMonitorContext[];
   execute?: boolean;
 }): Promise<AutoExitGuardStatus> {
   const {
@@ -298,52 +355,100 @@ export async function attachAutoExitGuard(params: {
     execute = false,
   } = params;
 
+  const spot = decision.lastPrice;
+  const evaluatedAt = new Date().toISOString();
+
   if (!pref.enabled) {
+    const offRuntime = { ...getAutoExitRuntimeState('disabled') };
+    offRuntime.lastEvaluatedAt = evaluatedAt;
+    appendExitTrace(offRuntime, 'disabled', {
+      at: evaluatedAt,
+      stage: 'off',
+      tone: 'neutral',
+      title: 'Auto-exit off',
+      detail: 'Enable auto-exit in Positions to watch index + option premium exits.',
+    });
     const guard = buildGuardStatus({
       pref,
-      runtime: getAutoExitRuntimeState('disabled'),
+      runtime: offRuntime,
       message:
         'Auto-exit off — enable in Positions tab to apply benchmark exit rules on live legs.',
       status: 'off',
+      indexSpot: spot,
     });
     managementContext.autoExit = guard;
+    setAutoExitRuntimeState('disabled', offRuntime);
     return guard;
   }
 
   const heldDirection = managementContext.heldDirection ?? null;
   const isMixed = Boolean(managementContext.isMixedDirections);
+  const blockedKey = autoExitStateKey(indexSymbol, 'mixed');
+  const blockedRuntime = { ...getAutoExitRuntimeState(blockedKey) };
+  blockedRuntime.lastEvaluatedAt = evaluatedAt;
 
   if (!heldDirection || isMixed || !managementContext.hasOpenPosition) {
+    appendExitTrace(blockedRuntime, blockedKey, {
+      at: blockedRuntime.lastEvaluatedAt!,
+      stage: 'blocked',
+      tone: 'warn',
+      title: isMixed ? 'Mixed CE+PE legs' : 'No watched leg',
+      detail: isMixed
+        ? 'Auto-exit needs a single direction on this index.'
+        : 'Open a watched CE or PE leg to arm exit telemetry.',
+    });
     const guard = buildGuardStatus({
       pref,
-      runtime: getAutoExitRuntimeState(autoExitStateKey(indexSymbol, 'mixed')),
+      runtime: blockedRuntime,
       message: isMixed
         ? 'Auto-exit paused — close or reduce to one direction (mixed CE+PE not supported).'
         : 'Auto-exit armed — waiting for an open CE or PE leg on this index.',
       status: 'blocked',
+      indexSpot: spot,
     });
     managementContext.autoExit = guard;
+    setAutoExitRuntimeState(blockedKey, blockedRuntime);
     return guard;
   }
 
   const tradeSetup = resolveTradeSetup(heldDirection, decision, entrySpot);
   const stateKey = autoExitStateKey(indexSymbol, heldDirection);
   const runtime = { ...getAutoExitRuntimeState(stateKey) };
+  runtime.lastEvaluatedAt = evaluatedAt;
+
+  const heldPositions = resolveHeldPositions(
+    indexSymbol,
+    heldDirection,
+    params.heldPositions,
+  );
+  const optionLegs = resolveHeldLegTelemetry({
+    fastify,
+    indexSymbol,
+    heldDirection,
+    positions: heldPositions,
+  });
+  const telemetry = { indexSpot: spot, optionLegs };
 
   if (!tradeSetup?.entry || !tradeSetup.stopLoss || tradeSetup.risk <= 0) {
+    appendExitTrace(runtime, stateKey, {
+      at: evaluatedAt,
+      stage: 'watching',
+      tone: 'neutral',
+      title: 'Waiting for index levels',
+      detail: formatOptionWatchDetail(spot, optionLegs),
+    });
     const guard = buildGuardStatus({
       pref,
       runtime,
       message:
         'Auto-exit armed — waiting for index entry/stop levels from the engine.',
       status: 'watching',
+      ...telemetry,
     });
     managementContext.autoExit = guard;
     setAutoExitRuntimeState(stateKey, runtime);
     return guard;
   }
-
-  const spot = decision.lastPrice;
   if (
     runtime.activeExitPolicy !== pref.exitPolicy ||
     runtime.activePositionPolicy !== pref.positionPolicy
@@ -393,8 +498,6 @@ export async function attachAutoExitGuard(params: {
       ? `Scale-out active · ${(runtime.scaleOut.remainingFraction * 100).toFixed(0)}% runner · banked ${runtime.scaleOut.bankedR.toFixed(2)}R`
       : null;
 
-  runtime.lastEvaluatedAt = new Date().toISOString();
-
   const scaleSignal = evaluateScaleOutSignal({
     heldDirection,
     peakR: runtime.peakR,
@@ -419,6 +522,13 @@ export async function attachAutoExitGuard(params: {
       syncScaleOutFromPeak(runtime.peakR, tradeSetup, runtime.scaleOut);
       runtime.lastExecutedAt = new Date().toISOString();
       runtime.lastExecutionNote = formatExecutionNote(result);
+      appendExitTrace(runtime, stateKey, {
+        at: evaluatedAt,
+        stage: 'scale_out',
+        tone: result.succeeded > 0 ? 'success' : 'error',
+        title: result.succeeded > 0 ? 'Partial scale-out' : 'Scale-out failed',
+        detail: `${runtime.lastExecutionNote} · ${scaleSignal.reason}`,
+      });
       const guard = buildGuardStatus({
         pref,
         runtime,
@@ -429,6 +539,7 @@ export async function attachAutoExitGuard(params: {
         trailStopPrice: activeTrail?.stopPrice ?? null,
         trailStopLabel: trailStopLabel(activeTrail?.hitLevel),
         scaleOutNote,
+        ...telemetry,
       });
       managementContext.autoExit = guard;
       setAutoExitRuntimeState(stateKey, runtime);
@@ -436,7 +547,10 @@ export async function attachAutoExitGuard(params: {
     }
   }
 
-  const signal = evaluateBenchmarkAutoExitSignal({
+  const optionSignal = pref.optionPremiumExit
+    ? evaluateOptionPremiumStop(optionLegs, pref.optionPremiumStopPct)
+    : null;
+  const indexSignal = evaluateBenchmarkAutoExitSignal({
     heldDirection,
     spot,
     peakR: runtime.peakR,
@@ -452,6 +566,7 @@ export async function attachAutoExitGuard(params: {
     scaleOut: runtime.scaleOut,
     momentumDecayPercent,
   });
+  const signal = optionSignal ?? indexSignal;
 
   const policyHint = describeExitPolicy(pref.exitPolicy);
   const positionHint =
@@ -468,6 +583,13 @@ export async function attachAutoExitGuard(params: {
       : rrFloor
         ? ` · R:R floor ${rrFloor.floorPrice.toFixed(2)}`
         : '';
+    appendExitTrace(runtime, stateKey, {
+      at: evaluatedAt,
+      stage: 'watching',
+      tone: 'neutral',
+      title: 'Watching index + option premium',
+      detail: `${formatOptionWatchDetail(spot, optionLegs)}${stopNote}`,
+    });
     const guard = buildGuardStatus({
       pref,
       runtime,
@@ -478,6 +600,7 @@ export async function attachAutoExitGuard(params: {
       trailStopPrice: activeTrail?.stopPrice ?? null,
       trailStopLabel: trailStopLabel(activeTrail?.hitLevel),
       scaleOutNote,
+      ...telemetry,
     });
     managementContext.autoExit = guard;
     setAutoExitRuntimeState(stateKey, runtime);
@@ -518,6 +641,13 @@ export async function attachAutoExitGuard(params: {
     runtime.lastSpot = null;
     runtime.runningAtr = 0;
 
+    appendExitTrace(runtime, stateKey, {
+      at: evaluatedAt,
+      stage: 'executed',
+      tone: result.succeeded > 0 ? 'success' : 'error',
+      title: result.succeeded > 0 ? 'Square-off placed' : 'Square-off failed',
+      detail: `${runtime.lastExecutionNote} · ${signal.reason}`,
+    });
     const guard = buildGuardStatus({
       pref,
       runtime,
@@ -528,10 +658,29 @@ export async function attachAutoExitGuard(params: {
       trailStopPrice: activeTrail?.stopPrice ?? null,
       trailStopLabel: trailStopLabel(activeTrail?.hitLevel),
       scaleOutNote,
+      ...telemetry,
     });
     managementContext.autoExit = guard;
     setAutoExitRuntimeState(stateKey, runtime);
     return guard;
+  }
+
+  if (cooldownActive) {
+    appendExitTrace(runtime, stateKey, {
+      at: evaluatedAt,
+      stage: 'cooldown',
+      tone: 'warn',
+      title: 'Cooldown active',
+      detail: signal.reason,
+    });
+  } else {
+    appendExitTrace(runtime, stateKey, {
+      at: evaluatedAt,
+      stage: ready ? 'pending' : 'watching',
+      tone: ready ? 'warn' : 'neutral',
+      title: ready ? 'Exit confirmed' : 'Exit trigger building',
+      detail: `${signal.hitLevel.replace(/_/g, ' ')} · ${runtime.confirmationCount}/${confirmationsRequired} · ${signal.reason}`,
+    });
   }
 
   const guard = buildGuardStatus({
@@ -550,6 +699,7 @@ export async function attachAutoExitGuard(params: {
     trailStopPrice: activeTrail?.stopPrice ?? null,
     trailStopLabel: trailStopLabel(activeTrail?.hitLevel),
     scaleOutNote,
+    ...telemetry,
   });
   managementContext.autoExit = guard;
   setAutoExitRuntimeState(stateKey, runtime);

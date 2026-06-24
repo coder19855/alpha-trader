@@ -36,13 +36,17 @@ function journalId(symbol: string, positionId: string): string {
   return `${symbol}|${positionId}`;
 }
 
+function journalCollection(fastify: FastifyInstance) {
+  return fastify.mongo?.db?.collection<TradeJournalEntry>(
+    TRADE_JOURNAL_COLLECTION,
+  );
+}
+
 export async function listTradeJournal(
   fastify: FastifyInstance,
   params: { symbol?: string; limit?: number } = {},
 ): Promise<{ entries: TradeJournalEntry[]; fetchedAt: string }> {
-  const col = fastify.mongo?.db?.collection<TradeJournalEntry>(
-    TRADE_JOURNAL_COLLECTION,
-  );
+  const col = journalCollection(fastify);
   const fetchedAt = new Date().toISOString();
   if (!col) return { entries: [], fetchedAt };
 
@@ -63,9 +67,7 @@ export async function recordJournalOpen(
   fastify: FastifyInstance,
   input: TradeJournalUpsertInput,
 ): Promise<void> {
-  const col = fastify.mongo?.db?.collection<TradeJournalEntry>(
-    TRADE_JOURNAL_COLLECTION,
-  );
+  const col = journalCollection(fastify);
   if (!col) return;
 
   const positionId = input.positionId?.trim() || `${Date.now()}`;
@@ -98,20 +100,22 @@ export async function recordJournalClose(
   fastify: FastifyInstance,
   params: {
     symbol: string;
+    tradingStyle: string;
     positionId: string;
+    side?: 'CE' | 'PE' | 'UNKNOWN';
     exitNote?: string;
     optionTrigger?: string;
   },
 ): Promise<void> {
-  const col = fastify.mongo?.db?.collection<TradeJournalEntry>(
-    TRADE_JOURNAL_COLLECTION,
-  );
+  const col = journalCollection(fastify);
   if (!col) return;
 
-  const id = journalId(params.symbol, params.positionId);
+  const positionId = params.positionId.trim();
+  const id = journalId(params.symbol, positionId);
+  const now = new Date().toISOString();
   const patch: Partial<TradeJournalEntry> = {
     status: 'closed',
-    exitAt: new Date().toISOString(),
+    exitAt: now,
     exitNote: params.exitNote ?? null,
     optionTriggerPending: false,
   };
@@ -119,10 +123,36 @@ export async function recordJournalClose(
     patch.optionTrigger = params.optionTrigger;
   }
 
-  await col.updateOne({ id, status: 'open' }, { $set: patch });
-}
+  const result = await col.updateOne({ id, status: 'open' }, { $set: patch });
+  if (result.matchedCount > 0) return;
 
-const openPositionKeys = new Map<string, Set<string>>();
+  // Close detected but open row was never written (missed sync / server restart).
+  await col.updateOne(
+    { id },
+    {
+      $setOnInsert: {
+        id,
+        symbol: params.symbol,
+        tradingStyle: params.tradingStyle,
+        side: params.side ?? 'UNKNOWN',
+        entryAt: now,
+        paTrigger: null,
+        optionTrigger: params.optionTrigger ?? null,
+        optionTriggerPending: false,
+        entryNote: 'Entry time unknown — position was open before journal sync',
+        positionId,
+      },
+      $set: {
+        status: 'closed',
+        exitAt: now,
+        exitNote: params.exitNote ?? 'Position closed',
+        optionTriggerPending: false,
+        ...(params.optionTrigger ? { optionTrigger: params.optionTrigger } : {}),
+      },
+    },
+    { upsert: true },
+  );
+}
 
 export async function syncTradeJournalFromPositions(
   fastify: FastifyInstance,
@@ -134,17 +164,38 @@ export async function syncTradeJournalFromPositions(
     optionTrigger?: string;
   },
 ): Promise<void> {
-  const channelKey = `${params.symbol}|${params.tradingStyle}`;
-  const prev = openPositionKeys.get(channelKey) ?? new Set<string>();
-  const next = new Set(params.entries.map((e) => e.symbol));
+  const col = journalCollection(fastify);
+  if (!col) {
+    fastify.log.warn(
+      { symbol: params.symbol },
+      'Trade journal sync skipped — MongoDB unavailable',
+    );
+    return;
+  }
+
+  const indexSymbol = params.symbol.trim();
+  const next = new Set(
+    params.entries.map((entry) => entry.symbol.trim()).filter(Boolean),
+  );
+
+  const openInDb = await col
+    .find({ symbol: indexSymbol, status: 'open' })
+    .project({ positionId: 1, side: 1 })
+    .toArray();
+  const openIds = new Set(
+    openInDb
+      .map((row) => row.positionId?.trim())
+      .filter((id): id is string => Boolean(id)),
+  );
 
   for (const entry of params.entries) {
-    if (prev.has(entry.symbol)) continue;
+    const positionId = entry.symbol.trim();
+    if (!positionId || openIds.has(positionId)) continue;
     const side = entry.direction.startsWith('PE') ? 'PE' : 'CE';
     await recordJournalOpen(fastify, {
-      symbol: params.symbol,
+      symbol: indexSymbol,
       tradingStyle: params.tradingStyle,
-      positionId: entry.symbol,
+      positionId,
       side,
       symbolLabel: entry.indexLabel,
       paTrigger: params.paTrigger,
@@ -154,22 +205,23 @@ export async function syncTradeJournalFromPositions(
     });
   }
 
-  for (const id of prev) {
-    if (next.has(id)) continue;
+  for (const row of openInDb) {
+    const positionId = row.positionId?.trim();
+    if (!positionId || next.has(positionId)) continue;
     await recordJournalClose(fastify, {
-      symbol: params.symbol,
-      positionId: id,
+      symbol: indexSymbol,
+      tradingStyle: params.tradingStyle,
+      positionId,
+      side: row.side,
       exitNote: 'Position closed',
       optionTrigger: params.optionTrigger,
     });
   }
 
-  openPositionKeys.set(channelKey, next);
-
   if (params.optionTrigger) {
     for (const entry of params.entries) {
       await patchJournalOptionTrigger(fastify, {
-        symbol: params.symbol,
+        symbol: indexSymbol,
         positionId: entry.symbol,
         optionTrigger: params.optionTrigger,
       });
@@ -185,9 +237,7 @@ export async function patchJournalOptionTrigger(
     optionTrigger: string;
   },
 ): Promise<void> {
-  const col = fastify.mongo?.db?.collection<TradeJournalEntry>(
-    TRADE_JOURNAL_COLLECTION,
-  );
+  const col = journalCollection(fastify);
   if (!col) return;
 
   const id = journalId(params.symbol, params.positionId);

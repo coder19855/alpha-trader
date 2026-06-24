@@ -594,6 +594,7 @@ async function buildDeckManagementContextFromPositions(
         decision: decisionSlice,
         managementContext,
         pref: exitPref,
+        heldPositions: watched,
         execute: false,
       });
       await attachAutoEntryGuard({
@@ -638,6 +639,7 @@ async function buildDeckManagementContextFromPositions(
       managementContext,
       pref: exitPref,
       entrySpot,
+      heldPositions: watched,
       execute: options?.executeAutoExit === true,
     });
     await attachAutoEntryGuard({
@@ -678,6 +680,47 @@ async function buildDeckManagementContextFromPositions(
   return emptyContext;
 }
 
+function journalTriggersFromDecision(decision: DeckDecision): {
+  paTrigger: string;
+  optionTrigger?: string;
+} {
+  const paTrigger = [
+    decision.action,
+    decision.humanSummary || decision.recommendation,
+  ]
+    .filter(Boolean)
+    .join(' — ');
+  const optionBias = decision.optionFlow?.bias;
+  const optionTrigger =
+    optionBias && optionBias !== 'NEUTRAL'
+      ? `Option flow ${optionBias}${decision.optionConviction ? ` (${Math.round(decision.optionConviction)}%)` : ''}`
+      : undefined;
+  return { paTrigger, optionTrigger };
+}
+
+function syncDeckTradeJournal(
+  fastify: FastifyInstance,
+  indexSymbol: string,
+  style: TradingStyle,
+  decision: DeckDecision,
+  entries: DeckOpenPositionsPayload['entries'],
+): void {
+  const { paTrigger, optionTrigger } = journalTriggersFromDecision(decision);
+  void syncTradeJournalFromPositions(fastify, {
+    symbol: indexSymbol,
+    tradingStyle: style,
+    entries: entries.map((e) => ({
+      symbol: e.symbol,
+      direction: e.direction,
+      indexLabel: e.indexLabel,
+    })),
+    paTrigger,
+    optionTrigger,
+  }).catch((err) => {
+    fastify.log.warn({ err }, 'trade journal sync failed');
+  });
+}
+
 async function buildPositionsBundle(
   fastify: FastifyInstance,
   indexSymbol: string,
@@ -701,31 +744,13 @@ async function buildPositionsBundle(
     ),
   ]);
 
-  const paTrigger = [
-    decision.action,
-    decision.humanSummary || decision.recommendation,
-  ]
-    .filter(Boolean)
-    .join(' — ');
-  const optionBias = decision.optionFlow?.bias;
-  const optionTrigger =
-    optionBias && optionBias !== 'NEUTRAL'
-      ? `Option flow ${optionBias}${decision.optionConviction ? ` (${Math.round(decision.optionConviction)}%)` : ''}`
-      : undefined;
-
-  void syncTradeJournalFromPositions(fastify, {
-    symbol: indexSymbol,
-    tradingStyle: style,
-    entries: openPositions.entries.map((e) => ({
-      symbol: e.symbol,
-      direction: e.direction,
-      indexLabel: e.indexLabel,
-    })),
-    paTrigger,
-    optionTrigger,
-  }).catch((err) => {
-    fastify.log.warn({ err }, 'trade journal sync failed');
-  });
+  syncDeckTradeJournal(
+    fastify,
+    indexSymbol,
+    style,
+    decision,
+    openPositions.entries,
+  );
 
   return { openPositions, managementContext };
 }
@@ -1105,6 +1130,11 @@ export async function runDeckAutoEntryPoll(
   const positions =
     params.preloadedPositions ??
     (await fetchOpenIndexOptionPositions(fastify, allIndexSymbols));
+  const openPositions = await buildDeckOpenPositions(
+    fastify,
+    indexSymbol,
+    positions.filter((p) => p.indexSymbol === indexSymbol),
+  );
   await buildDeckManagementContextFromPositions(
     fastify,
     decision,
@@ -1115,6 +1145,13 @@ export async function runDeckAutoEntryPoll(
       executeAutoExit: false,
       executeAutoEntry: shouldExecuteAutoEntry(fastify),
     },
+  );
+  syncDeckTradeJournal(
+    fastify,
+    indexSymbol,
+    style,
+    decision,
+    openPositions.entries,
   );
 }
 
@@ -1141,6 +1178,11 @@ export async function runDeckAutoExitPoll(
   const positions =
     params.preloadedPositions ??
     (await fetchOpenIndexOptionPositions(fastify, allIndexSymbols));
+  const openPositions = await buildDeckOpenPositions(
+    fastify,
+    indexSymbol,
+    positions.filter((p) => p.indexSymbol === indexSymbol),
+  );
   await buildDeckManagementContextFromPositions(
     fastify,
     decision,
@@ -1151,6 +1193,13 @@ export async function runDeckAutoExitPoll(
       executeAutoExit: isIndianMarketOpen(),
       executeAutoEntry: shouldExecuteAutoEntry(fastify),
     },
+  );
+  syncDeckTradeJournal(
+    fastify,
+    indexSymbol,
+    style,
+    decision,
+    openPositions.entries,
   );
 }
 

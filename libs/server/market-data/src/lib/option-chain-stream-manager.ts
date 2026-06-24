@@ -456,6 +456,36 @@ export class OptionChainStreamHub {
     });
   }
 
+  resolveStrikeGreeks(
+    indexSymbol: string,
+    strike: number,
+    type: 'CE' | 'PE',
+  ): {
+    delta: number | null;
+    gamma: number | null;
+    theta: number | null;
+    vega: number | null;
+    iv: number | null;
+  } | null {
+    const normalized = indexSymbol.trim();
+    for (const channel of this.channels.values()) {
+      if (channel.params.symbol !== normalized) continue;
+      const snap = channel.lastSnapshot;
+      if (!snap?.atmGreeks) continue;
+      if (snap.atmGreeks.atmStrike !== strike) continue;
+      const leg = type === 'CE' ? snap.atmGreeks.ce : snap.atmGreeks.pe;
+      if (!leg) continue;
+      return {
+        delta: leg.delta,
+        gamma: leg.gamma,
+        theta: leg.theta,
+        vega: leg.vega,
+        iv: leg.iv,
+      };
+    }
+    return null;
+  }
+
   setPaAction(
     symbol: string,
     tradingStyle: string | TradingStyle,

@@ -15,6 +15,20 @@ declare module 'fastify' {
     };
     fyersMarketStream?: {
       getIndexLtp: (symbol: string) => number | null;
+      getOptionLtp: (symbol: string) => number | null;
+    };
+    optionChainStreamHub?: {
+      resolveStrikeGreeks: (
+        indexSymbol: string,
+        strike: number,
+        type: 'CE' | 'PE',
+      ) => {
+        delta: number | null;
+        gamma: number | null;
+        theta: number | null;
+        vega: number | null;
+        iv: number | null;
+      } | null;
     };
   }
 }

@@ -556,14 +556,15 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
             [recentEvents]="data.managementContext?.autoEntry?.recentEvents ?? []"
           />
           <app-auto-exit-panel
-            [guardStatus]="data.managementContext?.autoExit?.status"
-            [guardMessage]="data.managementContext?.autoExit?.message"
+            [guardDetail]="data.managementContext?.autoExit"
           />
           <app-positions-list
             [entries]="data.openPositions?.entries ?? []"
             [note]="data.openPositions?.note"
             [advice]="data.managementContext?.advice?.headline"
             [rrTracker]="data.managementContext?.advice?.rrTracker"
+            [trailStopPrice]="data.managementContext?.autoExit?.trailStopPrice"
+            [trailStopLabel]="data.managementContext?.autoExit?.trailStopLabel"
           />
         </section>
 

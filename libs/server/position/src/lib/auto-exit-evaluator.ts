@@ -35,6 +35,7 @@ import { isIndexStopBreached } from './signal-exit-policy.js';
 
 export type AutoExitHitLevel =
   | 'STOP_LOSS'
+  | 'OPTION_PREMIUM_STOP'
   | 'TRAIL_FLOOR'
   | 'BE'
   | 'CHANDELIER'

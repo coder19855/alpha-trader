@@ -8,6 +8,8 @@ describe('normalizeAutoExitPreference', () => {
       signalFlipExit: true,
       exitPolicy: 'rr-ladder',
       positionPolicy: 'flat',
+      optionPremiumExit: true,
+      optionPremiumStopPct: 40,
     });
   });
 

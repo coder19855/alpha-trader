@@ -24,7 +24,8 @@ import { TradeJournalEntry } from '../../core/models/deck.models';
         }
       </div>
       <p class="journal-hint">
-        Entries logged when Fyers positions open/close. Option trigger may update shortly after entry.
+        Entries are written when Fyers open positions are detected (deck tick or guard poll).
+        Requires MongoDB on the server. Option trigger may update on the next sync after entry.
       </p>
       @if (error()) {
         <p class="journal-err">{{ error() }}</p>

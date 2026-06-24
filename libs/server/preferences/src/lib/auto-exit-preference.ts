@@ -16,6 +16,10 @@ export interface AutoExitPreferenceState {
   signalFlipExit: boolean;
   exitPolicy: BenchmarkExitPolicy;
   positionPolicy: BenchmarkPositionPolicy;
+  /** When true, also exit on option premium loss (WS LTP vs buy avg). */
+  optionPremiumExit: boolean;
+  /** Max premium drawdown % from entry before option hard stop fires. */
+  optionPremiumStopPct: number;
 }
 
 const DEFAULT_AUTO_EXIT: AutoExitPreferenceState = {
@@ -24,6 +28,8 @@ const DEFAULT_AUTO_EXIT: AutoExitPreferenceState = {
   signalFlipExit: true,
   exitPolicy: 'rr-ladder',
   positionPolicy: 'flat',
+  optionPremiumExit: true,
+  optionPremiumStopPct: 40,
 };
 
 function normalizeRetestCount(value: unknown): number {
@@ -45,6 +51,12 @@ function normalizePositionPolicy(value: unknown): BenchmarkPositionPolicy {
   return 'flat';
 }
 
+function normalizeOptionPremiumStopPct(value: unknown): number {
+  const n = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(n)) return DEFAULT_AUTO_EXIT.optionPremiumStopPct;
+  return Math.max(10, Math.min(90, n));
+}
+
 export function normalizeAutoExitPreference(
   raw?: Partial<AutoExitPreferenceState> | null,
 ): AutoExitPreferenceState {
@@ -54,6 +66,8 @@ export function normalizeAutoExitPreference(
     signalFlipExit: raw?.signalFlipExit !== false,
     exitPolicy: normalizeExitPolicy(raw?.exitPolicy),
     positionPolicy: normalizePositionPolicy(raw?.positionPolicy),
+    optionPremiumExit: raw?.optionPremiumExit !== false,
+    optionPremiumStopPct: normalizeOptionPremiumStopPct(raw?.optionPremiumStopPct),
   };
 }
 

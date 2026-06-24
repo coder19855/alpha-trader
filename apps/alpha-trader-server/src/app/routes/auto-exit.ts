@@ -25,6 +25,8 @@ export default async function autoExitRoutes(fastify: FastifyInstance) {
       signalFlipExit?: boolean;
       exitPolicy?: string;
       positionPolicy?: string;
+      optionPremiumExit?: boolean;
+      optionPremiumStopPct?: number;
     };
     try {
       const pref = await fastify.preferences.patchAutoExit(

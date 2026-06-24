@@ -6,7 +6,7 @@ interface LadderMarker {
   id: string;
   label: string;
   price: number;
-  tone: 'entry' | 'stop' | 'be' | 'tp' | 'spot';
+  tone: 'entry' | 'stop' | 'be' | 'tp' | 'trail' | 'spot';
   detail?: string;
 }
 
@@ -170,6 +170,9 @@ interface LadderMarker {
       .tone-tp {
         color: #4ade80;
       }
+      .tone-trail {
+        color: #fbbf24;
+      }
       .tone-spot {
         color: #f8fafc;
         z-index: 2;
@@ -211,33 +214,59 @@ interface LadderMarker {
 })
 export class PositionRrTrackerComponent {
   @Input() rrTracker: DeckPositionRrTracker | null | undefined = null;
+  @Input() trailStopPrice: number | null | undefined = null;
+  @Input() trailStopLabel: string | null | undefined = null;
 
   markers(): LadderMarker[] {
     const t = this.rrTracker;
     if (!t) return [];
-    return t.levels
+    const base: LadderMarker[] = t.levels
       .filter((level) => level.kind !== 'be' || level.price !== t.entry)
-      .map((level) => ({
-        id: level.id,
-        label:
-          level.kind === 'entry'
-            ? 'E'
-            : level.kind === 'stop'
-              ? 'S'
-              : level.kind === 'be'
-                ? 'BE'
-                : level.label,
-        price: level.price,
-        tone:
+      .map((level) => {
+        const tone: LadderMarker['tone'] =
           level.kind === 'entry'
             ? 'entry'
             : level.kind === 'stop'
               ? 'stop'
               : level.kind === 'be'
                 ? 'be'
-                : 'tp',
-        detail: `${level.label} @ ${level.price}`,
-      }));
+                : 'tp';
+        return {
+          id: level.id,
+          label:
+            level.kind === 'entry'
+              ? 'E'
+              : level.kind === 'stop'
+                ? 'S'
+                : level.kind === 'be'
+                  ? 'BE'
+                  : level.label,
+          price: level.price,
+          tone,
+          detail: `${level.label} @ ${level.price}`,
+        };
+      });
+
+    const trail = this.trailMarker();
+    if (trail && !base.some((m) => m.price === trail.price)) {
+      base.push(trail);
+    }
+    return base;
+  }
+
+  trailMarker(): LadderMarker | null {
+    const price = this.trailStopPrice;
+    if (!Number.isFinite(price)) return null;
+    const label = this.trailStopLabel?.trim() || 'Trail';
+    const short =
+      label.length <= 6 ? label : label.split(/\s+/).map((w) => w[0]).join('');
+    return {
+      id: 'trail-stop',
+      label: short || 'T',
+      price: price!,
+      tone: 'trail',
+      detail: `${label} @ ${price}`,
+    };
   }
 
   spotMarker(): LadderMarker | null {
@@ -299,8 +328,9 @@ export class PositionRrTrackerComponent {
       t.entry,
       t.stopLoss,
       t.spot,
+      this.trailStopPrice,
       ...t.levels.map((level) => level.price),
-    ].filter((p) => Number.isFinite(p));
+    ].filter((p): p is number => Number.isFinite(p));
     if (!prices.length) return null;
     const min = Math.min(...prices);
     const max = Math.max(...prices);

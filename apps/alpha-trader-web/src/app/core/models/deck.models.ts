@@ -275,6 +275,23 @@ export interface DeckLiveTick {
       message: string;
       exitPolicy?: string;
       positionPolicy?: string;
+      optionPremiumExit?: boolean;
+      optionPremiumStopPct?: number;
+      retestCount?: number;
+      confirmationCount?: number;
+      confirmationsRequired?: number;
+      pendingHitLevel?: string | null;
+      peakR?: number | null;
+      indexSpot?: number | null;
+      trailFloorPrice?: number | null;
+      trailFloorR?: number | null;
+      trailStopPrice?: number | null;
+      trailStopLabel?: string | null;
+      scaleOutNote?: string | null;
+      optionLegs?: AutoExitOptionLegTelemetry[];
+      lastExecutedAt?: string | null;
+      lastEvaluatedAt?: string | null;
+      recentEvents?: AutoExitTraceEvent[];
     };
     autoEntry?: {
       enabled: boolean;
@@ -399,12 +416,41 @@ export interface SettingsSnapshot {
   }>;
 }
 
+export interface AutoExitOptionLegTelemetry {
+  symbol: string;
+  optionLabel: string;
+  buyAvg: number;
+  ltp: number | null;
+  pnlPct: number | null;
+  pnlInr: number | null;
+  delta: number | null;
+  theta: number | null;
+  iv: number | null;
+}
+
+export interface AutoExitTraceEvent {
+  at: string;
+  stage:
+    | 'off'
+    | 'watching'
+    | 'blocked'
+    | 'pending'
+    | 'executed'
+    | 'scale_out'
+    | 'cooldown';
+  tone: 'neutral' | 'success' | 'warn' | 'error';
+  title: string;
+  detail?: string;
+}
+
 export interface AutoExitSnapshot {
   enabled: boolean;
   retestCount: number;
   signalFlipExit: boolean;
   exitPolicy: string;
   positionPolicy: string;
+  optionPremiumExit: boolean;
+  optionPremiumStopPct: number;
   exitPolicies: Array<{ id: string; label: string; hint: string }>;
   positionPolicies: Array<{ id: string; label: string; hint: string }>;
 }

@@ -22,7 +22,11 @@ import { PositionRrTrackerComponent } from '../position-rr-tracker/position-rr-t
       }
 
       @if (rrTracker) {
-        <app-position-rr-tracker [rrTracker]="rrTracker" />
+        <app-position-rr-tracker
+          [rrTracker]="rrTracker"
+          [trailStopPrice]="trailStopPrice"
+          [trailStopLabel]="trailStopLabel"
+        />
       }
 
       @if (!entries.length) {
@@ -92,6 +96,8 @@ export class PositionsListComponent {
   @Input() note: string | null | undefined;
   @Input() advice: string | null | undefined;
   @Input() rrTracker: DeckPositionRrTracker | null | undefined;
+  @Input() trailStopPrice: number | null | undefined;
+  @Input() trailStopLabel: string | null | undefined;
 
   direction(entry: DeckOpenPositionEntry): string {
     return entry.direction || entry.side || '—';

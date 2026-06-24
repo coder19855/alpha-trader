@@ -80,7 +80,16 @@ export {
   getAutoExitRuntimeState,
   setAutoExitRuntimeState,
   resetAutoExitRuntimeState,
+  recordAutoExitTraceEvent,
+  type AutoExitRuntimeState,
+  type AutoExitTraceEvent,
 } from './lib/auto-exit-state.js';
+
+export {
+  resolveHeldLegTelemetry,
+  evaluateOptionPremiumStop,
+  type AutoExitOptionLegTelemetry,
+} from './lib/option-premium-exit.js';
 
 export { resolveHeldEntrySpot } from './lib/held-position-trade-setup.js';
 

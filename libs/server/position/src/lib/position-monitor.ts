@@ -123,23 +123,33 @@ export interface PositionHealth {
   previousScore?: number;
 }
 
+import type { AutoExitOptionLegTelemetry } from './option-premium-exit.js';
+
+export type { AutoExitOptionLegTelemetry };
+
 export interface AutoExitGuardStatus {
   enabled: boolean;
   retestCount: number;
   exitPolicy: string;
   positionPolicy: string;
+  optionPremiumExit?: boolean;
+  optionPremiumStopPct?: number;
   confirmationsRequired: number;
   confirmationCount: number;
   pendingHitLevel: string | null;
   peakR: number | null;
+  indexSpot?: number | null;
   trailFloorPrice: number | null;
   trailFloorR: number | null;
   trailStopPrice: number | null;
   trailStopLabel: string | null;
   scaleOutNote: string | null;
+  optionLegs?: AutoExitOptionLegTelemetry[];
   status: 'off' | 'watching' | 'pending' | 'executed' | 'blocked';
   message: string;
   lastExecutedAt: string | null;
+  lastEvaluatedAt?: string | null;
+  recentEvents?: AutoExitTraceEvent[];
 }
 
 export interface AutoEntryGuardStatus {
@@ -184,6 +194,7 @@ import {
   TradingStyle,
 } from '@alpha-trader/server-shared';
 import type { AutoEntryTraceEvent } from './auto-entry-state.js';
+import type { AutoExitTraceEvent } from './auto-exit-state.js';
 
 function signalSupportsPosition(
   positionDirection: 'CE-BUY' | 'PE-BUY',
