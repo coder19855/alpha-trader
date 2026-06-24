@@ -5,6 +5,10 @@ import {
   FYERS_OPTION_INDEX_SYMBOLS,
   ResponseStatus,
 } from '@alpha-trader/server-shared';
+import {
+  formatFyersPlaceOrderError,
+  parseFyersPlaceOrderOutcome,
+} from './fyers-place-order.js';
 import { HeldDirection } from './position-monitor.js';
 
 export interface AutoEntryOrderResult {
@@ -167,11 +171,12 @@ export async function placeAutoEntryBuy(
       product_type: 'MIS',
       validity: 'DAY',
     });
-    if (orderRes?.id) {
+    const outcome = parseFyersPlaceOrderOutcome(orderRes);
+    if (outcome.ok && outcome.orderId) {
       return {
         attempted: true,
         succeeded: true,
-        orderId: String(orderRes.id),
+        orderId: outcome.orderId,
         symbol: leg.symbol,
         strike: leg.strike,
         qty,
@@ -185,10 +190,10 @@ export async function placeAutoEntryBuy(
       symbol: leg.symbol,
       strike: leg.strike,
       qty,
-      error: 'Order rejected by broker',
+      error: outcome.error ?? 'Order rejected by broker',
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = formatFyersPlaceOrderError(err);
     fastify.log.warn(
       { err, symbol: leg.symbol, reason: params.reason },
       'Auto-entry buy failed',

@@ -1,6 +1,10 @@
 import './augment-fastify.js';
 import { FastifyInstance } from 'fastify';
 import { resolveOptionMeta, ResponseStatus } from '@alpha-trader/server-shared';
+import {
+  formatFyersPlaceOrderError,
+  parseFyersPlaceOrderOutcome,
+} from './fyers-place-order.js';
 import { HeldDirection } from './position-monitor.js';
 
 function mapFyersProductType(raw: string | undefined): 'CNC' | 'MIS' | 'NRML' {
@@ -99,14 +103,17 @@ async function squareOffLegs(
         product_type: mapFyersProductType(leg.productType),
         validity: 'DAY',
       });
-      if (orderRes?.id) {
+      const outcome = parseFyersPlaceOrderOutcome(orderRes);
+      if (outcome.ok && outcome.orderId) {
         result.succeeded += 1;
-        result.orderIds.push(String(orderRes.id));
+        result.orderIds.push(outcome.orderId);
       } else {
-        result.failed.push(`${leg.symbol}: order rejected`);
+        result.failed.push(
+          `${leg.symbol}: ${outcome.error ?? 'order rejected'}`,
+        );
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = formatFyersPlaceOrderError(err);
       result.failed.push(`${leg.symbol}: ${message}`);
       fastify.log.warn(
         { err, symbol: leg.symbol, reason: params.reason },

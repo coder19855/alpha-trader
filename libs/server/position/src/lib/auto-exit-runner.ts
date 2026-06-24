@@ -522,7 +522,7 @@ export async function attachAutoExitGuard(params: {
       pref,
       runtime,
       message: `${runtime.lastExecutionNote} · ${signal.reason}`,
-      status: 'executed',
+      status: result.succeeded > 0 ? 'executed' : 'pending',
       trailFloorPrice: activeTrail?.trailFloorPrice ?? rrFloor?.floorPrice ?? null,
       trailFloorR: activeTrail?.trailFloorR ?? rrFloor?.floorR ?? null,
       trailStopPrice: activeTrail?.stopPrice ?? null,
@@ -540,7 +540,9 @@ export async function attachAutoExitGuard(params: {
     message: ready
       ? cooldownActive
         ? `Exit confirmed — cooldown before next auto-close. ${signal.reason}`
-        : `Exit confirmed (${runtime.confirmationCount}/${confirmationsRequired}) — next poll will square off. ${signal.reason}`
+        : execute
+          ? `Exit confirmed (${runtime.confirmationCount}/${confirmationsRequired}) — squaring off now. ${signal.reason}`
+          : `Exit confirmed (${runtime.confirmationCount}/${confirmationsRequired}) — awaiting broker hook. ${signal.reason}`
       : `Exit ${runtime.confirmationCount}/${confirmationsRequired}${signal.immediate ? '' : ` (+${pref.retestCount} retests)`}: ${signal.reason} · ${policyHint}`,
     status: 'pending',
     trailFloorPrice: activeTrail?.trailFloorPrice ?? rrFloor?.floorPrice ?? null,

@@ -8,6 +8,7 @@ import {
 } from '@alpha-trader/server-analysis';
 import {
   attachAutoExitGuard,
+  type AutoExitDecisionSlice,
   buildOpenPositionContextFromPositions,
   computeManagementAdvice,
   fetchOpenIndexOptionPositions,
@@ -29,7 +30,7 @@ import {
   getStyleScoringConfig,
   isIndianMarketOpen,
   isVetoOff,
-  resolveDeckSignalRefreshMs,
+  isDeckSignalCacheFresh,
 } from '@alpha-trader/server-shared';
 import { attachAutoEntryGuard } from './auto-entry-runner.js';
 import { resolveAutoEntryPresetSignal } from './auto-entry-preset.js';
@@ -299,12 +300,11 @@ async function buildDeckDecision(
   options?: { forceRefresh?: boolean },
 ): Promise<DeckDecision> {
   const key = deckDecisionCacheKey(symbol, style, vetoMode);
-  const ttlMs = resolveDeckSignalRefreshMs();
   const now = Date.now();
 
   if (!options?.forceRefresh) {
     const cached = deckDecisionCache.get(key);
-    if (cached && now - cached.at < ttlMs) {
+    if (cached && isDeckSignalCacheFresh(cached.at, now)) {
       return cached.value;
     }
     const inFlight = deckDecisionInFlight.get(key);
@@ -957,11 +957,94 @@ export async function buildDeckLiveFastPayload(
   return buildDeckLiveStreamTick(fastify, params);
 }
 
+function buildAutoExitDecisionSliceFromTick(
+  tick: DeckLiveStreamTick,
+  spot: number,
+): AutoExitDecisionSlice {
+  return {
+    action: tick.action,
+    conviction: tick.conviction,
+    lastPrice: spot,
+    tradeSetup: tick.tradeSetup ?? null,
+    tradeGuidance: {
+      thresholdsForThisStyle: { enter: tick.entryThreshold },
+    },
+    priceAction: tick.vetoReason
+      ? { overallSignal: { vetoReason: tick.vetoReason } }
+      : undefined,
+    momentumDecayPercent: null,
+  };
+}
+
+/** Lightweight auto-exit on LTP — uses the last full PA tick, not a fresh TA inject. */
+export async function runDeckAutoExitOnQuoteTick(
+  fastify: FastifyInstance,
+  params: {
+    symbol: string;
+    tradingStyle?: string;
+    spot: number;
+    priorManagementContext?: PositionManagementContext;
+    priorTick?: DeckLiveStreamTick | null;
+  },
+): Promise<PositionManagementContext | undefined> {
+  const exitPref = fastify.preferences.getAutoExit();
+  const indexSymbol = params.symbol.trim();
+
+  if (!params.priorManagementContext) {
+    return params.priorManagementContext;
+  }
+
+  if (!exitPref.enabled || !isIndianMarketOpen()) {
+    return refreshAutoExitGuardDisplay({
+      indexSymbol,
+      managementContext: params.priorManagementContext,
+      spot: params.spot,
+      pref: exitPref,
+    });
+  }
+
+  if (!params.priorTick || !params.priorManagementContext.hasOpenPosition) {
+    return refreshAutoExitGuardDisplay({
+      indexSymbol,
+      managementContext: params.priorManagementContext,
+      spot: params.spot,
+      pref: exitPref,
+    });
+  }
+
+  const managementContext = {
+    ...params.priorManagementContext,
+    advice: params.priorManagementContext.advice
+      ? {
+          ...params.priorManagementContext.advice,
+          rrTracker: params.priorManagementContext.advice.rrTracker
+            ? {
+                ...params.priorManagementContext.advice.rrTracker,
+                spot: params.spot,
+              }
+            : params.priorManagementContext.advice.rrTracker,
+        }
+      : params.priorManagementContext.advice,
+  };
+
+  await attachAutoExitGuard({
+    fastify,
+    indexSymbol,
+    decision: buildAutoExitDecisionSliceFromTick(params.priorTick, params.spot),
+    managementContext,
+    pref: exitPref,
+    execute: true,
+  });
+
+  return managementContext;
+}
+
 export async function buildDeckPositionsLtpPatch(
   fastify: FastifyInstance,
   params: { symbol: string; tradingStyle?: string },
   openPositions: DeckOpenPositionsPayload,
   managementContext?: PositionManagementContext,
+  priorTick?: DeckLiveStreamTick | null,
 ): Promise<DeckPositionsLtpPatch> {
   const indexSymbol = params.symbol.trim();
   const refreshed = refreshDeckOpenPositionsLtp(fastify, openPositions);
@@ -969,12 +1052,13 @@ export async function buildDeckPositionsLtpPatch(
   const liveLastPrice =
     liveQuote.ltp > 0 ? liveQuote.ltp : null;
   const patchedManagementContext =
-    managementContext && liveLastPrice != null
-      ? refreshAutoExitGuardDisplay({
-          indexSymbol,
-          managementContext,
+    liveLastPrice != null
+      ? await runDeckAutoExitOnQuoteTick(fastify, {
+          symbol: indexSymbol,
+          tradingStyle: params.tradingStyle,
           spot: liveLastPrice,
-          pref: fastify.preferences.getAutoExit(),
+          priorManagementContext: managementContext,
+          priorTick,
         })
       : managementContext;
   return {
@@ -1046,15 +1130,6 @@ export async function runDeckAutoExitPoll(
 
   const style = parseTradingStyle(params.tradingStyle);
   const indexSymbol = params.symbol.trim();
-  if (
-    (fastify.deckStreamHub?.getSubscriberCount({
-      symbol: indexSymbol,
-      tradingStyle: String(style),
-    }) ?? 0) > 0
-  ) {
-    return;
-  }
-
   const vetoMode = fastify.preferences.getSettings().vetoMode;
   const decision = await buildDeckDecision(
     fastify,

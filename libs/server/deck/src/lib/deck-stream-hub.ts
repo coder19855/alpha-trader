@@ -62,8 +62,8 @@ export class DeckStreamHub {
       } | null;
       tickInFlight: boolean;
       ltpInFlight: boolean;
+      pendingTickRefresh: boolean;
       pendingForceRefresh: boolean;
-      lastFullTickAt: number;
       signalRefreshTimer: NodeJS.Timeout | null;
     }
   >();
@@ -93,8 +93,8 @@ export class DeckStreamHub {
         cachedChartCandles: null,
         tickInFlight: false,
         ltpInFlight: false,
+        pendingTickRefresh: false,
         pendingForceRefresh: false,
-        lastFullTickAt: 0,
         signalRefreshTimer: null,
       };
       this.channels.set(key, channel);
@@ -165,16 +165,9 @@ export class DeckStreamHub {
       );
       if (!relevant) continue;
 
-      // Always push LTP — price must stay real-time; PA refresh is separate.
+      // LTP first (fast), then full PA recompute on every relevant quote tick.
       void this.sendLtpPatch(channel);
-
-      const intervalMs = resolveDeckSignalRefreshMs();
-      const dueForSignal =
-        channel.lastFullTickAt <= 0 ||
-        Date.now() - channel.lastFullTickAt >= intervalMs;
-      if (dueForSignal) {
-        void this.sendTick(channel);
-      }
+      void this.sendTick(channel);
     }
   }
 
@@ -218,6 +211,7 @@ export class DeckStreamHub {
   ): void {
     if (channel.signalRefreshTimer) return;
     const intervalMs = resolveDeckSignalRefreshMs();
+    if (intervalMs <= 0) return;
     channel.signalRefreshTimer = setInterval(() => {
       if (!isIndianMarketOpen() || channel.subscribers.size === 0) return;
       void this.sendTick(channel);
@@ -270,6 +264,7 @@ export class DeckStreamHub {
     forceRefresh = false,
   ): Promise<void> {
     if (channel.tickInFlight) {
+      channel.pendingTickRefresh = true;
       if (forceRefresh) channel.pendingForceRefresh = true;
       return;
     }
@@ -281,7 +276,6 @@ export class DeckStreamHub {
         channel.cachedOpenPositions ?? undefined,
       );
       channel.lastTick = tick;
-      channel.lastFullTickAt = Date.now();
       channel.cachedOpenPositions = tick.openPositions ?? channel.cachedOpenPositions;
       const chartPatch = this.patchCachedChartCandles(channel, tick.lastPrice);
       this.broadcast(channel, chartPatch ? { ...tick, ...chartPatch } : tick);
@@ -293,9 +287,13 @@ export class DeckStreamHub {
       });
     } finally {
       channel.tickInFlight = false;
-      if (channel.pendingForceRefresh) {
-        channel.pendingForceRefresh = false;
-        void this.sendTick(channel, true);
+      const rerun =
+        channel.pendingTickRefresh || channel.pendingForceRefresh;
+      const rerunForce = channel.pendingForceRefresh;
+      channel.pendingTickRefresh = false;
+      channel.pendingForceRefresh = false;
+      if (rerun) {
+        void this.sendTick(channel, rerunForce);
       }
     }
   }
@@ -312,6 +310,7 @@ export class DeckStreamHub {
           channel.params,
           { entries: [], asOf: new Date().toISOString(), note: null },
           channel.lastTick?.managementContext,
+          channel.lastTick,
         );
         const chartPatch = this.patchCachedChartCandles(channel, patch.lastPrice);
         this.broadcast(channel, chartPatch ? { ...patch, ...chartPatch } : patch);
@@ -323,6 +322,7 @@ export class DeckStreamHub {
         channel.params,
         channel.cachedOpenPositions,
         channel.lastTick?.managementContext,
+        channel.lastTick,
       );
       channel.cachedOpenPositions = patch.openPositions;
       if (patch.managementContext && channel.lastTick) {

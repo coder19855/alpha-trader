@@ -1,22 +1,34 @@
-/** Minimum interval between full price-action recomputes per deck channel. */
-const DECK_SIGNAL_REFRESH_MIN_MS = 1_000;
-
-/** Default matches pre-OOM live deck behaviour (PA refresh ~every second). */
-const DECK_SIGNAL_REFRESH_DEFAULT_MS = 1_000;
+/** Default: recompute PA on every live quote tick (in-flight dedup prevents OOM storms). */
+const DECK_SIGNAL_REFRESH_DEFAULT_MS = 0;
 
 /**
- * Env `DECK_SIGNAL_REFRESH_MS` overrides the default (minimum 1s to limit heap churn).
+ * Env `DECK_SIGNAL_REFRESH_MS` sets a minimum interval between full PA recomputes per channel.
+ * Unset or `0` = every quote tick. Set e.g. `1000` to throttle heap churn on small instances.
  */
 export function resolveDeckSignalRefreshMs(): number {
   const raw = process.env.DECK_SIGNAL_REFRESH_MS;
-  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
-  const ms =
-    Number.isFinite(parsed) && parsed > 0
-      ? parsed
-      : DECK_SIGNAL_REFRESH_DEFAULT_MS;
-  return Math.max(DECK_SIGNAL_REFRESH_MIN_MS, ms);
+  if (raw === undefined || raw === '') {
+    return DECK_SIGNAL_REFRESH_DEFAULT_MS;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DECK_SIGNAL_REFRESH_DEFAULT_MS;
+  }
+  return parsed;
 }
 
 export function resolvePaCacheTtlMs(): number {
-  return Math.max(500, resolveDeckSignalRefreshMs() - 50);
+  const refreshMs = resolveDeckSignalRefreshMs();
+  if (refreshMs <= 0) return 0;
+  return Math.max(500, refreshMs - 50);
+}
+
+export function isDeckSignalCacheFresh(cachedAt: number, now = Date.now()): boolean {
+  const ttlMs = resolveDeckSignalRefreshMs();
+  return ttlMs > 0 && now - cachedAt < ttlMs;
+}
+
+export function isPaResponseCacheFresh(cachedAt: number, now = Date.now()): boolean {
+  const ttlMs = resolvePaCacheTtlMs();
+  return ttlMs > 0 && now - cachedAt < ttlMs;
 }
