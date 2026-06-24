@@ -38,7 +38,8 @@
               "maximumError": "8kb"
             }
           ],
-          "outputHashing": "all"
+          "outputHashing": "all",
+          "serviceWorker": "apps/alpha-trader-web/ngsw-config.json"
         },
         "development": {
           "optimization": false,
