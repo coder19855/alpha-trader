@@ -69,6 +69,7 @@ interface IstChartSession {
         overflow: hidden;
         border: 1px solid var(--border);
         background: var(--chart-bg, var(--surface));
+        touch-action: pan-y;
       }
       .chart-host {
         width: 100%;

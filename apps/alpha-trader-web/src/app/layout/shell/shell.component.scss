@@ -3,3 +3,10 @@
   min-height: 100dvh;
   overflow: hidden;
 }
+
+@media (max-width: 900px) {
+  :host {
+    overflow: visible;
+    height: auto;
+  }
+}

@@ -307,9 +307,13 @@ html.web-layout #web-shell.hidden {
 .web-content {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   position: relative;
   padding-bottom: env(safe-area-inset-bottom);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
 }
 
 #web-deck-mount {
@@ -540,7 +544,31 @@ html.web-layout .loading-overlay {
     gap: 14px;
   }
 
+  /* Android Chrome: nested flex + overflow:hidden on body often blocks touch scroll. */
+  html.web-layout,
+  html.web-layout body {
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html.web-layout #web-shell,
+  html.web-layout .web-shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .web-main {
+    height: auto;
+    min-height: 100dvh;
+  }
+
   .web-content {
+    overflow: visible;
+    flex: 1 1 auto;
+    min-height: auto;
     padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
   }
 }

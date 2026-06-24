@@ -43,6 +43,13 @@ html.web-layout .web-shell {
   html.web-layout #web-shell,
   html.web-layout .web-shell {
     grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  app-root {
+    height: auto;
+    min-height: 100dvh;
   }
 }
 
