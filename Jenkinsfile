@@ -6,7 +6,7 @@ pipeline {
     timeout(time: 45, unit: 'MINUTES')
     timestamps()
   }
- 
+
   environment {
     NODE_VERSION = '22.23.0'
     CI = 'true'
@@ -16,6 +16,7 @@ pipeline {
     NODE_ENV = 'production'
     // API + Angular on the same port (:3000 → public :20063)
     SERVE_WEB_APP = 'true'
+    NVM_DIR = "${env.HOME}/.nvm"
   }
 
   triggers {
@@ -34,14 +35,32 @@ pipeline {
       steps {
         sh '''
           set -e
+          export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
           want_major="$(echo "${NODE_VERSION}" | cut -d. -f1)"
-          have_major="$(node --version 2>/dev/null | tr -d v | cut -d. -f1 || true)"
 
-          if [ "$have_major" != "$want_major" ] && [ -s "$HOME/.nvm/nvm.sh" ]; then
-            . "$HOME/.nvm/nvm.sh"
-            nvm install "${NODE_VERSION}"
-            nvm use "${NODE_VERSION}"
+          if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+            echo "Node not in Jenkins container PATH — installing nvm (host Node is not visible here)..."
+            if ! command -v curl >/dev/null 2>&1; then
+              echo "curl is required to bootstrap nvm inside the Jenkins container"
+              exit 1
+            fi
+            curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           fi
+
+          # shellcheck disable=SC1091
+          . "$NVM_DIR/nvm.sh"
+
+          have_major="$(node --version 2>/dev/null | tr -d v | cut -d. -f1 || true)"
+          if [ "$have_major" != "$want_major" ]; then
+            nvm install "${NODE_VERSION}"
+          fi
+          nvm use "${NODE_VERSION}"
+          nvm alias default "${NODE_VERSION}" >/dev/null
+
+          {
+            echo "export NVM_DIR=\\"$NVM_DIR\\""
+            echo '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use '"${NODE_VERSION}"' >/dev/null'
+          } > .jenkins-node.sh
 
           node --version
           npm --version
@@ -51,19 +70,31 @@ pipeline {
 
     stage('Install') {
       steps {
-        sh 'npm ci --legacy-peer-deps'
+        sh '''
+          set -e
+          . ./.jenkins-node.sh
+          npm ci --legacy-peer-deps
+        '''
       }
     }
 
     stage('Build') {
       steps {
-        sh 'npm run build'
+        sh '''
+          set -e
+          . ./.jenkins-node.sh
+          npm run build
+        '''
       }
     }
 
     stage('Test') {
       steps {
-        sh 'npm test'
+        sh '''
+          set -e
+          . ./.jenkins-node.sh
+          npm test
+        '''
       }
     }
 
@@ -75,8 +106,17 @@ pipeline {
         }
       }
       steps {
-        sh 'chmod +x scripts/deploy/restart-services.sh'
-        sh 'bash scripts/deploy/restart-services.sh'
+        sh '''
+          set -e
+          # Prefer restarting the host systemd unit when Jenkins SSH deploy is configured.
+          if [ -n "${DEPLOY_SSH_TARGET:-}" ]; then
+            ssh -o StrictHostKeyChecking=no ${DEPLOY_SSH_OPTS:-} "${DEPLOY_SSH_TARGET}" \
+              "systemctl restart alpha-trader-api && systemctl is-active alpha-trader-api"
+          else
+            chmod +x scripts/deploy/restart-services.sh
+            bash scripts/deploy/restart-services.sh
+          fi
+        '''
       }
     }
   }
