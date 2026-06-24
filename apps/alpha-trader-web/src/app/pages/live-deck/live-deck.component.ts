@@ -829,7 +829,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       this.reload(symbol, style);
     });
 
-    this.reloadSub = this.deckReload.requested.subscribe(() => this.softReconnect());
+    this.reloadSub = this.deckReload.requested.subscribe(() => this.forceReload());
 
     effect(() => {
       const symbol = this.ctx.symbol();
@@ -868,12 +868,9 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     this.reload(this.ctx.symbol(), this.ctx.style());
   }
 
-  private softReconnect(): void {
-    if (this.ctx.streamStatus() === 'live') {
-      this.deckReload.markFinished();
-      return;
-    }
-    this.connectStream(this.ctx.symbol(), this.ctx.style());
+  /** Shell refresh — full HTTP snapshot + new SSE even when status still says live. */
+  private forceReload(): void {
+    this.reload(this.ctx.symbol(), this.ctx.style());
   }
 
   onSymbolChange(symbol: string): void {

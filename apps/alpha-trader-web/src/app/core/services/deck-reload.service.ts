@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 
-/** Cross-component hook: shell reconnect button → lightweight WS reconnect only. */
+/** Cross-component hook: shell refresh button → full live deck reload. */
 @Injectable({ providedIn: 'root' })
 export class DeckReloadService {
   private readonly requested$ = new Subject<void>();

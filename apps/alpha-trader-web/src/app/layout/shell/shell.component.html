@@ -193,13 +193,13 @@
                 [disabled]="deckReload.busy()"
                 [attr.aria-label]="
                   deckReload.busy()
-                    ? 'Reconnecting stream'
-                    : 'Reconnect live stream if disconnected'
+                    ? 'Refreshing live deck'
+                    : 'Refresh live deck and stream'
                 "
                 [title]="
                   deckReload.busy()
-                    ? 'Reconnecting…'
-                    : 'Reconnect live stream if disconnected'
+                    ? 'Refreshing…'
+                    : 'Refresh live deck and stream'
                 "
                 (click)="reloadDeck()"
               >
