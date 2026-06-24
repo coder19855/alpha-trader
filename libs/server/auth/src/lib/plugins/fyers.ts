@@ -85,6 +85,14 @@ const fyersPlugin = fp(
       }
     });
 
+    // SDK method is snake_case `place_order`; keep camelCase alias for callers.
+    const placeOrderFn = (fyers as { place_order?: (req: unknown) => Promise<unknown> })
+      .place_order;
+    if (typeof placeOrderFn === 'function') {
+      (fyers as { placeOrder?: (req: unknown) => Promise<unknown> }).placeOrder =
+        placeOrderFn.bind(fyers);
+    }
+
     fastify.decorate('fyers', fyers);
     fastify.decorate('ensureFyersSession', ensureFyersSession);
   },

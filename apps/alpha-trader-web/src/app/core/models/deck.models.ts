@@ -86,6 +86,25 @@ export interface VetoBreakupItem {
   meter?: number;
 }
 
+export interface DeckPositionRrLevel {
+  id: string;
+  label: string;
+  rr: number;
+  price: number;
+  kind: 'stop' | 'entry' | 'be' | 'tp';
+}
+
+export interface DeckPositionRrTracker {
+  direction: 'CE-BUY' | 'PE-BUY';
+  entry: number;
+  stopLoss: number;
+  risk: number;
+  spot: number;
+  currentR: number | null;
+  highestHitRr: string | null;
+  levels: DeckPositionRrLevel[];
+}
+
 export interface DeckOpenPositionEntry {
   symbol: string;
   optionLabel?: string;
@@ -237,6 +256,9 @@ export interface DeckLiveTick {
     note?: string;
     advice?: {
       headline: string;
+      currentR?: number | null;
+      highestHitRr?: string | null;
+      rrTracker?: DeckPositionRrTracker;
       overall?:
         | 'STRONG_HOLD'
         | 'HOLD'

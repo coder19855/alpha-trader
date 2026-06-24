@@ -1,11 +1,15 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
-import { DeckOpenPositionEntry } from '../../core/models/deck.models';
+import {
+  DeckOpenPositionEntry,
+  DeckPositionRrTracker,
+} from '../../core/models/deck.models';
+import { PositionRrTrackerComponent } from '../position-rr-tracker/position-rr-tracker.component';
 
 @Component({
   selector: 'app-positions-list',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, PositionRrTrackerComponent],
   template: `
     <section class="positions-panel">
       <div class="panel-head">
@@ -15,6 +19,10 @@ import { DeckOpenPositionEntry } from '../../core/models/deck.models';
 
       @if (note) {
         <p class="positions-note" role="status">{{ note }}</p>
+      }
+
+      @if (rrTracker) {
+        <app-position-rr-tracker [rrTracker]="rrTracker" />
       }
 
       @if (!entries.length) {
@@ -83,6 +91,7 @@ export class PositionsListComponent {
   @Input() entries: DeckOpenPositionEntry[] = [];
   @Input() note: string | null | undefined;
   @Input() advice: string | null | undefined;
+  @Input() rrTracker: DeckPositionRrTracker | null | undefined;
 
   direction(entry: DeckOpenPositionEntry): string {
     return entry.direction || entry.side || '—';

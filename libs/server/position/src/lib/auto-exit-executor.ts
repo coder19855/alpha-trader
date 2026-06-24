@@ -91,7 +91,7 @@ async function squareOffLegs(
 
     result.attempted += 1;
     try {
-      const orderRes = await fastify.fyers.placeOrder({
+      const orderRes = await fastify.fyers.place_order({
         symbol: leg.symbol,
         qty,
         type: 'MARKET',

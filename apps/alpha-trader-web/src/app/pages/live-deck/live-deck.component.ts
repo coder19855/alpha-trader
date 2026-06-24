@@ -51,6 +51,7 @@ import { DeckReloadService } from '../../core/services/deck-reload.service';
 import { toOptionComponentGauges } from '../../core/models/option-chain.models';
 import { patchMultiTfSpotCandles } from '../../core/utils/live-candle-patch';
 import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timestamp';
+import { computeBlendLanes } from '../../core/utils/blend-lanes.util';
 
 type SignalSubTab = 'priceAction' | 'optionChain';
 type PaSignalSubTab = 'brief' | 'overview' | 'timeframes' | 'context';
@@ -111,11 +112,14 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
           <section class="signal-blend-banner" aria-label="Blended signal score">
             <span class="signal-blend-label">Blended score</span>
             <span class="signal-blend-value">
-              {{ data.weightedBaseConviction ?? data.lanes.combinedPercent }}%
+              {{ blendDisplay()?.combinedPercent ?? data.lanes.combinedPercent }}%
             </span>
             <span class="signal-blend-breakdown">
-              PA {{ data.lanes.priceActionPercent }}% · Option
-              {{ data.lanes.optionPercent }}%
+              PA {{ blendDisplay()?.paPercent ?? data.lanes.priceActionPercent }}% · Option
+              {{ blendDisplay()?.optionPercent ?? data.lanes.optionPercent }}%
+              @if (blendDisplay()?.hasOptionFlow) {
+                <span class="blend-live-tag">live</span>
+              }
             </span>
           </section>
           <nav class="signal-subtabs" aria-label="Signal views">
@@ -554,6 +558,7 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
             [entries]="data.openPositions?.entries ?? []"
             [note]="data.openPositions?.note"
             [advice]="data.managementContext?.advice?.headline"
+            [rrTracker]="data.managementContext?.advice?.rrTracker"
           />
         </section>
 
@@ -689,6 +694,14 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
         font-size: 0.72rem;
         color: var(--muted);
       }
+      .blend-live-tag {
+        margin-left: 6px;
+        font-size: 0.58rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--option);
+      }
       .signal-subtab-spacer {
         flex: 1;
       }
@@ -772,7 +785,8 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   private readonly stream = inject(DeckStreamService);
   private readonly notify = inject(NotificationService);
   private readonly deckAlerts = inject(DeckAlertService);
-  private sub: Subscription | null = null;
+  private httpSub: Subscription | null = null;
+  private streamSub: Subscription | null = null;
   private reloadSub: Subscription | null = null;
   private pendingChartPatch: Partial<DeckLiveTick> | null = null;
 
@@ -790,6 +804,20 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     return toOptionComponentGauges(rows);
   });
 
+  readonly blendDisplay = computed(() => {
+    const tick = this.tick();
+    if (!tick) return null;
+    const oc = this.optionPoll.data();
+    return computeBlendLanes({
+      style: this.ctx.style(),
+      paPercent:
+        tick.lanes?.priceActionPercent ??
+        tick.gauges?.priceAction?.percent ??
+        tick.conviction,
+      optionPercent: oc?.conviction,
+    });
+  });
+
   constructor() {
     effect(() => {
       const symbol = this.ctx.symbol();
@@ -797,30 +825,18 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       this.reload(symbol, style);
     });
 
-    this.reloadSub = this.deckReload.requested.subscribe(() => this.forceReconnect());
+    this.reloadSub = this.deckReload.requested.subscribe(() => this.softReconnect());
 
     effect(() => {
       const symbol = this.ctx.symbol();
       const style = this.ctx.style();
       const paAction = this.tick()?.action;
-      const tab = this.ctx.activeTab();
-      const signalTab = this.signalSubTab();
-      const compTab = this.componentsSubTab();
-      const needsOption =
-        tab === 'signal' && signalTab === 'optionChain'
-          ? true
-          : tab === 'components' && compTab === 'optionChain';
-
-      if (needsOption) {
-        this.optionPoll.configure({
-          symbol,
-          style,
-          paAction,
-          enabled: true,
-        });
-      } else {
-        this.optionPoll.stop();
-      }
+      this.optionPoll.configure({
+        symbol,
+        style,
+        paAction,
+        enabled: true,
+      });
     });
   }
 
@@ -833,7 +849,8 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.sub?.unsubscribe();
+    this.httpSub?.unsubscribe();
+    this.streamSub?.unsubscribe();
     this.reloadSub?.unsubscribe();
     this.optionPoll.stop();
   }
@@ -844,13 +861,15 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
 
   retry(): void {
     this.error.set(null);
-    this.forceReconnect();
+    this.reload(this.ctx.symbol(), this.ctx.style());
   }
 
-  private forceReconnect(): void {
-    const symbol = this.ctx.symbol();
-    const style = this.ctx.style();
-    this.reload(symbol, style);
+  private softReconnect(): void {
+    if (this.ctx.connected()) {
+      this.deckReload.markFinished();
+      return;
+    }
+    this.connectStream(this.ctx.symbol(), this.ctx.style());
   }
 
   onSymbolChange(symbol: string): void {
@@ -941,6 +960,27 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
         kind: 'hline',
       });
     }
+
+    const rrTracker = data.managementContext?.advice?.rrTracker;
+    if (rrTracker?.levels?.length) {
+      for (const level of rrTracker.levels) {
+        overlays.push({
+          id: `pos-${level.id}`,
+          label: level.label,
+          price: level.price,
+          color:
+            level.kind === 'stop'
+              ? '#ef4444'
+              : level.kind === 'entry'
+                ? '#22d3ee'
+                : level.kind === 'be'
+                  ? '#fbbf24'
+                  : '#4ade80',
+          kind: 'hline',
+        });
+      }
+    }
+
     return overlays;
   }
 
@@ -981,16 +1021,17 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   }
 
   private reload(symbol: string, style: string): void {
-    this.sub?.unsubscribe();
+    this.httpSub?.unsubscribe();
+    this.streamSub?.unsubscribe();
     this.error.set(null);
     this.pendingChartPatch = null;
     this.tick.set(null);
     this.deckAlerts.reset();
 
     const tradingStyle = style as TradingStyle;
-    this.sub = new Subscription();
+    this.httpSub = new Subscription();
 
-    this.sub.add(
+    this.httpSub.add(
       this.deckApi.getLive(symbol, tradingStyle, 'fast').subscribe({
         next: (fast) => this.applyTick(fast),
         error: (err) => {
@@ -1002,7 +1043,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       }),
     );
 
-    this.sub.add(
+    this.httpSub.add(
       this.deckApi.getLive(symbol, tradingStyle, 'enrichment').subscribe({
         next: (enrichment) => this.mergeChartPatch(enrichment),
         error: () => {
@@ -1011,51 +1052,54 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       }),
     );
 
-    this.sub.add(
-      this.stream.connect(symbol, style).subscribe({
-        next: (event) => {
-          if ('type' in event && event.type === 'status') {
-        const isConnected = event.phase === 'connected';
-        this.ctx.updateTracker({
-          connected: isConnected,
-          live: isConnected,
-        });
-        if (isConnected || event.phase === 'disconnected') {
-          this.deckReload.markFinished();
+    this.connectStream(symbol, style);
+  }
+
+  private connectStream(symbol: string, style: string): void {
+    this.streamSub?.unsubscribe();
+    this.streamSub = this.stream.connect(symbol, style).subscribe({
+      next: (event) => {
+        if ('type' in event && event.type === 'status') {
+          const isConnected = event.phase === 'connected';
+          this.ctx.updateTracker({
+            connected: isConnected,
+            live: isConnected,
+          });
+          if (isConnected || event.phase === 'disconnected') {
+            this.deckReload.markFinished();
+          }
+          return;
         }
-        return;
-      }
-          if (
-            'type' in event &&
-            (event.type === 'enrichment' ||
-              event.type === 'positions' ||
-              event.type === 'ltp')
-          ) {
-            const patch = event as unknown as Partial<DeckLiveTick> & {
-              type: string;
-            };
-            const { type: _type, ...rest } = patch;
-            this.mergeChartPatch(rest);
-            return;
-          }
-          if ('action' in event) {
-            this.applyTick({
-              ...(this.tick() ?? {}),
-              ...event,
-            } as DeckLiveTick);
-          }
-        },
-        error: (err: Error) => {
-          this.deckReload.markFinished();
-          this.ctx.updateTracker({ connected: false, live: false });
-          if (!this.tick()) {
-            const message = err.message || 'Stream failed';
-            this.error.set(message);
-            this.notify.error(message);
-          }
-        },
-      }),
-    );
+        if (
+          'type' in event &&
+          (event.type === 'enrichment' ||
+            event.type === 'positions' ||
+            event.type === 'ltp')
+        ) {
+          const patch = event as unknown as Partial<DeckLiveTick> & {
+            type: string;
+          };
+          const { type: _type, ...rest } = patch;
+          this.mergeChartPatch(rest);
+          return;
+        }
+        if ('action' in event) {
+          this.applyTick({
+            ...(this.tick() ?? {}),
+            ...event,
+          } as DeckLiveTick);
+        }
+      },
+      error: (err: Error) => {
+        this.deckReload.markFinished();
+        this.ctx.updateTracker({ connected: false, live: false });
+        if (!this.tick()) {
+          const message = err.message || 'Stream failed';
+          this.error.set(message);
+          this.notify.error(message);
+        }
+      },
+    });
   }
 
   /** Enrichment lacks gauges/action — never use it as the initial tick. */

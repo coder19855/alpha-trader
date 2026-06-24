@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 
-/** Cross-component hook: shell reload button → live deck reconnect + data refresh. */
+/** Cross-component hook: shell reconnect button → lightweight WS reconnect only. */
 @Injectable({ providedIn: 'root' })
 export class DeckReloadService {
   private readonly requested$ = new Subject<void>();
@@ -14,7 +14,7 @@ export class DeckReloadService {
     if (this.busy()) return;
     this.busy.set(true);
     this.clearFinishTimer();
-    this.finishTimer = setTimeout(() => this.markFinished(), 12_000);
+    this.finishTimer = setTimeout(() => this.markFinished(), 5_000);
     this.requested$.next();
   }
 

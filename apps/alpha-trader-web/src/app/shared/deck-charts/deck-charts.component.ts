@@ -562,7 +562,9 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
 
   activeOverlays(): ChartOverlayLine[] {
     const state = this.layerState();
-    const overlays = this.chartOverlays.filter((overlay) => state[overlay.id]);
+    const overlays = this.chartOverlays.filter(
+      (overlay) => overlay.id.startsWith('pos-') || state[overlay.id],
+    );
     if (
       state['chartPattern'] &&
       Number.isFinite(this.chartPatternNeckline) &&

@@ -159,7 +159,7 @@ export async function placeAutoEntryBuy(
 
   const qty = Math.max(leg.lotSize, params.lots * leg.lotSize);
   try {
-    const orderRes = await fastify.fyers.placeOrder({
+    const orderRes = await fastify.fyers.place_order({
       symbol: leg.symbol,
       qty,
       type: 'MARKET',

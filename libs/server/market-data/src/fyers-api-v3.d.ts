@@ -72,7 +72,11 @@ declare module 'fyers-api-v3' {
     getQuotes(request: FyersAPI.QuoteRequest): Promise<FyersAPI.QuotesResponse>;
 
     // Order APIs
-    placeOrder(
+    place_order(
+      order: FyersAPI.PlaceOrderRequest,
+    ): Promise<FyersAPI.OrderResponse>;
+    /** Alias added by registerFyersPlugin for camelCase callers. */
+    placeOrder?(
       order: FyersAPI.PlaceOrderRequest,
     ): Promise<FyersAPI.OrderResponse>;
     getOrders(): Promise<FyersAPI.OrdersListResponse>;
