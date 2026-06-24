@@ -10,13 +10,8 @@ pipeline {
   environment {
     NODE_VERSION = '22.23.0'
     CI = 'true'
-    // API listens on all interfaces; VPS maps public :20063 → :3000
-    HOST = '0.0.0.0'
-    PORT = '3000'
-    NODE_ENV = 'production'
-    // API + Angular on the same port (:3000 → public :20063)
-    SERVE_WEB_APP = 'true'
     NVM_DIR = "${env.HOME}/.nvm"
+    // Do not set NODE_ENV=production here — npm ci would skip devDependencies (nx, jest, etc.).
   }
 
   triggers {
@@ -73,7 +68,8 @@ pipeline {
         sh '''
           set -e
           . ./.jenkins-node.sh
-          npm ci --legacy-peer-deps
+          npm ci --legacy-peer-deps --include=dev
+          npx nx --version
         '''
       }
     }
@@ -104,6 +100,13 @@ pipeline {
           branch 'main'
           branch 'master'
         }
+      }
+      environment {
+        // Runtime only — applied when restarting the app, not during npm ci/build.
+        HOST = '0.0.0.0'
+        PORT = '3000'
+        NODE_ENV = 'production'
+        SERVE_WEB_APP = 'true'
       }
       steps {
         sh '''
