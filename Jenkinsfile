@@ -1,5 +1,10 @@
 pipeline {
-  agent any
+  // Pipeline jobs have no "Use custom workspace" UI — set it here instead.
+  agent {
+    node {
+      customWorkspace '/opt/alpha-trader'
+    }
+  }
 
   options {
     buildDiscarder(logRotator(numToKeepStr: '20'))
