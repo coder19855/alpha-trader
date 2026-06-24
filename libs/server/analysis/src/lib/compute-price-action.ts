@@ -4,9 +4,8 @@ import {
   TradingStyle,
   VetoMode,
   parseVetoModeQuery,
+  resolvePaCacheTtlMs,
 } from '@alpha-trader/server-shared';
-
-const PA_CACHE_TTL_MS = 55_000;
 const paResponseCache = new Map<
   string,
   { value: PriceActionResponse; at: number }
@@ -54,7 +53,7 @@ export async function computePriceAction(
 
   if (!params.forceRefresh) {
     const cached = paResponseCache.get(cacheKey);
-    if (cached && now - cached.at < PA_CACHE_TTL_MS) {
+    if (cached && now - cached.at < resolvePaCacheTtlMs()) {
       return cached.value;
     }
     const inFlight = paResponseInFlight.get(cacheKey);

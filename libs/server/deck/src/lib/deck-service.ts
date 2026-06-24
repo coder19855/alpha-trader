@@ -29,6 +29,7 @@ import {
   getStyleScoringConfig,
   isIndianMarketOpen,
   isVetoOff,
+  resolveDeckSignalRefreshMs,
 } from '@alpha-trader/server-shared';
 import { attachAutoEntryGuard } from './auto-entry-runner.js';
 import { resolveAutoEntryPresetSignal } from './auto-entry-preset.js';
@@ -261,12 +262,6 @@ type DeckDecision = TradeDecisionAlertPayload & {
 function shouldExecuteAutoEntry(fastify: FastifyInstance): boolean {
   if (isIndianMarketOpen()) return true;
   return fastify.preferences.getAutoEntry().dryRun;
-}
-
-function resolveDeckSignalRefreshMs(): number {
-  const raw = process.env.DECK_SIGNAL_REFRESH_MS;
-  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
 }
 
 const deckDecisionCache = new Map<

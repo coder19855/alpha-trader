@@ -1,9 +1,12 @@
 import './augment-fastify.js';
 import { randomUUID } from 'crypto';
 import { FastifyBaseLogger, FastifyInstance } from 'fastify';
-import { TradingStyle, isIndianMarketOpen } from '@alpha-trader/server-shared';
 import {
-  getMarketDataStore,
+  TradingStyle,
+  isIndianMarketOpen,
+  resolveDeckSignalRefreshMs,
+} from '@alpha-trader/server-shared';
+import {
   getOpenPositionsCacheSnapshot,
   seedIndexQuotesFromRest,
 } from '@alpha-trader/server-market-data';
@@ -13,7 +16,6 @@ import {
   buildDeckPositionsUpdate,
   DeckCandlePoint,
   DeckLiveStreamTick,
-  invalidateDeckLivePayloadCache,
 } from './deck-service.js';
 import { patchMultiTfSpotCandles } from './live-candle-patch.js';
 import type { DeckOpenPositionsPayload } from './deck-open-positions.js';
@@ -34,12 +36,6 @@ export function deckStreamChannelKey(params: DeckStreamChannelParams): string {
   const symbol = params.symbol.trim();
   const style = String(params.tradingStyle || TradingStyle.Intraday).toUpperCase();
   return `${symbol}:${style}`;
-}
-
-function resolveDeckSignalRefreshMs(): number {
-  const raw = process.env.DECK_SIGNAL_REFRESH_MS;
-  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
 }
 
 function parseTradingStyle(raw?: string): TradingStyle {
@@ -177,8 +173,7 @@ export class DeckStreamHub {
         channel.lastFullTickAt <= 0 ||
         Date.now() - channel.lastFullTickAt >= intervalMs;
       if (dueForSignal) {
-        invalidateDeckLivePayloadCache(channel.params.symbol.trim());
-        void this.sendTick(channel, true);
+        void this.sendTick(channel);
       }
     }
   }
@@ -225,9 +220,7 @@ export class DeckStreamHub {
     const intervalMs = resolveDeckSignalRefreshMs();
     channel.signalRefreshTimer = setInterval(() => {
       if (!isIndianMarketOpen() || channel.subscribers.size === 0) return;
-      getMarketDataStore().invalidateLiveHistory(channel.params.symbol.trim());
-      invalidateDeckLivePayloadCache(channel.params.symbol.trim());
-      void this.sendTick(channel, true);
+      void this.sendTick(channel);
     }, intervalMs);
     channel.signalRefreshTimer.unref?.();
   }

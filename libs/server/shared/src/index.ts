@@ -16,6 +16,7 @@ export {
 } from './lib/option-chain/pa-alignment.js';
 export * from './lib/constants/trade-rr.js';
 export * from './lib/constants/session.js';
+export * from './lib/constants/deck-signal.js';
 export * from './lib/constants/telegram-notifications.js';
 export {
   STYLE_SCORING_CONFIG,
