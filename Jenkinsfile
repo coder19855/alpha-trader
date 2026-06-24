@@ -74,6 +74,7 @@ pipeline {
           set -e
           . ./.jenkins-node.sh
           npm ci --legacy-peer-deps
+          npm i nx
         '''
       }
     }
