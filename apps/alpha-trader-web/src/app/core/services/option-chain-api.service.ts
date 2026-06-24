@@ -50,8 +50,16 @@ export class OptionChainApiService {
       source.onmessage = (event: MessageEvent<string>) => {
         try {
           const payload = JSON.parse(event.data) as OptionChainSignalPayload & {
+            type?: string;
+            message?: string;
             error?: string;
           };
+          if (payload.type === 'error') {
+            subscriber.error(
+              new Error(payload.message || payload.error || 'Option chain stream error'),
+            );
+            return;
+          }
           if (payload.error) {
             subscriber.error(new Error(payload.error));
             return;

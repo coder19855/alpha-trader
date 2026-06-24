@@ -22,7 +22,7 @@ import {
   countAlignedTimeframes,
   isHigherTfSupportive,
 } from './timeframe-alignment.js';
-import { TradingStyle } from '@alpha-trader/server-shared';
+import { TradingStyle, VetoMode } from '@alpha-trader/server-shared';
 
 export interface SnapshotDeps {
   ta: FastifyInstance['technicalAnalysisPlugin'];
@@ -47,6 +47,8 @@ export interface SnapshotInput {
   maxBars1h?: number;
   /** Skip expensive chart-pattern pass (benchmark replay). */
   benchmarkReplay?: boolean;
+  /** Entry veto strictness (matches /api/technical-analysis route). */
+  entryVetoMode?: VetoMode;
 }
 
 function sliceThrough(
@@ -87,6 +89,7 @@ export function buildPriceActionSnapshot(
     maxBars15m,
     maxBars1h,
     benchmarkReplay,
+    entryVetoMode,
   } = input;
 
   const candles5m = sliceThrough(raw5m, candleEnd5m, maxBars5m);
@@ -383,6 +386,7 @@ export function buildPriceActionSnapshot(
         : atr1h;
 
   const confluentSignal = ta.getConfluentTradeSignal({
+    entryVetoMode,
     tradingStyle,
     scores: { score5m, score15m, score1h },
     structures: { ms5m, ms15m, ms1h },

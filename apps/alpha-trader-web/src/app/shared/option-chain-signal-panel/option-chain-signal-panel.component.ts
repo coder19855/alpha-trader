@@ -9,6 +9,7 @@ import { OptionChainWidgetsComponent } from '../option-chain-widgets/option-chai
 import { OptionGaugeComponent } from '../option-gauge/option-gauge.component';
 import { OptionGuardDashboardComponent } from '../option-guard-dashboard/option-guard-dashboard.component';
 import { OptionSignalBriefComponent } from '../option-signal-brief/option-signal-brief.component';
+import { formatOptionSignalLabel } from '../signal-dual-lane/signal-dual-lane.component';
 
 type OcSignalSubTab = 'overview' | 'flow' | 'guards' | 'brief';
 
@@ -263,9 +264,5 @@ export class OptionChainSignalPanelComponent {
     return toOptionComponentGauges(rows);
   });
 
-  signalLabel(signal: string): string {
-    if (signal.includes('BULLISH')) return 'BULLISH FLOW';
-    if (signal.includes('BEARISH')) return 'BEARISH FLOW';
-    return 'NEUTRAL FLOW';
-  }
+  readonly signalLabel = formatOptionSignalLabel;
 }

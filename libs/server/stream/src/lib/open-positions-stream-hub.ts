@@ -5,6 +5,7 @@ import {
   TradingStyle,
   TradeDecisionAlertPayload,
   isIndianMarketOpen,
+  runDetached,
 } from '@alpha-trader/server-shared';
 import { computePriceAction, computePaDecision } from '@alpha-trader/server-analysis';
 import {
@@ -107,7 +108,9 @@ export class OpenPositionsStreamHub {
 
     channel.subscribers.set(subscriber.id, subscriber);
     if (channel.lastTick) subscriber.write(channel.lastTick);
-    void this.sendTick(channel);
+    runDetached(this.sendTick(channel), this.log, 'Open positions stream tick', {
+      channel: channel.params,
+    });
 
     return () => {
       channel?.subscribers.delete(subscriber.id);
@@ -140,7 +143,9 @@ export class OpenPositionsStreamHub {
       );
       if (!relevant) continue;
 
-      void this.sendLtpPatch(channel);
+      runDetached(this.sendLtpPatch(channel), this.log, 'Open positions LTP patch', {
+        channel: channel.params,
+      });
     }
   }
 
@@ -187,25 +192,29 @@ export class OpenPositionsStreamHub {
   private async sendLtpPatch(
     channel: NonNullable<ReturnType<typeof this.channels.get>>,
   ): Promise<void> {
-    const indexSymbol = channel.params.symbol.trim();
-    const livePrice =
-      this.fastify.fyersMarketStream?.getIndexLtp(indexSymbol) ?? null;
-    const snapshot = getOpenPositionsCacheSnapshot();
-    const positions = (snapshot?.positions ?? [])
-      .filter((p) => p.indexSymbol === indexSymbol)
-      .map((p) => ({
-        symbol: p.symbol,
-        ltp: this.fastify.fyersMarketStream?.getOptionLtp(p.symbol) ?? null,
-        unrealizedPnl: p.unrealizedPnl,
-      }));
+    try {
+      const indexSymbol = channel.params.symbol.trim();
+      const livePrice =
+        this.fastify.fyersMarketStream?.getIndexLtp(indexSymbol) ?? null;
+      const snapshot = getOpenPositionsCacheSnapshot();
+      const positions = (snapshot?.positions ?? [])
+        .filter((p) => p.indexSymbol === indexSymbol)
+        .map((p) => ({
+          symbol: p.symbol,
+          ltp: this.fastify.fyersMarketStream?.getOptionLtp(p.symbol) ?? null,
+          unrealizedPnl: p.unrealizedPnl,
+        }));
 
-    this.broadcast(channel, {
-      type: 'ltp',
-      asOf: new Date().toISOString(),
-      symbol: indexSymbol,
-      lastPrice: livePrice,
-      positions,
-    } satisfies OpenPositionsLtpPatch);
+      this.broadcast(channel, {
+        type: 'ltp',
+        asOf: new Date().toISOString(),
+        symbol: indexSymbol,
+        lastPrice: livePrice,
+        positions,
+      } satisfies OpenPositionsLtpPatch);
+    } catch (err) {
+      this.log.warn({ err, channel: channel.params }, 'Open positions LTP patch failed');
+    }
   }
 
   private broadcast(

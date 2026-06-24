@@ -28,6 +28,7 @@ export * from './lib/types/index.js';
 
 // Utils
 export * from './lib/utils/error-message.js';
+export * from './lib/async-guards.js';
 export * from './lib/utils/promise-timeout.js';
 export * from './lib/utils/symbol-utils.js';
 

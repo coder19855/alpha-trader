@@ -5,6 +5,7 @@ import { onQuoteTicksUpdated } from '@alpha-trader/server-market-data';
 import { fetchOpenIndexOptionPositions } from '@alpha-trader/server-position';
 import {
   isIndianMarketOpen,
+  runDetached,
   TELEGRAM_NOTIFICATION_DEFAULTS,
   TradingStyle,
 } from '@alpha-trader/server-shared';
@@ -82,7 +83,7 @@ const deckStreamPlugin = fp(
     };
 
     guardPollTimer = setInterval(() => {
-      void runGuardPollCycle();
+      runDetached(runGuardPollCycle(), fastify.log, 'Auto guard poll failed');
     }, pollIntervalMs);
     guardPollTimer.unref?.();
 

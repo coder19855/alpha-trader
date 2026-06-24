@@ -5,6 +5,7 @@ import {
   TradingStyle,
   isIndianMarketOpen,
   resolveDeckSignalRefreshMs,
+  runDetached,
 } from '@alpha-trader/server-shared';
 import {
   getOpenPositionsCacheSnapshot,
@@ -104,7 +105,7 @@ export class DeckStreamHub {
 
     channel.subscribers.set(subscriber.id, subscriber);
     if (channel.lastTick) subscriber.write(channel.lastTick);
-    void this.bootstrapChannel(channel);
+    this.runDetached(this.bootstrapChannel(channel), 'Deck stream bootstrap');
 
     return () => {
       channel?.subscribers.delete(subscriber.id);
@@ -166,8 +167,8 @@ export class DeckStreamHub {
       if (!relevant) continue;
 
       // LTP first (fast), then full PA recompute on every relevant quote tick.
-      void this.sendLtpPatch(channel);
-      void this.sendTick(channel);
+      this.runDetached(this.sendLtpPatch(channel), 'Deck LTP patch');
+      this.runDetached(this.sendTick(channel), 'Deck stream tick');
     }
   }
 
@@ -178,8 +179,8 @@ export class DeckStreamHub {
     for (const channel of this.channels.values()) {
       if (channel.subscribers.size === 0) continue;
       if (!unique.includes(channel.params.symbol.trim())) continue;
-      void this.sendPositionsUpdate(channel);
-      void this.sendTick(channel);
+      this.runDetached(this.sendPositionsUpdate(channel), 'Deck positions update');
+      this.runDetached(this.sendTick(channel), 'Deck stream tick');
     }
   }
 
@@ -214,7 +215,7 @@ export class DeckStreamHub {
     if (intervalMs <= 0) return;
     channel.signalRefreshTimer = setInterval(() => {
       if (!isIndianMarketOpen() || channel.subscribers.size === 0) return;
-      void this.sendTick(channel);
+      this.runDetached(this.sendTick(channel), 'Deck signal refresh tick');
     }, intervalMs);
     channel.signalRefreshTimer.unref?.();
   }
@@ -252,8 +253,8 @@ export class DeckStreamHub {
         channel.params.symbol.trim(),
       ]);
       // Price first (fast), then full PA tick — don't block LTP on PA compute.
-      void this.sendLtpPatch(channel);
-      void this.sendTick(channel);
+      this.runDetached(this.sendLtpPatch(channel), 'Deck LTP patch');
+      this.runDetached(this.sendTick(channel), 'Deck stream tick');
     } catch (err) {
       this.log.warn({ err, channel: channel.params }, 'Deck stream bootstrap failed');
     }
@@ -279,6 +280,11 @@ export class DeckStreamHub {
       channel.cachedOpenPositions = tick.openPositions ?? channel.cachedOpenPositions;
       const chartPatch = this.patchCachedChartCandles(channel, tick.lastPrice);
       this.broadcast(channel, chartPatch ? { ...tick, ...chartPatch } : tick);
+      this.fastify.optionChainStreamHub?.setPaAction(
+        channel.params.symbol,
+        channel.params.tradingStyle ?? TradingStyle.Intraday,
+        tick.action,
+      );
     } catch (err) {
       this.log.warn({ err, channel: channel.params }, 'Deck stream tick failed');
       this.broadcast(channel, {
@@ -293,7 +299,10 @@ export class DeckStreamHub {
       channel.pendingTickRefresh = false;
       channel.pendingForceRefresh = false;
       if (rerun) {
-        void this.sendTick(channel, rerunForce);
+        this.runDetached(
+          this.sendTick(channel, rerunForce),
+          'Deck queued stream tick',
+        );
       }
     }
   }
@@ -353,6 +362,10 @@ export class DeckStreamHub {
 
     channel.cachedChartCandles = { ...channel.cachedChartCandles, ...patched };
     return patched;
+  }
+
+  private runDetached(task: Promise<unknown>, label: string): void {
+    runDetached(task, this.log, label);
   }
 
   private async sendPositionsUpdate(

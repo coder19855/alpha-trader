@@ -46,6 +46,10 @@ function ttlForResolution(resolution: string): number {
 
 export class MarketDataStore {
   private historyCache = new Map<string, CacheEntry<FyersAPI.HistoryResponse>>();
+  private historyInFlight = new Map<
+    string,
+    Promise<FyersAPI.HistoryResponse>
+  >();
   private historyHits = 0;
   private historyMisses = 0;
 
@@ -63,12 +67,24 @@ export class MarketDataStore {
       return cached.value;
     }
 
-    this.historyMisses += 1;
-    const value = await fetch();
-    if (value.s === 'ok') {
-      this.historyCache.set(key, { value, fetchedAt: nowMs });
+    const inFlight = this.historyInFlight.get(key);
+    if (inFlight) {
+      return inFlight;
     }
-    return value;
+
+    this.historyMisses += 1;
+    const promise = (async () => {
+      const value = await fetch();
+      if (value.s === 'ok') {
+        this.historyCache.set(key, { value, fetchedAt: nowMs });
+      }
+      return value;
+    })().finally(() => {
+      this.historyInFlight.delete(key);
+    });
+
+    this.historyInFlight.set(key, promise);
+    return promise;
   }
 
   invalidateLiveHistory(symbol: string): void {
@@ -90,6 +106,7 @@ export class MarketDataStore {
 
   resetForTests(): void {
     this.historyCache.clear();
+    this.historyInFlight.clear();
     this.historyHits = 0;
     this.historyMisses = 0;
   }

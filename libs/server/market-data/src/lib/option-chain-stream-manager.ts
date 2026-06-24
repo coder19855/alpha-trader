@@ -5,9 +5,12 @@ import {
   TradeSignal,
   TradingStyle,
   OptionChainSignalResponse,
+  formatUnknownError,
+  isFyersRateLimitError,
   normalizeVetoMode,
   parseFyersOptionSymbolTemplate,
   resolvePaAlignment,
+  runDetached,
 } from '@alpha-trader/server-shared';
 import { BlackScholes } from '@uqee/black-scholes';
 import { getQuoteCache } from './quote-cache.js';
@@ -47,6 +50,8 @@ interface ChannelState {
   lastSnapshot: OptionChainSignalResponse | null;
   lastAtmStrike: number | null;
   lastOptionSymbols: string[];
+  /** Back off Fyers REST after rate-limit (429) responses. */
+  bootstrapBlockedUntil: number;
 }
 
 const PRICER = new BlackScholes();
@@ -435,6 +440,24 @@ export class OptionChainStreamHub {
     });
   }
 
+  setPaAction(
+    symbol: string,
+    tradingStyle: string | TradingStyle,
+    paAction: string | undefined,
+  ): void {
+    const normalizedStyle = normalizeTradingStyle(
+      typeof tradingStyle === 'string' ? tradingStyle : tradingStyle,
+    );
+    const key = `${symbol.trim()}:${normalizedStyle}`;
+    const channel = this.channels.get(key);
+    if (!channel) return;
+
+    const normalized = paAction?.trim() || undefined;
+    if (channel.params.paAction === normalized) return;
+    channel.params.paAction = normalized;
+    this.scheduleRefresh(channel);
+  }
+
   subscribe(
     params: OptionChainStreamParams,
     subscriber: OptionChainStreamSubscriber,
@@ -458,11 +481,12 @@ export class OptionChainStreamHub {
         lastSnapshot: null,
         lastAtmStrike: null,
         lastOptionSymbols: [],
+        bootstrapBlockedUntil: 0,
       };
       this.channels.set(key, channel);
       this.startHeartbeat(channel);
-      void this.ensureBootstrap(channel).catch((err) => {
-        this.log.warn({ err, key }, 'Option chain bootstrap failed');
+      runDetached(this.ensureBootstrap(channel), this.log, 'Option chain bootstrap failed', {
+        key,
       });
     } else if (channel.params.paAction !== normalized.paAction) {
       channel.params.paAction = normalized.paAction;
@@ -545,7 +569,9 @@ export class OptionChainStreamHub {
     channel.refreshScheduled = true;
     channel.refreshTimer = setTimeout(() => {
       channel.refreshScheduled = false;
-      void this.refreshChannel(channel);
+      runDetached(this.refreshChannel(channel), this.log, 'Option chain refresh failed', {
+        symbol: channel.params.symbol,
+      });
     }, 120);
     channel.refreshTimer.unref?.();
   }
@@ -554,18 +580,27 @@ export class OptionChainStreamHub {
     channel: NonNullable<ReturnType<typeof this.channels.get>>,
   ): Promise<void> {
     if (channel.bootstrap) return;
+    if (channel.bootstrapBlockedUntil > Date.now()) return;
     if (channel.bootstrapInFlight) return channel.bootstrapInFlight;
 
-    const promise = this.bootstrapChannel(channel)
-      .catch((err) => {
-        this.broadcastError(channel, err);
-        throw err;
-      })
-      .finally(() => {
-        if (channel.bootstrapInFlight === promise) {
-          channel.bootstrapInFlight = null;
+    const promise = (async () => {
+      try {
+        await this.bootstrapChannel(channel);
+      } catch (err) {
+        if (isFyersRateLimitError(err)) {
+          channel.bootstrapBlockedUntil = Date.now() + 30_000;
         }
-      });
+        this.log.warn(
+          { err, symbol: channel.params.symbol },
+          'Option chain bootstrap failed',
+        );
+        this.broadcastError(channel, err);
+      }
+    })().finally(() => {
+      if (channel.bootstrapInFlight === promise) {
+        channel.bootstrapInFlight = null;
+      }
+    });
     channel.bootstrapInFlight = promise;
     return promise;
   }
@@ -628,13 +663,14 @@ export class OptionChainStreamHub {
   private async refreshChannel(
     channel: NonNullable<ReturnType<typeof this.channels.get>>,
   ): Promise<void> {
-    if (channel.subscribers.size === 0) return;
-    if (!channel.bootstrap) {
-      await this.ensureBootstrap(channel);
-      if (!channel.bootstrap) return;
-    }
+    try {
+      if (channel.subscribers.size === 0) return;
+      if (!channel.bootstrap) {
+        await this.ensureBootstrap(channel);
+        if (!channel.bootstrap) return;
+      }
 
-    const indexSymbol = channel.params.symbol.trim();
+      const indexSymbol = channel.params.symbol.trim();
     let spot =
       this.fastify.fyersMarketStream?.getIndexLtp(indexSymbol) ??
       getQuoteCache().get(indexSymbol)?.ltp ??
@@ -874,17 +910,33 @@ export class OptionChainStreamHub {
       components: parts as unknown as OptionChainSignalResponse['components'],
     };
 
-    channel.lastSnapshot = payload;
-    this.broadcast(channel, payload);
+      channel.lastSnapshot = payload;
+      this.broadcast(channel, payload);
+    } catch (err) {
+      if (isFyersRateLimitError(err)) {
+        channel.bootstrapBlockedUntil = Date.now() + 30_000;
+      }
+      this.log.warn(
+        { err, symbol: channel.params.symbol },
+        'Option chain refresh failed',
+      );
+      this.broadcastError(channel, err);
+    }
   }
 
   private broadcastError(
     channel: NonNullable<ReturnType<typeof this.channels.get>>,
     err: unknown,
   ): void {
-    const message =
-      err instanceof Error ? err.message : 'Option chain stream failed';
-    this.broadcast(channel, { error: message });
+    const message = formatUnknownError(err) || 'Option chain stream failed';
+    this.broadcast(channel, {
+      type: 'error',
+      message,
+      retryAfterMs:
+        channel.bootstrapBlockedUntil > Date.now()
+          ? channel.bootstrapBlockedUntil - Date.now()
+          : undefined,
+    });
   }
 
   private broadcast(

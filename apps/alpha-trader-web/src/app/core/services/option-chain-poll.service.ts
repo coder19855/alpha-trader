@@ -31,7 +31,7 @@ export class OptionChainPollService {
   private sourceActive = false;
 
   private scheduleKey(ctx: OptionPollContext): string {
-    return `${ctx.symbol}|${ctx.style}|${ctx.moneyness ?? ''}|${ctx.paAction ?? ''}`;
+    return `${ctx.symbol}|${ctx.style}|${ctx.moneyness ?? ''}`;
   }
 
   private clearReconnectTimer(): void {

@@ -55,7 +55,7 @@ import { DeckReloadService } from '../../core/services/deck-reload.service';
 import { toOptionComponentGauges } from '../../core/models/option-chain.models';
 import { patchMultiTfSpotCandles } from '../../core/utils/live-candle-patch';
 import { formatSignalCalculatedAt } from '../../core/utils/format-signal-timestamp';
-import { computeBlendLanes } from '../../core/utils/blend-lanes.util';
+import { SignalDualLaneComponent } from '../../shared/signal-dual-lane/signal-dual-lane.component';
 
 type SignalSubTab = 'priceAction' | 'optionChain';
 type PaSignalSubTab = 'brief' | 'overview' | 'timeframes' | 'context';
@@ -92,6 +92,7 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
     ComponentsHelpComponent,
     PositionSizingComponent,
     OptionChainSignalPanelComponent,
+    SignalDualLaneComponent,
   ],
   template: `
     <section class="deck-page">
@@ -113,19 +114,19 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
           class="tab-panel"
           [class.active]="ctx.activeTab() === 'signal'"
         >
-          <section class="signal-blend-banner" aria-label="Blended signal score">
-            <span class="signal-blend-label">Blended score</span>
-            <span class="signal-blend-value">
-              {{ blendDisplay()?.combinedPercent ?? data.lanes.combinedPercent }}%
-            </span>
-            <span class="signal-blend-breakdown">
-              PA {{ blendDisplay()?.paPercent ?? data.lanes.priceActionPercent }}% · Option
-              {{ blendDisplay()?.optionPercent ?? data.lanes.optionPercent }}%
-              @if (blendDisplay()?.hasOptionFlow) {
-                <span class="blend-live-tag">live</span>
-              }
-            </span>
-          </section>
+          <app-signal-dual-lane
+            [paAction]="data.action"
+            [paConviction]="data.conviction"
+            [paBias]="data.bias ?? ''"
+            [optionSignal]="optionPoll.data()?.signal ?? null"
+            [optionConviction]="optionPoll.data()?.conviction ?? null"
+            [optionBias]="optionPoll.data()?.bias ?? ''"
+            [paAlignment]="optionPoll.data()?.paAlignment ?? null"
+            [paAlignmentDetail]="optionPoll.data()?.paAlignmentDetail ?? ''"
+            [optionLoading]="optionPoll.loading() && !optionPoll.data()"
+            [optionLive]="!!optionPoll.data()"
+            [flowMode]="data.flowMode ?? 'pa-only'"
+          />
           <nav class="signal-subtabs" aria-label="Signal views">
             <button
               type="button"
@@ -670,42 +671,6 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
         gap: 6px;
         margin-bottom: 12px;
       }
-      .signal-blend-banner {
-        display: flex;
-        align-items: baseline;
-        gap: 10px;
-        margin-bottom: 10px;
-        padding: 10px 12px;
-        border: 1px solid rgba(167, 139, 250, 0.28);
-        border-radius: 12px;
-        background: linear-gradient(90deg, rgba(167, 139, 250, 0.12), transparent);
-        color: var(--text);
-        flex-wrap: wrap;
-      }
-      .signal-blend-label {
-        font-size: 0.68rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }
-      .signal-blend-value {
-        font-size: 1rem;
-        font-weight: 800;
-        color: #c4b5fd;
-      }
-      .signal-blend-breakdown {
-        font-size: 0.72rem;
-        color: var(--muted);
-      }
-      .blend-live-tag {
-        margin-left: 6px;
-        font-size: 0.58rem;
-        font-weight: 700;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        color: var(--option);
-      }
       .signal-subtab-spacer {
         flex: 1;
       }
@@ -806,20 +771,6 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   readonly optionComponents = computed(() => {
     const rows = this.optionPoll.data()?.componentRows ?? [];
     return toOptionComponentGauges(rows);
-  });
-
-  readonly blendDisplay = computed(() => {
-    const tick = this.tick();
-    if (!tick) return null;
-    const oc = this.optionPoll.data();
-    return computeBlendLanes({
-      style: this.ctx.style(),
-      paPercent:
-        tick.lanes?.priceActionPercent ??
-        tick.gauges?.priceAction?.percent ??
-        tick.conviction,
-      optionPercent: oc?.conviction,
-    });
   });
 
   constructor() {

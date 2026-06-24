@@ -6,6 +6,8 @@ import {
   parseVetoModeQuery,
   isPaResponseCacheFresh,
 } from '@alpha-trader/server-shared';
+import { computeLivePriceAction } from './live-price-action.js';
+
 const paResponseCache = new Map<
   string,
   { value: PriceActionResponse; at: number }
@@ -62,28 +64,24 @@ export async function computePriceAction(
     }
   }
 
-  const rangeTo = params.rangeToMs ?? Date.now();
-  const rangeToSec = Math.floor(
-    rangeTo < 10_000_000_000 ? rangeTo : rangeTo / 1000,
-  );
-
-  const fetchPromise = (async () => {
-    const res = await fastify.inject({
-      method: 'GET',
-      url:
-        `/api/technical-analysis?symbol=${encodeURIComponent(params.symbol)}` +
-        `&tradingStyle=${encodeURIComponent(style)}` +
-        `&vetoMode=${encodeURIComponent(vetoMode)}` +
-        `&range_to=${rangeToSec}`,
+  const fetchPromise = computeLivePriceAction(fastify, {
+    symbol: params.symbol,
+    tradingStyle: style,
+    vetoMode,
+    rangeToMs: params.rangeToMs,
+  })
+    .then((value) => {
+      if (value) {
+        const at = Date.now();
+        if (isPaResponseCacheFresh(at, at)) {
+          paResponseCache.set(cacheKey, { value, at });
+        }
+      }
+      return value;
+    })
+    .finally(() => {
+      paResponseInFlight.delete(cacheKey);
     });
-
-    if (res.statusCode !== 200) return null;
-    const value = JSON.parse(res.body) as PriceActionResponse;
-    paResponseCache.set(cacheKey, { value, at: Date.now() });
-    return value;
-  })().finally(() => {
-    paResponseInFlight.delete(cacheKey);
-  });
 
   paResponseInFlight.set(cacheKey, fetchPromise);
   return fetchPromise;

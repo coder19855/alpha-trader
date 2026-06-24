@@ -58,6 +58,37 @@ describe('MarketDataStore', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('dedupes concurrent live history fetches', async () => {
+    const store = new MarketDataStore();
+    const nowMs = 1_700_000_000_000;
+    let resolveFetch: (value: FyersAPI.HistoryResponse) => void = () => undefined;
+    const fetch = jest.fn(
+      () =>
+        new Promise<FyersAPI.HistoryResponse>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    const params: FyersAPI.HistoryQueryRequest = {
+      symbol: 'NSE:NIFTY50-INDEX',
+      resolution: '5',
+      range_from: '1699000000',
+      range_to: String(Math.floor(nowMs / 1000)),
+      cont_flag: 1,
+      oi_flag: 0,
+      date_format: 0,
+    };
+
+    const first = store.getHistory(params, fetch, nowMs);
+    const second = store.getHistory(params, fetch, nowMs);
+    resolveFetch(okHistory([[nowMs / 1000, 1, 2, 0.5, 1.5, 100]]));
+
+    await Promise.all([first, second]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(store.getStats().historyMisses).toBe(1);
+  });
+
   it('does not share cache between historical and live queries', async () => {
     const store = new MarketDataStore();
     const nowMs = 1_700_000_000_000;

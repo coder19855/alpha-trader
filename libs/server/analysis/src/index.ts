@@ -4,6 +4,11 @@ export {
   invalidatePriceActionCache,
   parseVetoModeQuery,
 } from './lib/compute-price-action.js';
+export {
+  computeLivePriceAction,
+  fetchLiveMtfCandles,
+} from './lib/live-price-action.js';
+export type { LiveMtfCandles } from './lib/live-price-action.js';
 export { computePaDecision } from './lib/compute-pa-decision.js';
 export {
   buildOptionChainSignalResponse,
