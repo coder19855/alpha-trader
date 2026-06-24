@@ -15,6 +15,7 @@ import {
 import { BlackScholes } from '@uqee/black-scholes';
 import { getQuoteCache } from './quote-cache.js';
 import { seedIndexQuotesFromRest } from './seed-index-quotes.js';
+import { resolveSessionPremiumChange } from './resolve-session-premium-change.js';
 import { onQuoteTicksUpdated } from './market-stream-coordinator.js';
 
 export interface OptionChainStreamParams {
@@ -221,9 +222,12 @@ function scoreOiPressure(near: FyersAPI.OptionChainData[]): number {
 function scorePcr(callOi: number, putOi: number): number {
   if (callOi <= 0) return 0;
   const pcr = putOi / callOi;
-  if (pcr > 1.35) return clampScore(-(pcr - 1) / 0.8);
-  if (pcr < 0.75) return clampScore((1 - pcr) / 0.5);
-  return clampScore((1 - pcr) * 0.4);
+  if (pcr >= 0.9 && pcr <= 1.15) return 0;
+  if (pcr > 1.35) return clampScore(-(pcr - 1.15) / 0.8);
+  if (pcr > 1.15) return clampScore(-((pcr - 1.15) / 0.4) * 0.35);
+  if (pcr < 0.75) return clampScore((0.9 - pcr) / 0.5);
+  if (pcr < 0.9) return clampScore(((0.9 - pcr) / 0.15) * 0.35);
+  return 0;
 }
 
 function scorePain(spot: number, maxPain: number): number {
@@ -268,7 +272,12 @@ function scoreGreeks(near: FyersAPI.OptionChainData[]): number | null {
   return clampScore(netDelta / weight / 0.45);
 }
 
-function scoreTrend(near: FyersAPI.OptionChainData[]): number {
+function scoreSpotMomentum(changePct: number): number {
+  if (!Number.isFinite(changePct) || Math.abs(changePct) < 0.08) return 0;
+  return clampScore(changePct / 0.4);
+}
+
+function scoreOiTrend(near: FyersAPI.OptionChainData[]): number {
   let bullish = 0;
   let bearish = 0;
   for (const row of near) {
@@ -283,6 +292,13 @@ function scoreTrend(near: FyersAPI.OptionChainData[]): number {
   }
   const total = bullish + bearish;
   return total < 1 ? 0 : clampScore((bullish - bearish) / total);
+}
+
+function scoreTrend(near: FyersAPI.OptionChainData[], spotChangePct: number): number {
+  const oiTrend = scoreOiTrend(near);
+  const spot = scoreSpotMomentum(spotChangePct);
+  if (spot === 0) return oiTrend;
+  return clampScore(oiTrend * 0.65 + spot * 0.35);
 }
 
 function scoreBias(score: number | null, strong = 0.4): 'bullish' | 'bearish' | 'neutral' {
@@ -686,6 +702,7 @@ export class OptionChainStreamHub {
 
     const bootstrap = channel.bootstrap;
     const { atmStrike, rows, optionSymbols } = resolveStrikePlan(bootstrap, spot);
+    await seedIndexQuotesFromRest(this.fastify, optionSymbols);
 
     if (atmStrike !== channel.lastAtmStrike) {
       channel.lastAtmStrike = atmStrike;
@@ -695,9 +712,11 @@ export class OptionChainStreamHub {
     }
 
     const expiryYears = yearsToExpiry(bootstrap.expiryAtMs);
+    const spotChangePct = getQuoteCache().get(indexSymbol)?.chp ?? 0;
     const synthetic: FyersAPI.OptionChainData[] = rows.map((row) => {
       const quote = getQuoteCache().get(row.symbol);
       const ltp = quote?.ltp ?? row.ltp ?? 0;
+      const prem = resolveSessionPremiumChange(quote, row.ltpch, row.ltpchp);
       const greeks = resolveOptGreek(
         row.option_type === 'PE' ? 'put' : 'call',
         spot,
@@ -708,8 +727,8 @@ export class OptionChainStreamHub {
       return {
         ...row,
         ltp,
-        ltpch: quote?.ch ?? row.ltpch ?? 0,
-        ltpchp: quote?.chp ?? row.ltpchp ?? 0,
+        ltpch: prem.ltpChange,
+        ltpchp: prem.ltpChangePct,
         greeks: {
           delta: greeks.delta ?? 0,
           gamma: greeks.gamma ?? 0,
@@ -766,7 +785,7 @@ export class OptionChainStreamHub {
       pain: scorePain(spot, maxPain),
       greeks: scoreGreeks(near),
       vix: scoreVix(indiaVix, utils.norm),
-      trend: scoreTrend(near),
+      trend: scoreTrend(near, spotChangePct),
     };
     const weights = utils.getScoreWeights(
       channel.params.tradingStyle as TradingStyle,
@@ -885,8 +904,8 @@ export class OptionChainStreamHub {
           oi: row.oi || 0,
           oiChange: row.oich || 0,
           ltp: row.ltp || 0,
-          ltpChange: row.ltpch || 0,
-          ltpChangePct: row.ltpchp || 0,
+          ltpChange: row.ltpch ?? 0,
+          ltpChangePct: row.ltpchp ?? 0,
           iv: row.greeks?.iv ?? null,
           strength: clampScore(
             ((row.oi || 0) + Math.abs(row.oich || 0)) / Math.max(callOiTotal + putOiTotal, 1),

@@ -210,9 +210,13 @@ function scoreOiPressure(near: FyersAPI.OptionChainData[]): number {
 function scorePcr(callOi: number, putOi: number): number {
   if (callOi <= 0) return 0;
   const pcr = putOi / callOi;
-  if (pcr > 1.35) return clampScore(-(pcr - 1) / 0.8);
-  if (pcr < 0.75) return clampScore((1 - pcr) / 0.5);
-  return clampScore((1 - pcr) * 0.4);
+  // Index chains often sit 0.9–1.2 structurally — treat as neutral.
+  if (pcr >= 0.9 && pcr <= 1.15) return 0;
+  if (pcr > 1.35) return clampScore(-(pcr - 1.15) / 0.8);
+  if (pcr > 1.15) return clampScore(-((pcr - 1.15) / 0.4) * 0.35);
+  if (pcr < 0.75) return clampScore((0.9 - pcr) / 0.5);
+  if (pcr < 0.9) return clampScore(((0.9 - pcr) / 0.15) * 0.35);
+  return 0;
 }
 
 function scorePain(spot: number, maxPain: number): number {
@@ -259,7 +263,12 @@ function scoreGreeks(near: FyersAPI.OptionChainData[]): number | null {
   return clampScore(netDelta / weight / 0.45);
 }
 
-function scoreTrend(near: FyersAPI.OptionChainData[]): number {
+function scoreSpotMomentum(changePct: number): number {
+  if (!Number.isFinite(changePct) || Math.abs(changePct) < 0.08) return 0;
+  return clampScore(changePct / 0.4);
+}
+
+function scoreOiTrend(near: FyersAPI.OptionChainData[]): number {
   let bullish = 0;
   let bearish = 0;
   for (const row of near) {
@@ -275,6 +284,16 @@ function scoreTrend(near: FyersAPI.OptionChainData[]): number {
   const total = bullish + bearish;
   if (total < 1) return 0;
   return clampScore((bullish - bearish) / total);
+}
+
+function scoreTrend(
+  near: FyersAPI.OptionChainData[],
+  spotChangePct: number,
+): number {
+  const oiTrend = scoreOiTrend(near);
+  const spot = scoreSpotMomentum(spotChangePct);
+  if (spot === 0) return oiTrend;
+  return clampScore(oiTrend * 0.65 + spot * 0.35);
 }
 
 export function computeOptionMetricsFromChain(
@@ -307,7 +326,7 @@ export function computeOptionMetricsFromChain(
   const pain = scorePain(spotLtp, maxPain);
   const greeks = scoreGreeks(near);
   const vix = scoreVix(indiaVix, utils.norm);
-  const trend = scoreTrend(near);
+  const trend = scoreTrend(near, input.spotLtpChangePercent);
 
   const parts: ScoreComponents = {
     oi,
@@ -445,12 +464,10 @@ export function computeOptionMetricsFromChain(
 
   const ceSnap = legSnapshot(atmCall);
   const peSnap = legSnapshot(atmPut);
-  const skewCall = pickStrikeByMoneyness(chain, spotLtp, atmStrike, 'OTM', 'CE') ?? atmCall;
-  const skewPut = pickStrikeByMoneyness(chain, spotLtp, atmStrike, 'OTM', 'PE') ?? atmPut;
-  const callIv = skewCall?.greeks?.iv ?? ceSnap?.iv;
-  const putIv = skewPut?.greeks?.iv ?? peSnap?.iv;
   const ivSkew =
-    callIv != null && putIv != null ? +(putIv - callIv).toFixed(2) : null;
+    ceSnap?.iv != null && peSnap?.iv != null
+      ? +(peSnap.iv - ceSnap.iv).toFixed(2)
+      : null;
 
   return {
     score,

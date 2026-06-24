@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { getQuoteCache } from '@alpha-trader/server-market-data';
 
 type QuoteValue = {
   lp?: number;
@@ -57,7 +58,8 @@ export async function resolveSpotLtp(
 ): Promise<{ ltp: number; changePercent: number } | null> {
   const streamLtp = fastify.fyersMarketStream?.getIndexLtp(symbol);
   if (streamLtp != null && Number.isFinite(streamLtp) && streamLtp > 0) {
-    return { ltp: streamLtp, changePercent: 0 };
+    const chp = getQuoteCache().get(symbol)?.chp ?? 0;
+    return { ltp: streamLtp, changePercent: chp };
   }
 
   try {

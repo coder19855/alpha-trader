@@ -21,6 +21,7 @@ export {
 
 export { getQuoteCache } from './lib/quote-cache.js';
 export { seedIndexQuotesFromRest } from './lib/seed-index-quotes.js';
+export { resolveSessionPremiumChange } from './lib/resolve-session-premium-change.js';
 export { getMarketDataStore } from './lib/market-data-store.js';
 export {
   patchFyersCandlesWithLtp,
