@@ -1,4 +1,4 @@
-import '../augment-fastify.js';
+import './augment-fastify.js';
 import { FastifyInstance } from 'fastify';
 import { FyersAPI } from 'fyers-api-v3';
 import {
