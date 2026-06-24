@@ -1,6 +1,7 @@
 import { createFeatureSelector, createSelector } from '@ngrx/store';
 import {
   DeckTabDef,
+  deckStreamStatusLabel,
   LIVE_TABS,
   REPLAY_TABS,
 } from '../../core/services/deck-context.service';
@@ -19,6 +20,13 @@ export const selectLastPrice = createSelector(selectDeckTracker, (t) => t.lastPr
 export const selectPriceChange = createSelector(selectDeckTracker, (t) => t.priceChange);
 export const selectPriceChangeClass = createSelector(selectDeckTracker, (t) => t.priceChangeClass);
 export const selectConnected = createSelector(selectDeckTracker, (t) => t.connected);
+export const selectStreamStatus = createSelector(
+  selectDeckTracker,
+  (t) => t.streamStatus,
+);
+export const selectStreamStatusLabel = createSelector(selectStreamStatus, (status) =>
+  deckStreamStatusLabel(status),
+);
 export const selectLiveBadge = createSelector(selectDeckTracker, (t) => t.liveBadge);
 export const selectStyleLabel = createSelector(selectDeckTracker, (t) => t.styleLabel);
 

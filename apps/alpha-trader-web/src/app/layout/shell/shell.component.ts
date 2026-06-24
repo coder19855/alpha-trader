@@ -139,7 +139,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       this.notify.info('Open Live deck to reconnect the stream.');
       return;
     }
-    if (this.ctx.connected()) {
+    if (this.ctx.streamStatus() === 'live') {
       this.notify.info('Live stream is already connected.');
       return;
     }

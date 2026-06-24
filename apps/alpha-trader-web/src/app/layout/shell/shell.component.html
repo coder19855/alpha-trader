@@ -177,8 +177,15 @@
       <div class="web-topbar-right topbar-meta">
         <div class="topbar-status-col">
           <div class="topbar-status-row">
-            <span class="conn-dot" [class.ok]="ctx.connected()"></span>
-            <span>{{ ctx.connected() ? 'Connected' : 'Disconnected' }}</span>
+            <span
+              class="conn-dot"
+              [class.ok]="ctx.streamStatus() === 'live'"
+              [class.warn]="
+                ctx.streamStatus() === 'connecting' ||
+                ctx.streamStatus() === 'stale'
+              "
+            ></span>
+            <span>{{ ctx.streamStatusLabel() }}</span>
             @if (ctx.appView() === 'live') {
               <button
                 type="button"

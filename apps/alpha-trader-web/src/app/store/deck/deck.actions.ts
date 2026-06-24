@@ -1,6 +1,10 @@
 import { createActionGroup, props } from '@ngrx/store';
 import { TradingStyle } from '../../core/models/deck.models';
-import { AppView, DeckTab } from '../../core/services/deck-context.service';
+import {
+  AppView,
+  DeckTab,
+  DeckStreamStatus,
+} from '../../core/services/deck-context.service';
 
 export const DeckUiActions = createActionGroup({
   source: 'Deck UI',
@@ -17,6 +21,7 @@ export const DeckUiActions = createActionGroup({
       dayChangePct?: number | null;
       style?: string;
       connected?: boolean;
+      streamStatus?: DeckStreamStatus;
       live?: boolean;
       asOf?: string;
     }>(),

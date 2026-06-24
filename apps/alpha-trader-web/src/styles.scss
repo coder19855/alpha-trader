@@ -118,6 +118,10 @@ html.web-layout .deck-page .settings-group {
   background: var(--ce);
 }
 
+.conn-dot.warn {
+  background: var(--conflict);
+}
+
 .connect-fyers-btn,
 .login-cta {
   color: var(--accent);

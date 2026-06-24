@@ -358,7 +358,9 @@ export function createDeckStreamSubscriber(
     },
     writeHeartbeat() {
       if (isClosed()) return;
-      reply.raw.write(': heartbeat\n\n');
+      reply.raw.write(
+        `data: ${JSON.stringify({ type: 'heartbeat', asOf: new Date().toISOString() })}\n\n`,
+      );
     },
   };
 }

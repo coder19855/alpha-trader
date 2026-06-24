@@ -2,6 +2,7 @@ import { createReducer, on } from '@ngrx/store';
 import { TradingStyle } from '../../core/models/deck.models';
 import {
   AppView,
+  DeckStreamStatus,
   DeckTab,
   TRADING_STYLE_LABELS,
   tradingStyleLabel,
@@ -14,6 +15,7 @@ export interface DeckTrackerState {
   priceChange: string;
   priceChangeClass: 'up' | 'down' | 'muted';
   connected: boolean;
+  streamStatus: DeckStreamStatus;
   liveBadge: boolean;
   styleLabel: string;
 }
@@ -32,6 +34,7 @@ export const initialDeckTrackerState: DeckTrackerState = {
   priceChange: '—',
   priceChangeClass: 'muted',
   connected: false,
+  streamStatus: 'disconnected',
   liveBadge: false,
   styleLabel: TRADING_STYLE_LABELS.INTRADAY,
 };
@@ -68,6 +71,9 @@ export const deckUiReducer = createReducer(
       lastPrice: null,
       priceChange: '—',
       priceChangeClass: 'muted' as const,
+      connected: false,
+      streamStatus: 'disconnected' as const,
+      liveBadge: false,
     },
   })),
   on(DeckUiActions.styleChanged, (state, { style }) => ({
@@ -95,8 +101,17 @@ export const deckUiReducer = createReducer(
       tracker.styleLabel = tradingStyleLabel(params.style);
     }
 
-    if (params.connected !== undefined) tracker.connected = params.connected;
-    if (params.live !== undefined) tracker.liveBadge = params.live;
+    if (params.streamStatus !== undefined) {
+      tracker.streamStatus = params.streamStatus;
+      tracker.connected = params.streamStatus === 'live';
+      tracker.liveBadge = params.streamStatus === 'live';
+    } else {
+      if (params.connected !== undefined) {
+        tracker.connected = params.connected;
+        tracker.streamStatus = params.connected ? 'live' : 'disconnected';
+      }
+      if (params.live !== undefined) tracker.liveBadge = params.live;
+    }
 
     if (params.price != null && !Number.isNaN(Number(params.price))) {
       tracker.lastPrice = Number(params.price);

@@ -21,7 +21,11 @@ import {
 } from '../../core/models/deck.models';
 import { DeckContextService } from '../../core/services/deck-context.service';
 import { DeckApiService } from '../../core/services/deck-api.service';
-import { DeckStreamService } from '../../core/services/deck-stream.service';
+import {
+  DeckStreamPhase,
+  DeckStreamService,
+} from '../../core/services/deck-stream.service';
+import { DeckStreamStatus } from '../../core/services/deck-context.service';
 import { DeckAlertService } from '../../core/services/deck-alert.service';
 import { NotificationService } from '../../core/services/notification.service';
 import { BipolarListComponent } from '../../shared/bipolar-list/bipolar-list.component';
@@ -865,7 +869,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   }
 
   private softReconnect(): void {
-    if (this.ctx.connected()) {
+    if (this.ctx.streamStatus() === 'live') {
       this.deckReload.markFinished();
       return;
     }
@@ -1057,15 +1061,18 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
 
   private connectStream(symbol: string, style: string): void {
     this.streamSub?.unsubscribe();
+    this.ctx.updateTracker({ streamStatus: 'connecting' });
     this.streamSub = this.stream.connect(symbol, style).subscribe({
       next: (event) => {
         if ('type' in event && event.type === 'status') {
-          const isConnected = event.phase === 'connected';
           this.ctx.updateTracker({
-            connected: isConnected,
-            live: isConnected,
+            streamStatus: this.streamStatusFromPhase(event.phase),
           });
-          if (isConnected || event.phase === 'disconnected') {
+          if (
+            event.phase === 'live' ||
+            event.phase === 'disconnected' ||
+            event.phase === 'stale'
+          ) {
             this.deckReload.markFinished();
           }
           return;
@@ -1092,7 +1099,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       },
       error: (err: Error) => {
         this.deckReload.markFinished();
-        this.ctx.updateTracker({ connected: false, live: false });
+        this.ctx.updateTracker({ streamStatus: 'disconnected' });
         if (!this.tick()) {
           const message = err.message || 'Stream failed';
           this.error.set(message);
@@ -1120,8 +1127,6 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     if (patch.lastPrice != null && Number.isFinite(patch.lastPrice)) {
       this.ctx.updateTracker({
         price: patch.lastPrice,
-        connected: true,
-        live: true,
         asOf: patch.asOf,
         ...(patch.dayChange !== undefined ? { dayChange: patch.dayChange } : {}),
         ...(patch.dayChangePct !== undefined
@@ -1153,10 +1158,15 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       dayChange: next.dayChange ?? null,
       dayChangePct: next.dayChangePct ?? null,
       style: next.tradingStyle ?? this.ctx.style(),
-      connected: true,
-      live: true,
       asOf: next.asOf,
     });
+  }
+
+  private streamStatusFromPhase(phase: DeckStreamPhase): DeckStreamStatus {
+    if (phase === 'live') return 'live';
+    if (phase === 'connecting') return 'connecting';
+    if (phase === 'stale') return 'stale';
+    return 'disconnected';
   }
 
   private withLiveChartCandles<T extends Partial<DeckLiveTick>>(tick: T): T {

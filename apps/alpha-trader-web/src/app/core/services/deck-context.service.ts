@@ -7,6 +7,8 @@ import {
   selectActiveTab,
   selectAppView,
   selectConnected,
+  selectStreamStatus,
+  selectStreamStatusLabel,
   selectDeckTabs,
   selectLastPrice,
   selectLiveBadge,
@@ -19,6 +21,25 @@ import {
 } from '../../store/deck/deck.selectors';
 
 export type AppView = 'live' | 'replay' | 'benchmark';
+
+export type DeckStreamStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'live'
+  | 'stale';
+
+export function deckStreamStatusLabel(status: DeckStreamStatus): string {
+  switch (status) {
+    case 'live':
+      return 'Connected';
+    case 'connecting':
+      return 'Connecting…';
+    case 'stale':
+      return 'Stale';
+    default:
+      return 'Disconnected';
+  }
+}
 
 export type DeckTab =
   | 'signal'
@@ -111,6 +132,13 @@ export class DeckContextService {
   readonly connected = toSignal(this.store.select(selectConnected), {
     initialValue: false,
   });
+  readonly streamStatus = toSignal(this.store.select(selectStreamStatus), {
+    initialValue: 'disconnected' as DeckStreamStatus,
+  });
+  readonly streamStatusLabel = toSignal(
+    this.store.select(selectStreamStatusLabel),
+    { initialValue: 'Disconnected' },
+  );
   readonly liveBadge = toSignal(this.store.select(selectLiveBadge), {
     initialValue: false,
   });
@@ -146,6 +174,7 @@ export class DeckContextService {
     dayChangePct?: number | null;
     style?: string;
     connected?: boolean;
+    streamStatus?: DeckStreamStatus;
     live?: boolean;
     asOf?: string;
   }): void {

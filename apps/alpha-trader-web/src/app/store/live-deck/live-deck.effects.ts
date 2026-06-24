@@ -18,7 +18,11 @@ import { deckKey } from '../../core/routing/deck-routes';
 import { DeckLiveTick, TradingStyle } from '../../core/models/deck.models';
 import { DeckAlertService } from '../../core/services/deck-alert.service';
 import { DeckApiService } from '../../core/services/deck-api.service';
-import { DeckStreamService } from '../../core/services/deck-stream.service';
+import {
+  DeckStreamPhase,
+  DeckStreamService,
+} from '../../core/services/deck-stream.service';
+import { DeckStreamStatus } from '../../core/services/deck-context.service';
 import { selectStyle, selectSymbol } from '../deck/deck.selectors';
 import { DeckUiActions } from '../deck/deck.actions';
 import { LiveDeckActions } from './live-deck.actions';
@@ -81,10 +85,8 @@ export class LiveDeckEffects {
         const stream$ = this.stream.connect(sym, sty).pipe(
           map((event) => {
             if ('type' in event && event.type === 'status') {
-              const isConnected = event.phase === 'connected';
               return DeckUiActions.trackerUpdated({
-                connected: isConnected,
-                live: isConnected,
+                streamStatus: streamStatusFromPhase(event.phase),
               });
             }
             if (
@@ -101,7 +103,9 @@ export class LiveDeckEffects {
             return null;
           }),
           filter((action): action is NonNullable<typeof action> => action != null),
-          catchError(() => of(DeckUiActions.trackerUpdated({ connected: false, live: false }))),
+          catchError(() =>
+            of(DeckUiActions.trackerUpdated({ streamStatus: 'disconnected' })),
+          ),
           takeUntil(this.actions$.pipe(ofType(LiveDeckActions.left, LiveDeckActions.loadStarted))),
         );
 
@@ -127,8 +131,6 @@ export class LiveDeckEffects {
           dayChange: tick.dayChange ?? null,
           dayChangePct: tick.dayChangePct ?? null,
           style: tick.tradingStyle,
-          connected: true,
-          live: true,
           asOf: tick.asOf,
         }),
       ),
@@ -143,4 +145,11 @@ export class LiveDeckEffects {
       ),
     { dispatch: false },
   );
+}
+
+function streamStatusFromPhase(phase: DeckStreamPhase): DeckStreamStatus {
+  if (phase === 'live') return 'live';
+  if (phase === 'connecting') return 'connecting';
+  if (phase === 'stale') return 'stale';
+  return 'disconnected';
 }
