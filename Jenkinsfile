@@ -95,10 +95,12 @@ pipeline {
     }
 
     stage('Deploy') {
+      // Classic Pipeline jobs do not set BRANCH_NAME, so `branch 'main'` never matches.
       when {
-        anyOf {
-          branch 'main'
-          branch 'master'
+        expression {
+          def raw = env.BRANCH_NAME ?: env.GIT_BRANCH ?: ''
+          def branch = raw.replaceFirst('^origin/', '').tokenize('/')[-1]
+          return branch in ['main', 'master'] || raw == ''
         }
       }
       environment {
