@@ -144,10 +144,10 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
                 [disabled]="optionPoll.loading()"
                 [attr.aria-label]="
                   optionPoll.loading()
-                    ? 'Refreshing option chain'
-                    : 'Refresh option chain'
+                    ? 'Reconnecting option chain stream'
+                    : 'Reconnect option chain stream'
                 "
-                [title]="optionPoll.loading() ? 'Refreshing…' : 'Refresh now'"
+                [title]="optionPoll.loading() ? 'Reconnecting…' : 'Reconnect now'"
                 (click)="optionPoll.refresh(true)"
               >
                 <mat-icon [class.spinning]="optionPoll.loading()">refresh</mat-icon>
@@ -802,7 +802,6 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     effect(() => {
       const symbol = this.ctx.symbol();
       const style = this.ctx.style();
-      const pollMs = this.settings()?.optionChainPollMs ?? 10_000;
       const paAction = this.tick()?.action;
       const tab = this.ctx.activeTab();
       const signalTab = this.signalSubTab();
@@ -816,7 +815,6 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
         this.optionPoll.configure({
           symbol,
           style,
-          pollMs,
           paAction,
           enabled: true,
         });
@@ -841,10 +839,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   }
 
   optionPollLabel(): string {
-    const ms = this.settings()?.optionChainPollMs ?? 10_000;
-    if (ms <= 0) return 'Manual refresh';
-    if (ms < 60_000) return `Auto: ${Math.round(ms / 1000)}s`;
-    return `Auto: ${Math.round(ms / 60_000)} min`;
+    return 'Live option chain via websocket';
   }
 
   retry(): void {
@@ -889,9 +884,6 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   settingValue(s: SettingsSnapshot, field: string): string {
     if (field === 'tradingStyle') return s.tradingStyle;
     if (field === 'vetoMode') return s.vetoMode;
-    if (field === 'optionChainPollMs') {
-      return String(s.optionChainPollMs ?? 10_000);
-    }
     if (field === 'flowMode') return s.flowMode;
     return '';
   }

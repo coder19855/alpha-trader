@@ -1,6 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { EMPTY, Subscription, timer } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
 import { OptionChainSignalPayload } from '../models/option-chain.models';
 import { TradingStyle } from '../models/deck.models';
 import { OptionChainApiService } from './option-chain-api.service';
@@ -8,7 +7,6 @@ import { OptionChainApiService } from './option-chain-api.service';
 export interface OptionPollContext {
   symbol: string;
   style: TradingStyle;
-  pollMs: number;
   paAction?: string;
   moneyness?: '' | 'ATM' | 'OTM' | 'ITM';
   enabled: boolean;
@@ -25,56 +23,85 @@ export class OptionChainPollService {
   readonly error = signal<string | null>(null);
 
   private sub: Subscription | null = null;
-  private fetchSub: Subscription | null = null;
   private ctx: OptionPollContext | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private awaitingReconnect = false;
+  private reconnectListenersAttached = false;
+  private closed = false;
+  private sourceActive = false;
 
   private scheduleKey(ctx: OptionPollContext): string {
-   return `${ctx.symbol}|${ctx.style}|${ctx.pollMs}|${ctx.moneyness ?? ''}`;
+    return `${ctx.symbol}|${ctx.style}|${ctx.moneyness ?? ''}|${ctx.paAction ?? ''}`;
   }
 
-  private fetchParams(
-   ctx: OptionPollContext,
-   refresh = false,
-  ): Parameters<OptionChainApiService['fetch']>[0] {
-   return {
-     symbol: ctx.symbol,
-     style: ctx.style,
-     refresh,
-     paAction: ctx.paAction,
-     moneyness: ctx.moneyness || undefined,
+  private clearReconnectTimer(): void {
+   if (this.reconnectTimer) {
+     clearTimeout(this.reconnectTimer);
+     this.reconnectTimer = null;
+   }
+  }
+
+  private detachReconnectListeners(): void {
+   if (!this.reconnectListenersAttached) return;
+   window.removeEventListener('focus', this.handleFocus);
+   document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+   this.reconnectListenersAttached = false;
+  }
+
+  private handleFocus = (): void => {
+   if (this.closed || this.sourceActive || !this.awaitingReconnect) return;
+   if (document.visibilityState === 'visible' && document.hasFocus()) {
+     this.clearReconnectTimer();
+     this.connectSource();
+   }
+  };
+
+  private handleVisibilityChange = (): void => {
+   if (this.closed || this.sourceActive || !this.awaitingReconnect) return;
+   if (document.visibilityState === 'visible' && document.hasFocus()) {
+     this.clearReconnectTimer();
+     this.connectSource();
+   }
+  };
+
+  private scheduleReconnect(): void {
+   if (this.closed || this.sourceActive || this.awaitingReconnect) return;
+   this.awaitingReconnect = true;
+   if (!this.reconnectListenersAttached) {
+     window.addEventListener('focus', this.handleFocus);
+     document.addEventListener('visibilitychange', this.handleVisibilityChange);
+     this.reconnectListenersAttached = true;
+   }
+   if (document.visibilityState === 'visible' && document.hasFocus()) {
+     this.reconnectTimer = setTimeout(() => this.connectSource(), 1500);
+   }
+  }
+
+  private connectSource(): void {
+   if (this.closed || this.sourceActive || !this.ctx) return;
+   const query = {
+     symbol: this.ctx.symbol,
+     style: this.ctx.style,
+     paAction: this.ctx.paAction,
    };
-  }
 
-  private runFetch(showLoading: boolean, refresh = false): void {
-   if (!this.ctx) return;
-   this.fetchSub?.unsubscribe();
-   if (showLoading) this.loading.set(true);
+   if (!this.data()) {
+     this.loading.set(true);
+   }
    this.error.set(null);
-   this.fetchSub = this.api.fetch(this.fetchParams(this.ctx, refresh)).subscribe({
+   this.sourceActive = true;
+   this.sub = this.api.stream(query).subscribe({
      next: (payload) => {
        this.data.set(payload);
-       if (showLoading) this.loading.set(false);
+       this.loading.set(false);
      },
      error: (err) => {
-       if (showLoading) this.loading.set(false);
-       const body = (err as { error?: unknown })?.error;
-       if (typeof body === 'string' && body.trim()) {
-         this.error.set(body.trim());
-         return;
-       }
-       if (body && typeof body === 'object') {
-         const msg = (body as { error?: string }).error;
-         if (typeof msg === 'string' && msg.trim()) {
-           this.error.set(msg.trim());
-           return;
-         }
-       }
-       const message = (err as { message?: string })?.message;
-       this.error.set(
-         typeof message === 'string' && message.trim()
-           ? message.trim()
-           : 'Option chain fetch failed',
-       );
+       this.sourceActive = false;
+       const message =
+         err instanceof Error ? err.message : 'Option chain stream disconnected';
+       this.loading.set(false);
+       this.error.set(message);
+       this.scheduleReconnect();
      },
    });
   }
@@ -87,50 +114,48 @@ export class OptionChainPollService {
 
    const prev = this.ctx;
    const sameSchedule =
-     prev != null &&
-     this.scheduleKey(prev) === this.scheduleKey(ctx) &&
-     this.sub != null;
-
+     prev != null && this.scheduleKey(prev) === this.scheduleKey(ctx);
    this.ctx = ctx;
 
-   // Deck ticks only change paAction — keep polling schedule, skip refetch + loading flash.
-   if (sameSchedule) {
+   if (sameSchedule && this.sourceActive) {
      return;
    }
 
    this.sub?.unsubscribe();
    this.sub = null;
-
-   this.runFetch(!this.data());
-
-   if (ctx.pollMs > 0) {
-     this.sub = timer(ctx.pollMs, ctx.pollMs)
-       .pipe(
-         switchMap(() => {
-           if (!this.ctx) return EMPTY;
-           return this.api.fetch(this.fetchParams(this.ctx));
-         }),
-       )
-       .subscribe({
-         next: (payload) => this.data.set(payload),
-         error: () => {
-           /* keep last good payload on poll errors */
-         },
-       });
-   }
+   this.sourceActive = false;
+   this.awaitingReconnect = false;
+   this.clearReconnectTimer();
+   this.detachReconnectListeners();
+   this.connectSource();
   }
 
   refresh(force = true): void {
    if (!this.ctx) return;
-   this.runFetch(true, force);
+   if (force) {
+     this.loading.set(true);
+     this.error.set(null);
+   }
+   this.sub?.unsubscribe();
+   this.sub = null;
+   this.sourceActive = false;
+   this.awaitingReconnect = false;
+   this.clearReconnectTimer();
+   this.detachReconnectListeners();
+   this.connectSource();
   }
 
   stop(): void {
    this.ctx = null;
+   this.closed = true;
    this.sub?.unsubscribe();
    this.sub = null;
-   this.fetchSub?.unsubscribe();
-   this.fetchSub = null;
+   this.sourceActive = false;
+   this.awaitingReconnect = false;
+   this.clearReconnectTimer();
+   this.detachReconnectListeners();
    this.loading.set(false);
+   this.error.set(null);
+   this.closed = false;
   }
 }

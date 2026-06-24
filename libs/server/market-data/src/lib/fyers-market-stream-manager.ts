@@ -30,6 +30,7 @@ export class FyersMarketStreamManager {
   private socket: DataSocketLike | null = null;
   private readonly watchSymbols = new Set<string>();
   private readonly positionSymbols = new Set<string>();
+  private readonly optionSymbolsByIndex = new Map<string, Set<string>>();
   private activeSymbols = new Set<string>();
   private connected = false;
   private messages = 0;
@@ -69,6 +70,26 @@ export class FyersMarketStreamManager {
       if (symbol) this.positionSymbols.add(symbol);
     }
     this.reconcileSubscriptions();
+  }
+
+  syncOptionSymbols(indexSymbol: string, symbols: string[]): void {
+    const key = indexSymbol.trim();
+    if (!key) return;
+    const next = new Set(symbols.filter(Boolean));
+    if (!next.size) {
+      this.optionSymbolsByIndex.delete(key);
+    } else {
+      this.optionSymbolsByIndex.set(key, next);
+    }
+    this.reconcileSubscriptions();
+  }
+
+  clearOptionSymbols(indexSymbol: string): void {
+    const key = indexSymbol.trim();
+    if (!key) return;
+    if (this.optionSymbolsByIndex.delete(key)) {
+      this.reconcileSubscriptions();
+    }
   }
 
   async connect(accessToken: string, appId: string): Promise<void> {
@@ -169,6 +190,11 @@ export class FyersMarketStreamManager {
 
     for (const symbol of this.positionSymbols) {
       desired.add(symbol);
+    }
+    for (const symbols of this.optionSymbolsByIndex.values()) {
+      for (const symbol of symbols) {
+        desired.add(symbol);
+      }
     }
 
     return desired;

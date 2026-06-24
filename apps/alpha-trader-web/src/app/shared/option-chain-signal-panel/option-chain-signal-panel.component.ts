@@ -136,7 +136,7 @@ type OcSignalSubTab = 'overview' | 'flow' | 'guards' | 'brief';
         </div>
       }
     } @else if (!poll.loading() && !poll.error()) {
-      <p class="oc-empty">No option chain data yet. Use refresh to fetch.</p>
+      <p class="oc-empty">No option chain data yet. Use reconnect to load it.</p>
     }
   `,
   styles: [

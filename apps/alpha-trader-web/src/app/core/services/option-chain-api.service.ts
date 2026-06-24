@@ -33,4 +33,43 @@ export class OptionChainApiService {
       params,
     });
   }
+
+  stream(
+    query: Pick<OptionChainQuery, 'symbol' | 'style' | 'paAction'>,
+  ): Observable<OptionChainSignalPayload> {
+    return new Observable((subscriber) => {
+      const params = new URLSearchParams({
+        symbol: query.symbol,
+        style: query.style,
+      });
+      if (query.paAction) {
+        params.set('paAction', query.paAction);
+      }
+      const source = new EventSource(`/api/option-chain/stream?${params}`);
+
+      source.onmessage = (event: MessageEvent<string>) => {
+        try {
+          const payload = JSON.parse(event.data) as OptionChainSignalPayload & {
+            error?: string;
+          };
+          if (payload.error) {
+            subscriber.error(new Error(payload.error));
+            return;
+          }
+          subscriber.next(payload);
+        } catch {
+          subscriber.error(new Error('Invalid option chain stream payload'));
+        }
+      };
+
+      source.onerror = () => {
+        source.close();
+        subscriber.error(new Error('Option chain stream disconnected'));
+      };
+
+      return () => {
+        source.close();
+      };
+    });
+  }
 }

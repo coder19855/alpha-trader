@@ -1,11 +1,8 @@
 import './augment-fastify.js';
 import { FastifyInstance } from 'fastify';
 import {
-  OPTION_CHAIN_POLL_DEFAULT_MS,
-  OPTION_CHAIN_POLL_PRESETS,
   TradingStyle,
   VetoMode,
-  normalizeOptionChainPollMs,
   normalizeVetoMode,
 } from '@alpha-trader/server-shared';
 import {
@@ -32,7 +29,6 @@ export interface SettingsGroup {
 export interface SettingsSnapshot {
   vetoMode: VetoMode;
   tradingStyle: TradingStyle;
-  optionChainPollMs: number;
   flowMode: 'pa-only';
   canPersist: boolean;
   groups: SettingsGroup[];
@@ -41,19 +37,16 @@ export interface SettingsSnapshot {
 export type SettingsPatch = {
   vetoMode?: string;
   tradingStyle?: string;
-  optionChainPollMs?: string | number;
 };
 
 export interface StoredSettings {
   vetoMode: VetoMode;
   tradingStyle: TradingStyle;
-  optionChainPollMs: number;
 }
 
 const DEFAULT_SETTINGS: StoredSettings = {
   vetoMode: 'strict',
   tradingStyle: TradingStyle.Intraday,
-  optionChainPollMs: OPTION_CHAIN_POLL_DEFAULT_MS,
 };
 
 function normalizeTradingStyle(value: unknown): TradingStyle {
@@ -93,18 +86,6 @@ export function settingsGroups(): SettingsGroup[] {
         { value: 'off', label: 'Off' },
       ],
     },
-    {
-      id: 'option-chain-poll',
-      title: 'Option chain refresh',
-      description:
-        'How often the UI auto-fetches option chain data. Manual refresh always works.',
-      control: 'segmented',
-      field: 'optionChainPollMs',
-      options: OPTION_CHAIN_POLL_PRESETS.map((p) => ({
-        value: String(p.value),
-        label: p.label,
-      })),
-    },
   ];
 }
 
@@ -115,7 +96,6 @@ export function buildSettingsSnapshot(
   return {
     vetoMode: stored.vetoMode,
     tradingStyle: stored.tradingStyle,
-    optionChainPollMs: stored.optionChainPollMs,
     flowMode: 'pa-only',
     canPersist,
     groups: settingsGroups(),
@@ -137,9 +117,6 @@ export async function loadSettings(
   return {
     vetoMode: normalizeVetoMode(doc.vetoMode, DEFAULT_SETTINGS.vetoMode),
     tradingStyle: normalizeTradingStyle(doc.tradingStyle),
-    optionChainPollMs: normalizeOptionChainPollMs(
-      doc.optionChainPollMs ?? DEFAULT_SETTINGS.optionChainPollMs,
-    ),
   };
 }
 
@@ -154,9 +131,6 @@ export async function saveSettings(
   }
   if (patch.tradingStyle != null) {
     next.tradingStyle = normalizeTradingStyle(patch.tradingStyle);
-  }
-  if (patch.optionChainPollMs != null) {
-    next.optionChainPollMs = normalizeOptionChainPollMs(patch.optionChainPollMs);
   }
 
   const col = fastify.mongo?.db?.collection<

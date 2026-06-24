@@ -118,3 +118,26 @@ export function resolveOptionMeta(optionSymbol: string): {
     optionType,
   };
 }
+
+export interface FyersOptionSymbolTemplate {
+  prefix: string;
+  suffix: 'CE' | 'PE';
+}
+
+export function parseFyersOptionSymbolTemplate(
+  optionSymbol: string,
+): FyersOptionSymbolTemplate | null {
+  const match = optionSymbol.toUpperCase().match(/^(.*?)(\d+)(CE|PE)$/);
+  if (!match) return null;
+  return {
+    prefix: match[1],
+    suffix: match[3] as 'CE' | 'PE',
+  };
+}
+
+export function formatFyersOptionSymbol(
+  template: FyersOptionSymbolTemplate,
+  strike: number,
+): string {
+  return `${template.prefix}${Math.round(strike)}${template.suffix}`;
+}

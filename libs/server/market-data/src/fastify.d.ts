@@ -25,6 +25,8 @@ declare module 'fastify' {
       ) => Array<{ t: number; v: number }>;
       getQuote: (symbol: string) => unknown;
       getStats: () => import('./lib/fyers-market-stream-manager.js').MarketStreamStats;
+      syncOptionSymbols: (indexSymbol: string, symbols: string[]) => void;
+      clearOptionSymbols: (indexSymbol: string) => void;
       syncSession: () => Promise<void>;
     };
     fyersOrderStream?: {

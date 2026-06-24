@@ -24,6 +24,13 @@ import {
   getAllHeldOptionSymbols,
   getOpenPositionsWsStats,
 } from './open-positions-live-cache.js';
+import { OptionChainStreamHub } from './option-chain-stream-manager.js';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    optionChainStreamHub?: OptionChainStreamHub;
+  }
+}
 function parseWatchSymbols(): string[] {
   const raw =
     process.env.ALPHA_WATCH_SYMBOLS ?? process.env.TELEGRAM_NOTIFY_SYMBOLS;
@@ -73,6 +80,7 @@ const fyersMarketStreamPlugin = fp(
   async (fastify: FastifyInstance) => {
     const enabled = resolveFyersWsEnabled();
     const manager = new FyersMarketStreamManager(fastify.log);
+    const optionHub = new OptionChainStreamHub(fastify, fastify.log);
     let sessionTimer: NodeJS.Timeout | null = null;
 
     bindMarketStreamHooks({
@@ -128,11 +136,58 @@ const fyersMarketStreamPlugin = fp(
       isConnected: () => manager.isConnected(),
       getIndexLtp: (symbol: string) => manager.getIndexLtp(symbol),
       getOptionLtp: (symbol: string) => manager.getOptionLtp(symbol),
+      syncOptionSymbols: (indexSymbol: string, symbols: string[]) =>
+        manager.syncOptionSymbols(indexSymbol, symbols),
+      clearOptionSymbols: (indexSymbol: string) =>
+        manager.clearOptionSymbols(indexSymbol),
       getSpotSeries: (symbol: string, maxAgeMs?: number) =>
         manager.getSpotSeries(symbol, maxAgeMs),
       getQuote: (symbol: string) => getQuoteCache().get(symbol),
       getStats: () => manager.getStats(enabled),
       syncSession: () => syncSession(),
+    });
+
+    fastify.decorate('optionChainStreamHub', optionHub);
+
+    fastify.get<{
+      Querystring: {
+        symbol?: string;
+        style?: string;
+        paAction?: string;
+      };
+    }>('/api/option-chain/stream', async (request, reply) => {
+      reply.hijack();
+      reply.raw.setHeader('Content-Type', 'text/event-stream');
+      reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
+      reply.raw.setHeader('Connection', 'keep-alive');
+      reply.raw.setHeader('X-Accel-Buffering', 'no');
+      reply.raw.flushHeaders?.();
+
+      const subscriber = {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        write(payload: unknown) {
+          reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+        },
+        writeHeartbeat() {
+          reply.raw.write(': heartbeat\n\n');
+        },
+        isClosed() {
+          return reply.raw.writableEnded || reply.raw.destroyed;
+        },
+      };
+
+      const unsubscribe = optionHub.subscribe(
+        {
+          symbol: String(request.query.symbol ?? 'NSE:NIFTY50-INDEX').trim(),
+          tradingStyle: String(request.query.style ?? 'INTRADAY'),
+          paAction: request.query.paAction ? String(request.query.paAction) : undefined,
+        },
+        subscriber,
+      );
+
+      request.raw.on('close', () => {
+        unsubscribe();
+      });
     });
 
     if (enabled) {
@@ -151,6 +206,7 @@ const fyersMarketStreamPlugin = fp(
     fastify.addHook('onClose', async () => {
       if (sessionTimer) clearInterval(sessionTimer);
       bindMarketStreamHooks(null);
+      optionHub.shutdown();
       await manager.disconnect();
     });
   },

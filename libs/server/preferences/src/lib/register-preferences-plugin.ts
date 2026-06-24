@@ -13,10 +13,7 @@ import {
   normalizeAutoEntryPreference,
   saveAutoEntryPreference,
 } from './auto-entry-preference.js';
-import {
-  OPTION_CHAIN_POLL_DEFAULT_MS,
-  TradingStyle,
-} from '@alpha-trader/server-shared';
+import { TradingStyle } from '@alpha-trader/server-shared';
 import {
   SettingsPatch,
   StoredSettings,
@@ -44,7 +41,6 @@ const preferencesPlugin = fp(
     let settings: StoredSettings = {
       vetoMode: 'strict',
       tradingStyle: TradingStyle.Intraday,
-      optionChainPollMs: OPTION_CHAIN_POLL_DEFAULT_MS,
     };
     let autoExit = normalizeAutoExitPreference(null);
     let autoEntry = normalizeAutoEntryPreference(null);

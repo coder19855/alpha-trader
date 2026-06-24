@@ -4,9 +4,8 @@ import {
   FYERS_OPTION_INDEX_SYMBOLS,
   GreeksMoneyness,
   OptionChainSignalResponse,
-  OPTION_CHAIN_POLL_DEFAULT_MS,
+  OPTION_CHAIN_CACHE_TTL_MS,
   TradingStyle,
-  normalizeOptionChainPollMs,
   normalizeVetoMode,
 } from '@alpha-trader/server-shared';
 import { fyersErrorMessage } from './fyers-error.js';
@@ -31,37 +30,39 @@ export interface BuildOptionChainSignalParams {
   forceRefresh?: boolean;
 }
 
+export interface BuildOptionChainSignalFromChainParams {
+  symbol: string;
+  tradingStyle: TradingStyle;
+  paAction?: string;
+  moneyness?: GreeksMoneyness;
+  optionSide?: 'CE' | 'PE';
+  chain: FyersAPI.OptionChainData[];
+  spotLtp: number;
+  spotLtpChangePercent: number;
+  indiaVix: number;
+  supportResistance?: {
+    overallSupport: number | null;
+    overallResistance: number | null;
+    intradaySupport: number | null;
+    intradayResistance: number | null;
+  };
+}
+
 function resolveLotSize(symbol: string): number {
   const meta = FYERS_OPTION_INDEX_SYMBOLS.find((r) => r.symbol === symbol);
   return meta?.lotSize ?? 65;
 }
 
-function resolveSettings(
-  fastify: FastifyInstance,
-): {
-  vetoMode: string;
-  optionChainPollMs: number;
-} {
+function resolveVetoMode(fastify: FastifyInstance): string {
   const prefs = (
     fastify as FastifyInstance & {
       preferences?: {
-        getSettings: () => {
-          vetoMode: string;
-          tradingStyle: TradingStyle;
-          optionChainPollMs?: number;
-        };
+        getSettings: () => { vetoMode: string };
       };
     }
   ).preferences;
-  const settings = prefs?.getSettings?.() ?? {
-    vetoMode: 'strict',
-    tradingStyle: TradingStyle.Intraday,
-    optionChainPollMs: OPTION_CHAIN_POLL_DEFAULT_MS,
-  };
-  return {
-    vetoMode: normalizeVetoMode(settings.vetoMode, 'strict'),
-    optionChainPollMs: normalizeOptionChainPollMs(settings.optionChainPollMs),
-  };
+  const settings = prefs?.getSettings?.() ?? { vetoMode: 'strict' };
+  return normalizeVetoMode(settings.vetoMode, 'strict');
 }
 
 export async function buildOptionChainSignalResponse(
@@ -70,8 +71,8 @@ export async function buildOptionChainSignalResponse(
 ): Promise<OptionChainSignalResponse> {
   const symbol = params.symbol.trim();
   const tradingStyle = params.tradingStyle;
-  const { vetoMode, optionChainPollMs } = resolveSettings(fastify);
-  const cacheTtlMs = optionChainPollMs > 0 ? optionChainPollMs : 60_000;
+  const vetoMode = resolveVetoMode(fastify);
+  const cacheTtlMs = OPTION_CHAIN_CACHE_TTL_MS;
 
   const cacheKey = optionChainCacheKey(
     symbol,
@@ -129,24 +130,59 @@ export async function buildOptionChainSignalResponse(
     );
   }
 
-  const sr = fastify.supportResistancePlugin?.getSupportResistance(
-    chainRes.data.optionsChain,
+  const payload = buildOptionChainSignalResponseFromChain(
+    fastify,
+    {
+      symbol,
+      tradingStyle,
+      paAction: params.paAction,
+      moneyness: params.moneyness,
+      optionSide: params.optionSide,
+      chain: chainRes.data.optionsChain,
+      spotLtp: spot.ltp,
+      spotLtpChangePercent: spot.changePercent,
+      indiaVix: chainRes.data.indiavixData?.ltp ?? 0,
+      supportResistance: fastify.supportResistancePlugin?.getSupportResistance(
+        chainRes.data.optionsChain,
+      ),
+    },
   );
 
+  setCachedOptionChain(cacheKey, payload, cacheTtlMs);
+  return payload;
+}
+
+export function buildOptionChainSignalResponseFromChain(
+  fastify: FastifyInstance,
+  params: BuildOptionChainSignalFromChainParams,
+): OptionChainSignalResponse {
   const computed = computeOptionMetricsFromChain({
-    chain: chainRes.data.optionsChain,
-    spotLtp: spot.ltp,
-    spotLtpChangePercent: spot.changePercent,
-    indiaVix: chainRes.data.indiavixData?.ltp ?? 0,
-    tradingStyle,
-    supportResistance: sr,
+    chain: params.chain,
+    spotLtp: params.spotLtp,
+    spotLtpChangePercent: params.spotLtpChangePercent,
+    indiaVix: params.indiaVix,
+    tradingStyle: params.tradingStyle,
+    supportResistance: params.supportResistance,
     moneyness: params.moneyness,
     optionSide: params.moneyness ? params.optionSide : undefined,
     utils: fastify.utilsPlugin,
   });
 
-  const alignment = resolvePaAlignment(params.paAction, computed.signal, vetoMode);
-  const lotSize = resolveLotSize(symbol);
+  const alignment = resolvePaAlignment(
+    params.paAction,
+    computed.signal,
+    normalizeVetoMode(
+      (
+        fastify as FastifyInstance & {
+          preferences?: {
+            getSettings: () => { vetoMode: string };
+          };
+        }
+      ).preferences?.getSettings().vetoMode ?? 'strict',
+      'strict',
+    ),
+  );
+  const lotSize = resolveLotSize(params.symbol);
   const estRiskPerLot = estimateRiskPerLot(
     computed.optionPremium,
     lotSize,
@@ -164,11 +200,11 @@ export async function buildOptionChainSignalResponse(
     }),
   );
 
-  const payload: OptionChainSignalResponse = {
+  return {
     fetchedAt: new Date().toISOString(),
     cached: false,
-    symbol,
-    tradingStyle,
+    symbol: params.symbol,
+    tradingStyle: params.tradingStyle,
     score: computed.score,
     signal: computed.signal,
     bias: computed.bias,
@@ -178,17 +214,17 @@ export async function buildOptionChainSignalResponse(
     components: computed.components,
     componentRows,
     guard: {
-      spotLtp: spot.ltp,
+      spotLtp: params.spotLtp,
       atmStrike: computed.atmStrike,
       maxPain: computed.maxPain,
       pcr: computed.pcr,
       callOiTotal: computed.callOiTotal,
       putOiTotal: computed.putOiTotal,
-      supportStrike: sr?.overallSupport ?? null,
-      resistanceStrike: sr?.overallResistance ?? null,
-      intradaySupport: sr?.intradaySupport ?? null,
-      intradayResistance: sr?.intradayResistance ?? null,
-      indiaVix: chainRes.data.indiavixData?.ltp ?? 0,
+      supportStrike: params.supportResistance?.overallSupport ?? null,
+      resistanceStrike: params.supportResistance?.overallResistance ?? null,
+      intradaySupport: params.supportResistance?.intradaySupport ?? null,
+      intradayResistance: params.supportResistance?.intradayResistance ?? null,
+      indiaVix: params.indiaVix,
       levels: computed.guardLevels,
     },
     atmGreeks: computed.atmGreeks,
@@ -204,7 +240,4 @@ export async function buildOptionChainSignalResponse(
     optionTheta: computed.optionTheta,
     optionVega: computed.optionVega,
   };
-
-  setCachedOptionChain(cacheKey, payload, cacheTtlMs);
-  return payload;
 }

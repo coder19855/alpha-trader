@@ -306,8 +306,8 @@ import { MatIconModule } from '@angular/material/icon';
           </div>
 
           <p class="oc-readout-note">
-            Data auto-refreshes per Settings (pauses outside 09:15–15:30 IST). Use the
-            <strong>refresh icon</strong> top-right for an on-demand fetch. Open
+            Data streams live via websocket while this tab is open. Use the
+            <strong>reconnect icon</strong> top-right if the feed stalls. Open
             <strong>Components</strong> (under Veto in the sidebar) for the per-component
             breakdown.
           </p>

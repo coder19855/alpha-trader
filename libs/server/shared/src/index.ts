@@ -10,6 +10,10 @@ export * from './lib/constants/chase-decay.js';
 export * from './lib/constants/benchmark.js';
 export * from './lib/constants/position-sizing.js';
 export * from './lib/constants/option-chain.js';
+export {
+  resolvePaAlignment,
+  type OptionPaAlignment,
+} from './lib/option-chain/pa-alignment.js';
 export * from './lib/constants/trade-rr.js';
 export * from './lib/constants/session.js';
 export * from './lib/constants/telegram-notifications.js';

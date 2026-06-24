@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@alpha-trader/server-shared": "*",
+    "@uqee/black-scholes": "^1.0.7",
     "fastify": "~5.2.1",
     "fastify-plugin": "~5.0.1",
     "fyers-api-v3": "^1.9.0",
