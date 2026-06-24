@@ -27,6 +27,28 @@ export PORT="${PORT:-3000}"
 export NODE_ENV="${NODE_ENV:-production}"
 export SERVE_WEB_APP="${SERVE_WEB_APP:-true}"
 
+resolve_node_bin() {
+  if [[ -n "${NODE_BIN:-}" && -x "$NODE_BIN" ]]; then
+    return 0
+  fi
+  if command -v node >/dev/null 2>&1; then
+    NODE_BIN="$(command -v node)"
+    return 0
+  fi
+  local nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+  if [[ -s "$nvm_dir/nvm.sh" ]]; then
+    # shellcheck disable=SC1091
+    . "$nvm_dir/nvm.sh"
+    NODE_BIN="$(command -v node || true)"
+  fi
+  [[ -n "${NODE_BIN:-}" ]]
+}
+
+if ! resolve_node_bin; then
+  echo "node not found (install Node or set NODE_BIN)" >&2
+  exit 1
+fi
+
 API_ENTRY="$ROOT/apps/alpha-trader-server/dist/main.js"
 WEB_ROOT="$ROOT/dist/apps/alpha-trader-web/browser"
 
@@ -61,16 +83,16 @@ stop_pid "$WEB_PID_FILE" "alpha-trader-web"
 
 if [[ "$SERVE_WEB_APP" == "true" ]]; then
   echo "Starting alpha-trader (API + web) on ${HOST}:${PORT}…"
-  nohup node "$API_ENTRY" >>"$API_LOG" 2>&1 &
+  nohup "$NODE_BIN" "$API_ENTRY" >>"$API_LOG" 2>&1 &
   echo $! >"$API_PID_FILE"
 else
   echo "Starting alpha-trader API on ${HOST}:${PORT}…"
-  nohup node "$API_ENTRY" >>"$API_LOG" 2>&1 &
+  nohup "$NODE_BIN" "$API_ENTRY" >>"$API_LOG" 2>&1 &
   echo $! >"$API_PID_FILE"
 
   echo "Starting alpha-trader web on 0.0.0.0:4000…"
   HOST=0.0.0.0 PORT=4000 API_PROXY_TARGET="http://127.0.0.1:${PORT}" \
-    nohup node "$ROOT/scripts/serve-frontend.mjs" >>"$WEB_LOG" 2>&1 &
+    nohup "$NODE_BIN" "$ROOT/scripts/serve-frontend.mjs" >>"$WEB_LOG" 2>&1 &
   echo $! >"$WEB_PID_FILE"
 fi
 

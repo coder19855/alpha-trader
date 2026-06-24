@@ -118,11 +118,23 @@ pipeline {
       steps {
         sh '''
           set -e
-          # Prefer restarting the host systemd unit when Jenkins SSH deploy is configured.
+          . ./.jenkins-node.sh
+          export NODE_BIN="$(command -v node)"
+
+          restart_host_service() {
+            systemctl restart alpha-trader-api
+            systemctl is-active alpha-trader-api
+          }
+
+          # Production on VPS: restart host systemd (build artifacts live in /opt/alpha-trader).
           if [ -n "${DEPLOY_SSH_TARGET:-}" ]; then
             ssh -o StrictHostKeyChecking=no ${DEPLOY_SSH_OPTS:-} "${DEPLOY_SSH_TARGET}" \
               "systemctl restart alpha-trader-api && systemctl is-active alpha-trader-api"
+          elif systemctl cat alpha-trader-api.service >/dev/null 2>&1; then
+            restart_host_service
           else
+            echo "DEPLOY_SSH_TARGET not set and systemd unit not visible in this agent."
+            echo "Falling back to restart-services.sh (Jenkins container only — not public :20063)."
             chmod +x scripts/deploy/restart-services.sh
             bash scripts/deploy/restart-services.sh
           fi
