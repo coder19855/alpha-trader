@@ -144,12 +144,10 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
                 [disabled]="optionPoll.loading()"
                 [attr.aria-label]="
                   optionPoll.loading()
-                    ? 'Reconnecting option stream'
-                    : 'Reconnect option stream'
+                    ? 'Refreshing option chain'
+                    : 'Refresh option chain'
                 "
-                [title]="
-                  optionPoll.loading() ? 'Reconnecting…' : 'Reconnect stream'
-                "
+                [title]="optionPoll.loading() ? 'Refreshing…' : 'Refresh now'"
                 (click)="optionPoll.refresh(true)"
               >
                 <mat-icon [class.spinning]="optionPoll.loading()">refresh</mat-icon>
@@ -804,11 +802,27 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     effect(() => {
       const symbol = this.ctx.symbol();
       const style = this.ctx.style();
-      this.optionPoll.configure({
-        symbol,
-        style,
-        paAction: this.tick()?.action,
-      });
+      const pollMs = this.settings()?.optionChainPollMs ?? 10_000;
+      const paAction = this.tick()?.action;
+      const tab = this.ctx.activeTab();
+      const signalTab = this.signalSubTab();
+      const compTab = this.componentsSubTab();
+      const needsOption =
+        tab === 'signal' && signalTab === 'optionChain'
+          ? true
+          : tab === 'components' && compTab === 'optionChain';
+
+      if (needsOption) {
+        this.optionPoll.configure({
+          symbol,
+          style,
+          pollMs,
+          paAction,
+          enabled: true,
+        });
+      } else {
+        this.optionPoll.stop();
+      }
     });
   }
 
@@ -828,9 +842,9 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
 
   optionPollLabel(): string {
     const ms = this.settings()?.optionChainPollMs ?? 10_000;
-    if (ms <= 0) return 'Server refresh: manual';
-    if (ms < 60_000) return `Server refresh: ${Math.round(ms / 1000)}s`;
-    return `Server refresh: ${Math.round(ms / 60_000)} min`;
+    if (ms <= 0) return 'Manual refresh';
+    if (ms < 60_000) return `Auto: ${Math.round(ms / 1000)}s`;
+    return `Auto: ${Math.round(ms / 60_000)} min`;
   }
 
   retry(): void {
@@ -1030,14 +1044,6 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
             };
             const { type: _type, ...rest } = patch;
             this.mergeChartPatch(rest);
-            return;
-          }
-          if ('type' in event && event.type === 'option-chain') {
-            this.optionPoll.receive(event);
-            return;
-          }
-          if ('type' in event && event.type === 'error') {
-            this.optionPoll.markError(event.message || 'Option chain unavailable');
             return;
           }
           if ('action' in event) {

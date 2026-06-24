@@ -32,7 +32,7 @@ type OcSignalSubTab = 'overview' | 'flow' | 'guards' | 'brief';
     }
 
     @if (poll.loading() && !poll.data()) {
-      <p class="oc-loading">Waiting for server option chain…</p>
+      <p class="oc-loading">Fetching option chain…</p>
     }
 
     @if (poll.data(); as oc) {
@@ -136,7 +136,7 @@ type OcSignalSubTab = 'overview' | 'flow' | 'guards' | 'brief';
         </div>
       }
     } @else if (!poll.loading() && !poll.error()) {
-      <p class="oc-empty">No option chain data yet. Use refresh to reconnect.</p>
+      <p class="oc-empty">No option chain data yet. Use refresh to fetch.</p>
     }
   `,
   styles: [

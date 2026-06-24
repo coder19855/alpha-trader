@@ -1,7 +1,6 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { DeckLiveTick } from '../models/deck.models';
-import { OptionChainSignalPayload } from '../models/option-chain.models';
 
 export type DeckStreamEvent =
   | DeckLiveTick
@@ -11,7 +10,6 @@ export type DeckStreamEvent =
       phase: 'connecting' | 'connected' | 'disconnected' | 'closed';
     }
   | { type: 'enrichment'; asOf: string }
-  | ({ type: 'option-chain' } & OptionChainSignalPayload)
   | { type: 'ltp' | 'positions' | 'error'; message?: string; asOf?: string };
 
 @Injectable({ providedIn: 'root' })
