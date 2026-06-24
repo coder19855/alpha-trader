@@ -66,6 +66,8 @@ export class DeckStreamHub {
       } | null;
       tickInFlight: boolean;
       ltpInFlight: boolean;
+      pendingForceRefresh: boolean;
+      lastFullTickAt: number;
       signalRefreshTimer: NodeJS.Timeout | null;
     }
   >();
@@ -95,6 +97,8 @@ export class DeckStreamHub {
         cachedChartCandles: null,
         tickInFlight: false,
         ltpInFlight: false,
+        pendingForceRefresh: false,
+        lastFullTickAt: 0,
         signalRefreshTimer: null,
       };
       this.channels.set(key, channel);
@@ -104,10 +108,7 @@ export class DeckStreamHub {
 
     channel.subscribers.set(subscriber.id, subscriber);
     if (channel.lastTick) subscriber.write(channel.lastTick);
-    void seedIndexQuotesFromRest(this.fastify, [normalized.symbol]).then(() => {
-      void this.sendLtpPatch(channel);
-    });
-    void this.sendTick(channel);
+    void this.bootstrapChannel(channel);
 
     return () => {
       channel?.subscribers.delete(subscriber.id);
@@ -168,8 +169,17 @@ export class DeckStreamHub {
       );
       if (!relevant) continue;
 
-      // LTP-only on quote ticks — full PA recompute runs on subscribe + signal refresh timer.
+      // Always push LTP — price must stay real-time; PA refresh is separate.
       void this.sendLtpPatch(channel);
+
+      const intervalMs = resolveDeckSignalRefreshMs();
+      const dueForSignal =
+        channel.lastFullTickAt <= 0 ||
+        Date.now() - channel.lastFullTickAt >= intervalMs;
+      if (dueForSignal) {
+        invalidateDeckLivePayloadCache(channel.params.symbol.trim());
+        void this.sendTick(channel, true);
+      }
     }
   }
 
@@ -247,11 +257,29 @@ export class DeckStreamHub {
     }
   }
 
+  private async bootstrapChannel(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): Promise<void> {
+    try {
+      await seedIndexQuotesFromRest(this.fastify, [
+        channel.params.symbol.trim(),
+      ]);
+      // Price first (fast), then full PA tick — don't block LTP on PA compute.
+      void this.sendLtpPatch(channel);
+      void this.sendTick(channel);
+    } catch (err) {
+      this.log.warn({ err, channel: channel.params }, 'Deck stream bootstrap failed');
+    }
+  }
+
   private async sendTick(
     channel: NonNullable<ReturnType<typeof this.channels.get>>,
     forceRefresh = false,
   ): Promise<void> {
-    if (channel.tickInFlight) return;
+    if (channel.tickInFlight) {
+      if (forceRefresh) channel.pendingForceRefresh = true;
+      return;
+    }
     channel.tickInFlight = true;
     try {
       const tick = await buildDeckLiveStreamTick(
@@ -260,6 +288,7 @@ export class DeckStreamHub {
         channel.cachedOpenPositions ?? undefined,
       );
       channel.lastTick = tick;
+      channel.lastFullTickAt = Date.now();
       channel.cachedOpenPositions = tick.openPositions ?? channel.cachedOpenPositions;
       const chartPatch = this.patchCachedChartCandles(channel, tick.lastPrice);
       this.broadcast(channel, chartPatch ? { ...tick, ...chartPatch } : tick);
@@ -271,6 +300,10 @@ export class DeckStreamHub {
       });
     } finally {
       channel.tickInFlight = false;
+      if (channel.pendingForceRefresh) {
+        channel.pendingForceRefresh = false;
+        void this.sendTick(channel, true);
+      }
     }
   }
 

@@ -534,7 +534,7 @@ function buildStreamTickParts(
     vetoReason: params.decision.priceAction.overallSignal?.vetoReason,
     structuralAction: params.decision.priceAction.overallSignal?.structuralAction,
     openPositions: params.openPositions,
-    openPositionsLtpOnly: Boolean(params.openPositions?.entries?.length),
+    openPositionsLtpOnly: false,
     managementContext: params.managementContext,
     patternInsights: extractPatternInsightsFromPriceAction(
       rawPrice,

@@ -1077,6 +1077,14 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
           }
           return;
         }
+        if ('type' in event && event.type === 'error') {
+          const message = event.message || 'Live stream tick failed';
+          if (!this.tick()) {
+            this.error.set(message);
+            this.notify.error(message);
+          }
+          return;
+        }
         if (
           'type' in event &&
           (event.type === 'enrichment' ||
@@ -1090,7 +1098,10 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
           this.mergeChartPatch(rest);
           return;
         }
-        if ('action' in event) {
+        if (
+          ('type' in event && event.type === 'tick') ||
+          ('action' in event && !('type' in event))
+        ) {
           this.applyTick({
             ...(this.tick() ?? {}),
             ...event,
@@ -1143,7 +1154,11 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       ...(this.pendingChartPatch ?? {}),
       ...data,
       signalCalculatedAt:
-        data.signalCalculatedAt ?? data.asOf ?? prev?.signalCalculatedAt,
+        data.signalCalculatedAt ??
+        (('type' in data && data.type === 'tick') || 'action' in data
+          ? data.asOf
+          : undefined) ??
+        prev?.signalCalculatedAt,
     }) as DeckLiveTick;
     this.tick.set(next);
     if (prev) {
