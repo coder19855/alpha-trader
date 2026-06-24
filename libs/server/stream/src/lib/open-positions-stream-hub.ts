@@ -141,7 +141,6 @@ export class OpenPositionsStreamHub {
       if (!relevant) continue;
 
       void this.sendLtpPatch(channel);
-      void this.sendTick(channel);
     }
   }
 

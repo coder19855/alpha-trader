@@ -4,6 +4,7 @@ import {
   computePaDecision,
   computePriceAction,
   computeTechnicalAnalysisTimeline,
+  invalidatePriceActionCache,
 } from '@alpha-trader/server-analysis';
 import {
   attachAutoExitGuard,
@@ -262,16 +263,91 @@ function shouldExecuteAutoEntry(fastify: FastifyInstance): boolean {
   return fastify.preferences.getAutoEntry().dryRun;
 }
 
+function resolveDeckSignalRefreshMs(): number {
+  const raw = process.env.DECK_SIGNAL_REFRESH_MS;
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+}
+
+const deckDecisionCache = new Map<
+  string,
+  { value: DeckDecision; at: number }
+>();
+const deckDecisionInFlight = new Map<string, Promise<DeckDecision>>();
+
+function deckDecisionCacheKey(
+  symbol: string,
+  style: TradingStyle,
+  vetoMode: VetoMode,
+): string {
+  return `${symbol.trim()}:${style}:${vetoMode}`;
+}
+
+export function invalidateDeckDecisionCache(symbol?: string): void {
+  if (!symbol) {
+    deckDecisionCache.clear();
+    return;
+  }
+  const prefix = `${symbol.trim()}:`;
+  for (const key of Array.from(deckDecisionCache.keys())) {
+    if (key.startsWith(prefix)) {
+      deckDecisionCache.delete(key);
+    }
+  }
+}
+
 async function buildDeckDecision(
   fastify: FastifyInstance,
   symbol: string,
   style: TradingStyle,
   vetoMode: VetoMode,
+  options?: { forceRefresh?: boolean },
+): Promise<DeckDecision> {
+  const key = deckDecisionCacheKey(symbol, style, vetoMode);
+  const ttlMs = resolveDeckSignalRefreshMs();
+  const now = Date.now();
+
+  if (!options?.forceRefresh) {
+    const cached = deckDecisionCache.get(key);
+    if (cached && now - cached.at < ttlMs) {
+      return cached.value;
+    }
+    const inFlight = deckDecisionInFlight.get(key);
+    if (inFlight) {
+      return inFlight;
+    }
+  }
+
+  const computePromise = (async () => {
+    const decision = await computeDeckDecisionUncached(
+      fastify,
+      symbol,
+      style,
+      vetoMode,
+      { forceRefresh: options?.forceRefresh === true },
+    );
+    deckDecisionCache.set(key, { value: decision, at: Date.now() });
+    return decision;
+  })().finally(() => {
+    deckDecisionInFlight.delete(key);
+  });
+
+  deckDecisionInFlight.set(key, computePromise);
+  return computePromise;
+}
+
+async function computeDeckDecisionUncached(
+  fastify: FastifyInstance,
+  symbol: string,
+  style: TradingStyle,
+  vetoMode: VetoMode,
+  options?: { forceRefresh?: boolean },
 ): Promise<DeckDecision> {
   const priceData = await computePriceAction(fastify, {
     symbol,
     tradingStyle: style,
     vetoMode,
+    forceRefresh: options?.forceRefresh === true,
   });
   if (!priceData) {
     throw new Error('Price action unavailable');
@@ -718,6 +794,8 @@ function makeDeckLiveCacheKey(
 }
 
 export function invalidateDeckLivePayloadCache(symbol?: string): void {
+  invalidateDeckDecisionCache(symbol);
+  invalidatePriceActionCache(symbol);
   if (!symbol) {
     deckLivePayloadCache.clear();
     return;
@@ -732,7 +810,12 @@ export function invalidateDeckLivePayloadCache(symbol?: string): void {
 
 export async function buildDeckLiveStreamTick(
   fastify: FastifyInstance,
-  params: { symbol: string; tradingStyle?: string; vetoMode?: VetoMode },
+  params: {
+    symbol: string;
+    tradingStyle?: string;
+    vetoMode?: VetoMode;
+    forceRefresh?: boolean;
+  },
   cachedOpenPositions?: DeckOpenPositionsPayload,
 ): Promise<DeckLiveStreamTick> {
   const style = parseTradingStyle(params.tradingStyle);
@@ -742,6 +825,7 @@ export async function buildDeckLiveStreamTick(
     params.symbol.trim(),
     style,
     vetoMode,
+    { forceRefresh: params.forceRefresh === true },
   );
   const indexSymbol = decision.symbol || params.symbol.trim();
   const openPositions =

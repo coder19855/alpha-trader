@@ -168,8 +168,8 @@ export class DeckStreamHub {
       );
       if (!relevant) continue;
 
+      // LTP-only on quote ticks — full PA recompute runs on subscribe + signal refresh timer.
       void this.sendLtpPatch(channel);
-      void this.sendTick(channel);
     }
   }
 
@@ -249,14 +249,14 @@ export class DeckStreamHub {
 
   private async sendTick(
     channel: NonNullable<ReturnType<typeof this.channels.get>>,
-    _forceRefresh = false,
+    forceRefresh = false,
   ): Promise<void> {
     if (channel.tickInFlight) return;
     channel.tickInFlight = true;
     try {
       const tick = await buildDeckLiveStreamTick(
         this.fastify,
-        channel.params,
+        { ...channel.params, forceRefresh },
         channel.cachedOpenPositions ?? undefined,
       );
       channel.lastTick = tick;
