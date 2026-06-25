@@ -1,6 +1,7 @@
 [Unit]
 Description=Alpha Trader API (Fastify)
-After=network.target
+After=network.target docker.service
+Wants=docker.service
 
 [Service]
 Type=simple
@@ -11,8 +12,9 @@ Environment=HOST=0.0.0.0
 Environment=PORT=3000
 Environment=NODE_ENV=production
 Environment=SERVE_WEB_APP=true
+Environment=NVM_DIR=/root/.nvm
 # Node 22+ required (ESM workspace libs). Install: nvm install 22
-ExecStart=/root/.nvm/versions/node/v22.23.0/bin/node /opt/alpha-trader/apps/alpha-trader-server/dist/main.js
+ExecStart=/bin/bash -lc 'source "$NVM_DIR/nvm.sh" && nvm use 22 >/dev/null && exec node /opt/alpha-trader/apps/alpha-trader-server/dist/main.js'
 Restart=on-failure
 RestartSec=5
 
