@@ -21,8 +21,20 @@ if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
   . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
 fi
 
+if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
+  # shellcheck disable=SC1091
+  . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+  nvm use 22 >/dev/null 2>&1 || nvm install 22
+fi
+
 if ! command -v node >/dev/null 2>&1; then
-  echo "error: node not found (install Node 22 or load nvm)" >&2
+  echo "error: node not found (install Node 22 via nvm)" >&2
+  exit 1
+fi
+
+node_major="$(node --version | tr -d v | cut -d. -f1)"
+if [[ "$node_major" -lt 22 ]]; then
+  echo "error: Node 22+ required (have $(node --version))" >&2
   exit 1
 fi
 
