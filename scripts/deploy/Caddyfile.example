@@ -1,0 +1,11 @@
+# Copy to /etc/caddy/Caddyfile on the VPS.
+#
+# Until trading-bot.in DNS points at this VPS, use :80 so the IP works:
+:80 {
+    reverse_proxy 127.0.0.1:3000
+}
+
+# After DNS is live, replace with:
+# trading-bot.in, www.trading-bot.in {
+#     reverse_proxy 127.0.0.1:3000
+# }
