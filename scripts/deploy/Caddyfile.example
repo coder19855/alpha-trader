@@ -1,4 +1,6 @@
-# Copy to /etc/caddy/Caddyfile on the VPS.
+# OPTIONAL — only when using Caddy for HTTPS on trading-bot.in.
+# Default VPS setup uses provider port map :20063 → :3000 (no Caddy).
+# See scripts/deploy/setup-direct-access.sh
 #
 # Until trading-bot.in DNS points at this VPS, use :80 so the IP works:
 :80 {
