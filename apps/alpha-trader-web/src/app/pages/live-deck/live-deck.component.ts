@@ -832,12 +832,12 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     this.settingsRequestSub = this.deckApi
       .patchSettings({ tradingStyle: style })
       .subscribe({
-      next: (s) => {
-        this.settings.set(s);
-        this.syncStyleFromSettings(s);
-      },
-      error: (err) =>
-        this.notify.error(err?.error?.error || err.message || 'Update failed'),
+        next: (s) => {
+          this.settings.set(s);
+          this.syncStyleFromSettings(s);
+        },
+        error: (err) =>
+          this.notify.error(err?.error?.error || err.message || 'Update failed'),
       });
   }
 

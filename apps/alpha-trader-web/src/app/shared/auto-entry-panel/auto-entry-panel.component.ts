@@ -1,6 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject, input, output, signal } from '@angular/core';
+import {
+  Component,
+  OnDestroy,
+  OnInit,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { AutoEntrySnapshot, AutoEntryTraceEvent } from '../../core/models/deck.models';
 import { DeckApiService } from '../../core/services/deck-api.service';
 import { NotificationService } from '../../core/services/notification.service';
@@ -351,9 +360,10 @@ import { NotificationService } from '../../core/services/notification.service';
     `,
   ],
 })
-export class AutoEntryPanelComponent implements OnInit {
+export class AutoEntryPanelComponent implements OnInit, OnDestroy {
   private readonly api = inject(DeckApiService);
   private readonly notify = inject(NotificationService);
+  private requestSub: Subscription | null = null;
 
   readonly guardStatus = input<string | null | undefined>(null);
   readonly guardMessage = input<string | null | undefined>(null);
@@ -367,10 +377,16 @@ export class AutoEntryPanelComponent implements OnInit {
   readonly snapshot = signal<AutoEntrySnapshot | null>(null);
 
   ngOnInit(): void {
-    this.api.getAutoEntry().subscribe({
+    this.requestSub?.unsubscribe();
+    this.requestSub = this.api.getAutoEntry().subscribe({
       next: (s) => this.snapshot.set(s),
       error: (err) => this.notify.error(err?.message || 'Failed to load auto-entry'),
     });
+  }
+
+  ngOnDestroy(): void {
+    this.requestSub?.unsubscribe();
+    this.requestSub = null;
   }
 
   statusClass(): string {
@@ -452,7 +468,8 @@ export class AutoEntryPanelComponent implements OnInit {
   }
 
   patch(patch: Partial<AutoEntrySnapshot>): void {
-    this.api.patchAutoEntry(patch).subscribe({
+    this.requestSub?.unsubscribe();
+    this.requestSub = this.api.patchAutoEntry(patch).subscribe({
       next: (s) => {
         this.snapshot.set(s);
         this.saved.emit(s);
