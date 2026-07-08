@@ -11,6 +11,10 @@ import { parseWsTicks } from './parse-ws-tick.js';
 import { getQuoteCache, QuoteCacheStats } from './quote-cache.js';
 import { notifyQuoteTicksUpdated } from './market-stream-coordinator.js';
 import { diffSymbolSets } from './subscription-symbols.js';
+import {
+  detachSocketHandler,
+  SocketEventHandler,
+} from './socket-listener-cleanup.js';
 
 
 export interface MarketStreamStats {
@@ -28,6 +32,15 @@ export interface MarketStreamStats {
 
 export class FyersMarketStreamManager {
   private socket: DataSocketLike | null = null;
+  private socketHandlers:
+    | {
+        socket: DataSocketLike;
+        connect: SocketEventHandler;
+        message: SocketEventHandler;
+        error: SocketEventHandler;
+        close: SocketEventHandler;
+      }
+    | null = null;
   private readonly watchSymbols = new Set<string>();
   private readonly positionSymbols = new Set<string>();
   private readonly optionSymbolsByIndex = new Map<string, Set<string>>();
@@ -38,7 +51,10 @@ export class FyersMarketStreamManager {
   private lastError: string | null = null;
   private accessTokenKey = '';
 
-  constructor(private readonly log: FastifyBaseLogger) {}
+  constructor(
+    private readonly log: FastifyBaseLogger,
+    private readonly createSocket: typeof createFyersDataSocket = createFyersDataSocket,
+  ) {}
 
   getIndexLtp(indexSymbol: string, nowMs = Date.now()): number | null {
     return getQuoteCache().getLtp(indexSymbol, undefined, nowMs);
@@ -102,45 +118,9 @@ export class FyersMarketStreamManager {
 
     this.accessTokenKey = tokenKey;
     const auth = `${appId}:${accessToken}`;
-    const socket = createFyersDataSocket(auth, '', false);
+    const socket = this.createSocket(auth, '', false);
     this.socket = socket;
-
-    socket.on('connect', () => {
-      this.connected = true;
-      this.lastError = null;
-      this.log.info('Fyers market data WebSocket connected');
-      if (resolveFyersWsLiteMode() && socket.LiteMode != null) {
-        socket.mode(socket.LiteMode);
-      }
-      this.reconcileSubscriptions(true);
-    });
-
-    socket.on('message', (message: unknown) => {
-      this.messages += 1;
-      this.lastMessageAt = Date.now();
-      const updatedSymbols: string[] = [];
-      for (const tick of parseWsTicks(message, this.lastMessageAt)) {
-        getQuoteCache().upsert(tick, this.lastMessageAt);
-        if (tick.source === 'ws') {
-          updatedSymbols.push(tick.symbol);
-        }
-      }
-      if (updatedSymbols.length) {
-        notifyQuoteTicksUpdated(updatedSymbols);
-      }
-    });
-
-    socket.on('error', (err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.lastError = msg;
-      this.log.warn({ err }, 'Fyers market data WebSocket error');
-    });
-
-    socket.on('close', () => {
-      this.connected = false;
-      this.activeSymbols.clear();
-      this.log.info('Fyers market data WebSocket closed');
-    });
+    this.attachSocketHandlers(socket);
 
     const reconnect = socket.autoReconnect ?? socket.autoreconnect;
     reconnect?.call(socket, FYERS_MARKET_STREAM_DEFAULTS.AUTO_RECONNECT_TRIES);
@@ -149,16 +129,18 @@ export class FyersMarketStreamManager {
   }
 
   async disconnect(): Promise<void> {
-    if (!this.socket) return;
-    try {
-      this.socket.close?.();
-    } catch {
-      // ignore close errors during teardown
-    }
+    const socket = this.socket;
     this.socket = null;
     this.connected = false;
     this.activeSymbols.clear();
     this.accessTokenKey = '';
+    if (!socket) return;
+    this.detachSocketHandlers(socket);
+    try {
+      socket.close?.();
+    } catch {
+      // ignore close errors during teardown
+    }
   }
 
   isConnected(): boolean {
@@ -244,5 +226,69 @@ export class FyersMarketStreamManager {
         this.log.warn({ err, count: subscribe.length }, 'WS subscribe failed');
       }
     }
+  }
+
+  private attachSocketHandlers(socket: DataSocketLike): void {
+    const onConnect = () => {
+      if (this.socket !== socket) return;
+      this.connected = true;
+      this.lastError = null;
+      this.log.info('Fyers market data WebSocket connected');
+      if (resolveFyersWsLiteMode() && socket.LiteMode != null) {
+        socket.mode(socket.LiteMode);
+      }
+      this.reconcileSubscriptions(true);
+    };
+
+    const onMessage = (message: unknown) => {
+      if (this.socket !== socket) return;
+      this.messages += 1;
+      this.lastMessageAt = Date.now();
+      const updatedSymbols: string[] = [];
+      for (const tick of parseWsTicks(message, this.lastMessageAt)) {
+        getQuoteCache().upsert(tick, this.lastMessageAt);
+        if (tick.source === 'ws') {
+          updatedSymbols.push(tick.symbol);
+        }
+      }
+      if (updatedSymbols.length) {
+        notifyQuoteTicksUpdated(updatedSymbols);
+      }
+    };
+
+    const onError = (err: unknown) => {
+      if (this.socket !== socket) return;
+      const msg = err instanceof Error ? err.message : String(err);
+      this.lastError = msg;
+      this.log.warn({ err }, 'Fyers market data WebSocket error');
+    };
+
+    const onClose = () => {
+      if (this.socket !== socket) return;
+      this.connected = false;
+      this.activeSymbols.clear();
+      this.log.info('Fyers market data WebSocket closed');
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('message', onMessage);
+    socket.on('error', onError);
+    socket.on('close', onClose);
+    this.socketHandlers = {
+      socket,
+      connect: onConnect,
+      message: onMessage,
+      error: onError,
+      close: onClose,
+    };
+  }
+
+  private detachSocketHandlers(socket: DataSocketLike): void {
+    if (this.socketHandlers?.socket !== socket) return;
+    detachSocketHandler(socket, 'connect', this.socketHandlers.connect);
+    detachSocketHandler(socket, 'message', this.socketHandlers.message);
+    detachSocketHandler(socket, 'error', this.socketHandlers.error);
+    detachSocketHandler(socket, 'close', this.socketHandlers.close);
+    this.socketHandlers = null;
   }
 }

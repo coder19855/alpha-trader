@@ -1,4 +1,5 @@
 import { fyersOrderSocket } from 'fyers-api-v3';
+import { ListenerCleanupCapable } from './socket-listener-cleanup.js';
 
 export interface FyersWsPositionRow {
   symbol?: string;
@@ -14,7 +15,7 @@ export interface FyersWsPositionsMessage {
   positions?: FyersWsPositionRow;
 }
 
-export interface OrderSocketLike {
+export interface OrderSocketLike extends ListenerCleanupCapable {
   orderUpdates: string;
   tradeUpdates: string;
   positionUpdates: string;

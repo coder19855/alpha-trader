@@ -1,9 +1,15 @@
 import {
   formatUnknownError,
   isFyersRateLimitError,
+  installProcessAsyncGuards,
+  uninstallProcessAsyncGuards,
 } from './async-guards.js';
 
 describe('async-guards', () => {
+  afterEach(() => {
+    uninstallProcessAsyncGuards();
+  });
+
   it('formats plain Fyers error objects', () => {
     expect(
       formatUnknownError({ message: 'request limit reached', code: 429 }),
@@ -15,5 +21,21 @@ describe('async-guards', () => {
       true,
     );
     expect(isFyersRateLimitError(new Error('nope'))).toBe(false);
+  });
+
+  it('installs process guards idempotently and removes them cleanly', () => {
+    const beforeUnhandled = process.listenerCount('unhandledRejection');
+    const beforeUncaught = process.listenerCount('uncaughtException');
+
+    const cleanup = installProcessAsyncGuards();
+    installProcessAsyncGuards();
+
+    expect(process.listenerCount('unhandledRejection')).toBe(beforeUnhandled + 1);
+    expect(process.listenerCount('uncaughtException')).toBe(beforeUncaught + 1);
+
+    cleanup();
+
+    expect(process.listenerCount('unhandledRejection')).toBe(beforeUnhandled);
+    expect(process.listenerCount('uncaughtException')).toBe(beforeUncaught);
   });
 });

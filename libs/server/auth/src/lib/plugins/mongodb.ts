@@ -47,7 +47,10 @@ const mongodbPlugin = fp(
     }
 
     const client = new MongoClient(url, resolveMongoClientOptions());
-    attachMongoClientErrorHandlers(client, fastify.log);
+    const detachMongoClientErrorHandlers = attachMongoClientErrorHandlers(
+      client,
+      fastify.log,
+    );
 
     try {
       await client.connect();
@@ -57,6 +60,7 @@ const mongodbPlugin = fp(
 
       fastify.decorate('mongo', { client, ObjectId, db });
       fastify.addHook('onClose', async () => {
+        detachMongoClientErrorHandlers();
         await client.close(true);
       });
       void ensureMongoStorageIndexes(fastify).catch((err) => {
@@ -68,6 +72,7 @@ const mongodbPlugin = fp(
         'MongoDB connected',
       );
     } catch (err) {
+      detachMongoClientErrorHandlers();
       await client.close(true).catch(() => undefined);
       fastify.log.error(
         { err },

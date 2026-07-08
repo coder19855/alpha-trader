@@ -8,17 +8,31 @@ import { FyersOrderStreamManager } from './fyers-order-stream-manager';
 import { OrderSocketLike } from './fyers-order-socket-adapter';
 
 function createMockSocket(): OrderSocketLike & {
-  handlers: Record<string, (...args: unknown[]) => void>;
+  listenerCount: (event: string) => number;
   trigger: (event: string, payload?: unknown) => void;
 } {
-  const handlers: Record<string, (...args: unknown[]) => void> = {};
+  const handlers = new Map<string, Set<(...args: unknown[]) => void>>();
   const socket = {
     orderUpdates: 'orders',
     tradeUpdates: 'trades',
     positionUpdates: 'positions',
-    handlers,
     on(event: string, callback: (...args: unknown[]) => void) {
-      handlers[event] = callback;
+      const listeners = handlers.get(event) ?? new Set<(...args: unknown[]) => void>();
+      listeners.add(callback);
+      handlers.set(event, listeners);
+    },
+    off(event: string, callback: (...args: unknown[]) => void) {
+      handlers.get(event)?.delete(callback);
+    },
+    removeListener(event: string, callback: (...args: unknown[]) => void) {
+      handlers.get(event)?.delete(callback);
+    },
+    removeAllListeners(event?: string) {
+      if (event) {
+        handlers.delete(event);
+        return;
+      }
+      handlers.clear();
     },
     subscribe: jest.fn(),
     connect: jest.fn(),
@@ -26,7 +40,12 @@ function createMockSocket(): OrderSocketLike & {
     isConnected: jest.fn().mockReturnValue(true),
     autoreconnect: jest.fn(),
     trigger(event: string, payload?: unknown) {
-      handlers[event]?.(payload);
+      for (const callback of [...(handlers.get(event) ?? [])]) {
+        callback(payload);
+      }
+    },
+    listenerCount(event: string) {
+      return handlers.get(event)?.size ?? 0;
     },
   };
   return socket;
@@ -82,5 +101,62 @@ describe('FyersOrderStreamManager', () => {
       indexSymbols: ['NSE:NIFTY50-INDEX'],
       optionSymbols: ['NSE:NIFTY24JUN25000CE'],
     });
+  });
+
+  it('detaches socket handlers on disconnect', async () => {
+    const socket = createMockSocket();
+    const manager = new FyersOrderStreamManager(log, undefined, undefined, () => socket);
+
+    await manager.connect('token-abc', 'app-id');
+
+    expect(socket.listenerCount('connect')).toBe(1);
+    expect(socket.listenerCount('positions')).toBe(1);
+    expect(socket.listenerCount('trades')).toBe(1);
+    expect(socket.listenerCount('orders')).toBe(1);
+    expect(socket.listenerCount('error')).toBe(1);
+    expect(socket.listenerCount('close')).toBe(1);
+
+    await manager.disconnect();
+
+    expect(socket.close).toHaveBeenCalledTimes(1);
+    expect(socket.listenerCount('connect')).toBe(0);
+    expect(socket.listenerCount('positions')).toBe(0);
+    expect(socket.listenerCount('trades')).toBe(0);
+    expect(socket.listenerCount('orders')).toBe(0);
+    expect(socket.listenerCount('error')).toBe(0);
+    expect(socket.listenerCount('close')).toBe(0);
+    expect(isOpenPositionsWsLive()).toBe(false);
+  });
+
+  it('ignores stale close events after reconnect', async () => {
+    const first = createMockSocket();
+    const second = createMockSocket();
+    const sockets = [first, second];
+    const manager = new FyersOrderStreamManager(
+      log,
+      undefined,
+      undefined,
+      () => {
+        const socket = sockets.shift();
+        if (!socket) throw new Error('No mock socket remaining');
+        return socket;
+      },
+    );
+
+    await manager.connect('token-one', 'app-id');
+    first.trigger('connect');
+
+    await manager.connect('token-two', 'app-id');
+    second.trigger('connect');
+    first.trigger('close');
+
+    expect(first.listenerCount('connect')).toBe(0);
+    expect(first.listenerCount('positions')).toBe(0);
+    expect(first.listenerCount('trades')).toBe(0);
+    expect(first.listenerCount('orders')).toBe(0);
+    expect(first.listenerCount('error')).toBe(0);
+    expect(first.listenerCount('close')).toBe(0);
+    expect(manager.isConnected()).toBe(true);
+    expect(isOpenPositionsWsLive()).toBe(true);
   });
 });

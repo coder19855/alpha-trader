@@ -9,6 +9,10 @@ import {
   FyersWsPositionsMessage,
   OrderSocketLike,
 } from './fyers-order-socket-adapter.js';
+import {
+  detachSocketHandler,
+  SocketEventHandler,
+} from './socket-listener-cleanup.js';
 
 export interface OrderStreamStats {
   enabled: boolean;
@@ -29,6 +33,17 @@ export interface OrderStreamPositionChange {
 
 export class FyersOrderStreamManager {
   private socket: OrderSocketLike | null = null;
+  private socketHandlers:
+    | {
+        socket: OrderSocketLike;
+        connect: SocketEventHandler;
+        positions: SocketEventHandler;
+        trades: SocketEventHandler;
+        orders: SocketEventHandler;
+        error: SocketEventHandler;
+        close: SocketEventHandler;
+      }
+    | null = null;
   private connected = false;
   private messages = 0;
   private positionUpdates = 0;
@@ -63,64 +78,26 @@ export class FyersOrderStreamManager {
     this.socket = socket;
 
     socket.autoreconnect(FYERS_ORDER_STREAM_DEFAULTS.AUTO_RECONNECT_TRIES);
-
-    socket.on('connect', () => {
-      this.connected = true;
-      this.lastError = null;
-      setOpenPositionsWsLive(true);
-      this.log.info('Fyers order WebSocket connected');
-      socket.subscribe([
-        socket.orderUpdates,
-        socket.tradeUpdates,
-        socket.positionUpdates,
-      ]);
-      void this.runBootstrap('connect');
-    });
-
-    socket.on('positions', (message: unknown) => {
-      this.recordMessage();
-      this.positionUpdates += 1;
-      this.handlePositionsMessage(message);
-    });
-
-    socket.on('trades', () => {
-      this.recordMessage();
-      this.tradeUpdates += 1;
-    });
-
-    socket.on('orders', () => {
-      this.recordMessage();
-      this.orderUpdates += 1;
-    });
-
-    socket.on('error', (err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.lastError = msg;
-      this.log.warn({ err }, 'Fyers order WebSocket error');
-    });
-
-    socket.on('close', () => {
-      this.connected = false;
-      setOpenPositionsWsLive(false);
-      this.log.info('Fyers order WebSocket closed');
-    });
+    this.attachSocketHandlers(socket);
 
     socket.connect();
   }
 
   async disconnect(): Promise<void> {
-    if (this.socket) {
-      try {
-        this.socket.close();
-      } catch {
-        // ignore close errors during teardown
-      }
-    }
+    const socket = this.socket;
     this.socket = null;
     this.connected = false;
     setOpenPositionsWsLive(false);
     this.accessTokenKey = '';
     this.bootstrapInFlight = null;
+    if (socket) {
+      this.detachSocketHandlers(socket);
+      try {
+        socket.close();
+      } catch {
+        // ignore close errors during teardown
+      }
+    }
   }
 
   isConnected(): boolean {
@@ -189,5 +166,81 @@ export class FyersOrderStreamManager {
 
     this.bootstrapInFlight = promise;
     await promise;
+  }
+
+  private attachSocketHandlers(socket: OrderSocketLike): void {
+    const onConnect = () => {
+      if (this.socket !== socket) return;
+      this.connected = true;
+      this.lastError = null;
+      setOpenPositionsWsLive(true);
+      this.log.info('Fyers order WebSocket connected');
+      socket.subscribe([
+        socket.orderUpdates,
+        socket.tradeUpdates,
+        socket.positionUpdates,
+      ]);
+      void this.runBootstrap('connect');
+    };
+
+    const onPositions = (message: unknown) => {
+      if (this.socket !== socket) return;
+      this.recordMessage();
+      this.positionUpdates += 1;
+      this.handlePositionsMessage(message);
+    };
+
+    const onTrades = () => {
+      if (this.socket !== socket) return;
+      this.recordMessage();
+      this.tradeUpdates += 1;
+    };
+
+    const onOrders = () => {
+      if (this.socket !== socket) return;
+      this.recordMessage();
+      this.orderUpdates += 1;
+    };
+
+    const onError = (err: unknown) => {
+      if (this.socket !== socket) return;
+      const msg = err instanceof Error ? err.message : String(err);
+      this.lastError = msg;
+      this.log.warn({ err }, 'Fyers order WebSocket error');
+    };
+
+    const onClose = () => {
+      if (this.socket !== socket) return;
+      this.connected = false;
+      setOpenPositionsWsLive(false);
+      this.log.info('Fyers order WebSocket closed');
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('positions', onPositions);
+    socket.on('trades', onTrades);
+    socket.on('orders', onOrders);
+    socket.on('error', onError);
+    socket.on('close', onClose);
+    this.socketHandlers = {
+      socket,
+      connect: onConnect,
+      positions: onPositions,
+      trades: onTrades,
+      orders: onOrders,
+      error: onError,
+      close: onClose,
+    };
+  }
+
+  private detachSocketHandlers(socket: OrderSocketLike): void {
+    if (this.socketHandlers?.socket !== socket) return;
+    detachSocketHandler(socket, 'connect', this.socketHandlers.connect);
+    detachSocketHandler(socket, 'positions', this.socketHandlers.positions);
+    detachSocketHandler(socket, 'trades', this.socketHandlers.trades);
+    detachSocketHandler(socket, 'orders', this.socketHandlers.orders);
+    detachSocketHandler(socket, 'error', this.socketHandlers.error);
+    detachSocketHandler(socket, 'close', this.socketHandlers.close);
+    this.socketHandlers = null;
   }
 }
