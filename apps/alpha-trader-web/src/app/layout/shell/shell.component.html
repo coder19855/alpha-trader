@@ -206,7 +206,7 @@
                 <mat-icon [class.spinning]="deckReload.busy()">refresh</mat-icon>
               </button>
             }
-            @if (!session()?.auth?.fyersValid) {
+            @if (session() !== null && !session()?.auth?.fyersValid) {
               <span>·</span>
               <button type="button" class="connect-fyers-btn" (click)="login()">
                 Connect Fyers
