@@ -24,7 +24,12 @@ import { NotificationService } from '../../core/services/notification.service';
           Alpha Trader stores one Fyers access token on the server (~24h). Complete OAuth once,
           then use the live deck, replay, and benchmark in your browser.
         </p>
-        @if (hasToken()) {
+        @if (auth.authChecking()) {
+          <p class="settings-status checking">Checking Fyers session…</p>
+          <div class="web-modal-actions">
+            <button mat-flat-button type="button" disabled>Checking…</button>
+          </div>
+        } @else if (hasToken()) {
           <p class="settings-status ok">Fyers session is active. Continue to the app.</p>
           <div class="web-modal-actions">
             <button mat-flat-button color="primary" type="button" (click)="goApp()">
@@ -100,11 +105,15 @@ import { NotificationService } from '../../core/services/notification.service';
         --mdc-filled-button-container-color: var(--accent);
         --mdc-filled-button-label-text-color: #0d0f12;
       }
+
+      .settings-status.checking {
+        color: var(--muted);
+      }
     `,
   ],
 })
 export class LoginComponent implements OnInit {
-  private readonly auth = inject(AuthService);
+  readonly auth = inject(AuthService);
   private readonly notify = inject(NotificationService);
   private readonly router = inject(Router);
   readonly hasToken = signal(false);
