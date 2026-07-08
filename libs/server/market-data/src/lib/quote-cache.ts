@@ -21,6 +21,7 @@ export interface QuoteCacheStats {
   wsUpdates: number;
   restSeeds: number;
   ringSymbols: number;
+  totalRingPoints: number;
 }
 
 export class QuoteCache {
@@ -28,6 +29,11 @@ export class QuoteCache {
   private spotRings = new Map<string, SpotRingPoint[]>();
   private wsUpdates = 0;
   private restSeeds = 0;
+  private readonly maxSymbols: number;
+
+  constructor(maxSymbols = FYERS_MARKET_STREAM_DEFAULTS.MAX_QUOTE_SYMBOLS) {
+    this.maxSymbols = maxSymbols;
+  }
 
   upsert(
     tick: Omit<LiveQuote, 'updatedAt'> & { updatedAt?: number },
@@ -67,6 +73,15 @@ export class QuoteCache {
       source: tick.source,
     };
     this.quotes.set(tick.symbol, entry);
+
+    // Enforce hard cap: evict the oldest non-current symbol when over limit.
+    if (!prev && this.quotes.size > this.maxSymbols) {
+      const oldest = this.quotes.keys().next().value;
+      if (oldest != null && oldest !== tick.symbol) {
+        this.quotes.delete(oldest);
+        this.spotRings.delete(oldest);
+      }
+    }
 
     if (tick.source === 'ws') {
       this.wsUpdates += 1;
@@ -135,12 +150,39 @@ export class QuoteCache {
   }
 
   getStats(): QuoteCacheStats {
+    let totalRingPoints = 0;
+    for (const ring of this.spotRings.values()) {
+      totalRingPoints += ring.length;
+    }
     return {
       quoteCount: this.quotes.size,
       wsUpdates: this.wsUpdates,
       restSeeds: this.restSeeds,
       ringSymbols: this.spotRings.size,
+      totalRingPoints,
     };
+  }
+
+  /** Remove a single symbol from the quote and ring caches. */
+  evictSymbol(symbol: string): void {
+    this.quotes.delete(symbol);
+    this.spotRings.delete(symbol);
+  }
+
+  /**
+   * Evict all symbols that are not in the provided active set.
+   * Returns the number of evicted entries for logging.
+   */
+  pruneToActiveSymbols(activeSymbols: Set<string>): number {
+    let evicted = 0;
+    for (const symbol of [...this.quotes.keys()]) {
+      if (!activeSymbols.has(symbol)) {
+        this.quotes.delete(symbol);
+        this.spotRings.delete(symbol);
+        evicted++;
+      }
+    }
+    return evicted;
   }
 
   resetForTests(): void {

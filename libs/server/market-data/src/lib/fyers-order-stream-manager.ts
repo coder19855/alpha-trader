@@ -54,6 +54,7 @@ export class FyersOrderStreamManager {
   private lastBootstrapAt: number | null = null;
   private accessTokenKey = '';
   private bootstrapInFlight: Promise<void> | null = null;
+  private reconcileTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly log: FastifyBaseLogger,
@@ -90,6 +91,7 @@ export class FyersOrderStreamManager {
     setOpenPositionsWsLive(false);
     this.accessTokenKey = '';
     this.bootstrapInFlight = null;
+    this.stopPeriodicReconcile();
     if (socket) {
       this.detachSocketHandlers(socket);
       try {
@@ -168,6 +170,30 @@ export class FyersOrderStreamManager {
     await promise;
   }
 
+  private startPeriodicReconcile(): void {
+    this.stopPeriodicReconcile();
+    const schedule = () => {
+      const base = FYERS_ORDER_STREAM_DEFAULTS.REST_RECONCILE_MS;
+      const jitter = Math.round(base * 0.2);
+      const delay = base + Math.round(Math.random() * jitter * 2 - jitter);
+      this.reconcileTimer = setTimeout(() => {
+        if (this.socket && this.connected) {
+          void this.runBootstrap('periodic');
+        }
+        schedule();
+      }, delay);
+      this.reconcileTimer?.unref?.();
+    };
+    schedule();
+  }
+
+  private stopPeriodicReconcile(): void {
+    if (this.reconcileTimer !== null) {
+      clearTimeout(this.reconcileTimer);
+      this.reconcileTimer = null;
+    }
+  }
+
   private attachSocketHandlers(socket: OrderSocketLike): void {
     const onConnect = () => {
       if (this.socket !== socket) return;
@@ -181,6 +207,7 @@ export class FyersOrderStreamManager {
         socket.positionUpdates,
       ]);
       void this.runBootstrap('connect');
+      this.startPeriodicReconcile();
     };
 
     const onPositions = (message: unknown) => {
@@ -213,6 +240,7 @@ export class FyersOrderStreamManager {
       if (this.socket !== socket) return;
       this.connected = false;
       setOpenPositionsWsLive(false);
+      this.stopPeriodicReconcile();
       this.log.info('Fyers order WebSocket closed');
     };
 

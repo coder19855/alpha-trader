@@ -5,6 +5,14 @@ export const FYERS_MARKET_STREAM_DEFAULTS = {
   QUOTE_MAX_AGE_MS: 120_000,
   SPOT_RING_MAX_POINTS: 540,
   SPOT_RING_MAX_AGE_MS: 90 * 60 * 1000,
+  /** Hard cap on number of distinct quote symbols held in memory. */
+  MAX_QUOTE_SYMBOLS: 2_000,
+  /** Base interval for periodic WS symbol reconciliation (ms). */
+  RECONCILE_BASE_MS: 60_000,
+  /** ± jitter applied to reconciliation interval to avoid thundering-herd (ms). */
+  RECONCILE_JITTER_MS: 15_000,
+  /** Coalescing window: batch outbound tick notifications before firing listeners (ms). */
+  TICK_COALESCE_MS: 200,
   /** Default WS chain policy: index/vix + held legs only; ATM window when flat. */
   CHAIN_SUBSCRIBE_MODE: 'position-first' as FyersWsChainSubscribeMode,
   ATM_STRIKE_WINDOW: 2,
