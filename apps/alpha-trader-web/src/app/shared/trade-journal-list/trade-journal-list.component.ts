@@ -121,7 +121,8 @@ import { TradeJournalEntry } from '../../core/models/deck.models';
 })
 export class TradeJournalListComponent implements OnInit, OnDestroy {
   private readonly api = inject(DeckApiService);
-  private sub: Subscription | null = null;
+  private pollSub: Subscription | null = null;
+  private requestSub: Subscription | null = null;
   private symbolValue: string | undefined;
 
   @Input() set symbol(value: string | null | undefined) {
@@ -132,12 +133,9 @@ export class TradeJournalListComponent implements OnInit, OnDestroy {
   @Input() set tabActive(active: boolean) {
     this.active = active;
     if (active) {
-      this.load();
-      this.sub?.unsubscribe();
-      this.sub = interval(60_000).subscribe(() => this.load());
+      this.startPolling();
     } else {
-      this.sub?.unsubscribe();
-      this.sub = null;
+      this.stopPolling();
     }
   }
 
@@ -149,13 +147,12 @@ export class TradeJournalListComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     if (this.active) {
-      this.load();
-      this.sub = interval(60_000).subscribe(() => this.load());
+      this.startPolling();
     }
   }
 
   ngOnDestroy(): void {
-    this.sub?.unsubscribe();
+    this.stopPolling();
   }
 
   formatFetchedAt(iso: string): string {
@@ -172,7 +169,8 @@ export class TradeJournalListComponent implements OnInit, OnDestroy {
 
   private load(): void {
     this.error.set(null);
-    this.api.getJournal(this.symbolValue).subscribe({
+    this.requestSub?.unsubscribe();
+    this.requestSub = this.api.getJournal(this.symbolValue).subscribe({
       next: (res) => {
         this.entries.set(res.entries);
         this.fetchedAt.set(res.fetchedAt);
@@ -181,5 +179,18 @@ export class TradeJournalListComponent implements OnInit, OnDestroy {
         this.error.set(err?.error?.error || err?.message || 'Journal fetch failed');
       },
     });
+  }
+
+  private startPolling(): void {
+    this.stopPolling();
+    this.load();
+    this.pollSub = interval(60_000).subscribe(() => this.load());
+  }
+
+  private stopPolling(): void {
+    this.pollSub?.unsubscribe();
+    this.pollSub = null;
+    this.requestSub?.unsubscribe();
+    this.requestSub = null;
   }
 }

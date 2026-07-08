@@ -1,7 +1,17 @@
 import { CommonModule } from '@angular/common';
 import { DecimalPipe } from '@angular/common';
-import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import {
+  Component,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import {
   AutoExitSnapshot,
   DeckLiveTick,
@@ -418,9 +428,10 @@ type AutoExitGuardDetail = NonNullable<
     `,
   ],
 })
-export class AutoExitPanelComponent implements OnInit {
+export class AutoExitPanelComponent implements OnInit, OnDestroy {
   private readonly api = inject(DeckApiService);
   private readonly notify = inject(NotificationService);
+  private requestSub: Subscription | null = null;
 
   readonly guardDetail = input<AutoExitGuardDetail | null | undefined>(null);
   readonly saved = output<AutoExitSnapshot>();
@@ -430,10 +441,16 @@ export class AutoExitPanelComponent implements OnInit {
   readonly guardStatus = computed(() => this.guardDetail()?.status ?? null);
 
   ngOnInit(): void {
-    this.api.getAutoExit().subscribe({
+    this.requestSub?.unsubscribe();
+    this.requestSub = this.api.getAutoExit().subscribe({
       next: (s) => this.snapshot.set(s),
       error: (err) => this.notify.error(err?.message || 'Failed to load auto-exit'),
     });
+  }
+
+  ngOnDestroy(): void {
+    this.requestSub?.unsubscribe();
+    this.requestSub = null;
   }
 
   statusClass(): string {
@@ -471,7 +488,8 @@ export class AutoExitPanelComponent implements OnInit {
   }
 
   patch(patch: Partial<AutoExitSnapshot>): void {
-    this.api.patchAutoExit(patch).subscribe({
+    this.requestSub?.unsubscribe();
+    this.requestSub = this.api.patchAutoExit(patch).subscribe({
       next: (s) => {
         this.snapshot.set(s);
         this.saved.emit(s);

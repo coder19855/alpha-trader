@@ -4,6 +4,7 @@ import {
   Component,
   Input,
   OnChanges,
+  OnDestroy,
   SimpleChanges,
   ViewChild,
   effect,
@@ -380,7 +381,7 @@ const DEFAULT_ON_LAYER_IDS = new Set([
     `,
   ],
 })
-export class DeckChartsComponent implements AfterViewInit, OnChanges {
+export class DeckChartsComponent implements AfterViewInit, OnChanges, OnDestroy {
   @ViewChild('spotChart') spotChart?: SpotChartComponent;
 
   readonly layers = CHART_LAYER_DEFS;
@@ -395,6 +396,9 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
     ),
   );
   readonly hoveredPatternKey = signal<string | null>(null);
+  private pendingMountFrameId: number | null = null;
+  private pendingRefreshFrameId: number | null = null;
+  private pendingRefreshTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   @Input() spotCandles5m: Candle[] = [];
   @Input() spotCandles15m: Candle[] = [];
@@ -433,6 +437,10 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
     if (this.tabActive && this.hasChartData()) this.scheduleChartMount();
   }
 
+  ngOnDestroy(): void {
+    this.clearScheduledChartMount();
+  }
+
   hasChartData(): boolean {
     return (
       this.spotCandles5m.length > 0 ||
@@ -445,12 +453,33 @@ export class DeckChartsComponent implements AfterViewInit, OnChanges {
 
   /** Mirrors Opstra: remount only after the charts tab panel is visible and sized. */
   private scheduleChartMount(): void {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    this.clearScheduledChartMount();
+    this.pendingMountFrameId = requestAnimationFrame(() => {
+      this.pendingMountFrameId = null;
+      this.pendingRefreshFrameId = requestAnimationFrame(() => {
+        this.pendingRefreshFrameId = null;
         this.spotChart?.refresh();
-        window.setTimeout(() => this.spotChart?.refresh(), 120);
+        this.pendingRefreshTimeoutId = window.setTimeout(() => {
+          this.pendingRefreshTimeoutId = null;
+          this.spotChart?.refresh();
+        }, 120);
       });
     });
+  }
+
+  private clearScheduledChartMount(): void {
+    if (this.pendingMountFrameId != null) {
+      cancelAnimationFrame(this.pendingMountFrameId);
+      this.pendingMountFrameId = null;
+    }
+    if (this.pendingRefreshFrameId != null) {
+      cancelAnimationFrame(this.pendingRefreshFrameId);
+      this.pendingRefreshFrameId = null;
+    }
+    if (this.pendingRefreshTimeoutId != null) {
+      clearTimeout(this.pendingRefreshTimeoutId);
+      this.pendingRefreshTimeoutId = null;
+    }
   }
 
   setChartStyle(style: SpotChartStyle): void {

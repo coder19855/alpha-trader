@@ -750,6 +750,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   private readonly stream = inject(DeckStreamService);
   private readonly notify = inject(NotificationService);
   private readonly deckAlerts = inject(DeckAlertService);
+  private settingsRequestSub: Subscription | null = null;
   private httpSub: Subscription | null = null;
   private streamSub: Subscription | null = null;
   private reloadSub: Subscription | null = null;
@@ -794,7 +795,8 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.deckApi.getSettings().subscribe({
+    this.settingsRequestSub?.unsubscribe();
+    this.settingsRequestSub = this.deckApi.getSettings().subscribe({
       next: (s) => this.settings.set(s),
       error: (err) =>
         this.notify.error(err?.message || 'Failed to load settings'),
@@ -802,9 +804,11 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.httpSub?.unsubscribe();
-    this.streamSub?.unsubscribe();
+    this.settingsRequestSub?.unsubscribe();
+    this.settingsRequestSub = null;
+    this.stopLiveSubscriptions();
     this.reloadSub?.unsubscribe();
+    this.reloadSub = null;
     this.optionPoll.stop();
   }
 
@@ -824,18 +828,22 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
 
   onStyleChange(style: TradingStyle): void {
     this.ctx.setStyle(style);
-    this.deckApi.patchSettings({ tradingStyle: style }).subscribe({
-      next: (s) => {
-        this.settings.set(s);
-        this.syncStyleFromSettings(s);
-      },
-      error: (err) =>
-        this.notify.error(err?.error?.error || err.message || 'Update failed'),
-    });
+    this.settingsRequestSub?.unsubscribe();
+    this.settingsRequestSub = this.deckApi
+      .patchSettings({ tradingStyle: style })
+      .subscribe({
+        next: (s) => {
+          this.settings.set(s);
+          this.syncStyleFromSettings(s);
+        },
+        error: (err) =>
+          this.notify.error(err?.error?.error || err.message || 'Update failed'),
+      });
   }
 
   patchSetting(field: string, value: string): void {
-    this.deckApi.patchSettings({ [field]: value }).subscribe({
+    this.settingsRequestSub?.unsubscribe();
+    this.settingsRequestSub = this.deckApi.patchSettings({ [field]: value }).subscribe({
       next: (s) => {
         this.settings.set(s);
         this.syncStyleFromSettings(s);
@@ -973,11 +981,21 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     this.ctx.setStyle(s.tradingStyle as TradingStyle);
   }
 
-  private reload(symbol: string, style: string): void {
+  private stopLiveSubscriptions(): void {
     this.httpSub?.unsubscribe();
+    this.httpSub = null;
     this.streamSub?.unsubscribe();
-    this.error.set(null);
+    this.streamSub = null;
+    this.clearChartPatchWork();
+  }
+
+  private clearChartPatchWork(): void {
     this.pendingChartPatch = null;
+  }
+
+  private reload(symbol: string, style: string): void {
+    this.stopLiveSubscriptions();
+    this.error.set(null);
     this.tick.set(null);
     this.deckAlerts.reset();
 
@@ -1060,6 +1078,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       error: (err: Error) => {
         this.deckReload.markFinished();
         this.ctx.updateTracker({ streamStatus: 'disconnected' });
+        this.clearChartPatchWork();
         if (!this.tick()) {
           const message = err.message || 'Stream failed';
           this.error.set(message);
@@ -1075,6 +1094,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       ...(this.pendingChartPatch ?? {}),
       ...patch,
     });
+    const hasTick = !!this.tick();
     this.tick.update((prev) => {
       if (!prev) return prev;
       const next = this.withLiveChartCandles({
@@ -1084,6 +1104,9 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
       this.deckAlerts.evaluate(prev, next);
       return next;
     });
+    if (hasTick) {
+      this.clearChartPatchWork();
+    }
     if (patch.lastPrice != null && Number.isFinite(patch.lastPrice)) {
       this.ctx.updateTracker({
         price: patch.lastPrice,
@@ -1100,9 +1123,11 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
 
   private applyTick(data: DeckLiveTick): void {
     const prev = this.tick();
+    const pendingChartPatch = this.pendingChartPatch;
+    this.clearChartPatchWork();
     const next = this.withLiveChartCandles({
       ...(prev ?? {}),
-      ...(this.pendingChartPatch ?? {}),
+      ...(pendingChartPatch ?? {}),
       ...data,
       signalCalculatedAt:
         data.signalCalculatedAt ??
