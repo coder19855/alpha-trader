@@ -98,16 +98,27 @@ let mongoProcessSafetyHandlersInstalled = false;
 
 const onMongoUnhandledRejection = (reason: unknown) => {
   if (!isMongoTransientNetworkError(reason)) return;
-  mongoProcessSafetyLog?.warn(
-    { err: reason },
-    'Suppressed unhandled MongoDB network rejection',
-  );
+  if (mongoProcessSafetyLog) {
+    mongoProcessSafetyLog.warn(
+      { err: reason },
+      'Suppressed unhandled MongoDB network rejection',
+    );
+    return;
+  }
+  console.error('Suppressed unhandled MongoDB network rejection', reason);
 };
 
 const onMongoUncaughtException = (err: unknown) => {
   if (!isMongoTransientNetworkError(err)) return;
-  mongoProcessSafetyLog?.warn(
-    { err },
+  if (mongoProcessSafetyLog) {
+    mongoProcessSafetyLog.warn(
+      { err },
+      'Suppressed uncaught MongoDB network exception — process kept alive',
+    );
+    return;
+  }
+  console.error(
     'Suppressed uncaught MongoDB network exception — process kept alive',
+    err,
   );
 };

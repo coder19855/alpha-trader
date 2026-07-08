@@ -3,7 +3,6 @@ export type SocketEventHandler = (...args: unknown[]) => void;
 export interface ListenerCleanupCapable {
   off?(event: string, handler: SocketEventHandler): void;
   removeListener?(event: string, handler: SocketEventHandler): void;
-  removeAllListeners?(event?: string): void;
 }
 
 export function detachSocketHandler(
@@ -17,9 +16,5 @@ export function detachSocketHandler(
   }
   if (typeof socket.removeListener === 'function') {
     socket.removeListener(event, handler);
-    return;
-  }
-  if (typeof socket.removeAllListeners === 'function') {
-    socket.removeAllListeners(event);
   }
 }
