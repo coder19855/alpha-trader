@@ -28,6 +28,7 @@ export interface MarketStreamStats {
   lastMessageAt: string | null;
   lastError: string | null;
   quoteCache: QuoteCacheStats;
+  memoryUsage: { rss: number; heapUsed: number; external: number };
 }
 
 export class FyersMarketStreamManager {
@@ -50,6 +51,9 @@ export class FyersMarketStreamManager {
   private lastMessageAt: number | null = null;
   private lastError: string | null = null;
   private accessTokenKey = '';
+  private reconcileTimer: ReturnType<typeof setTimeout> | null = null;
+  private tickFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingTickSymbols = new Set<string>();
 
   constructor(
     private readonly log: FastifyBaseLogger,
@@ -134,6 +138,8 @@ export class FyersMarketStreamManager {
     this.connected = false;
     this.activeSymbols.clear();
     this.accessTokenKey = '';
+    this.stopPeriodicReconcile();
+    this.cancelPendingTicks();
     if (!socket) return;
     this.detachSocketHandlers(socket);
     try {
@@ -149,6 +155,7 @@ export class FyersMarketStreamManager {
 
   getStats(enabled: boolean): MarketStreamStats {
     const desired = this.computeDesiredSymbols();
+    const mem = process.memoryUsage();
 
     return {
       enabled,
@@ -163,6 +170,7 @@ export class FyersMarketStreamManager {
         : null,
       lastError: this.lastError,
       quoteCache: getQuoteCache().getStats(),
+      memoryUsage: { rss: mem.rss, heapUsed: mem.heapUsed, external: mem.external },
     };
   }
 
@@ -198,6 +206,7 @@ export class FyersMarketStreamManager {
         this.socket.unsubscribe(unsubscribe);
         for (const symbol of unsubscribe) {
           this.activeSymbols.delete(symbol);
+          getQuoteCache().evictSymbol(symbol);
         }
         this.log.debug(
           { removed: unsubscribe.length, total: this.activeSymbols.size },
@@ -228,6 +237,56 @@ export class FyersMarketStreamManager {
     }
   }
 
+  private scheduleTickFlush(symbols: string[]): void {
+    for (const s of symbols) this.pendingTickSymbols.add(s);
+    if (this.tickFlushTimer !== null) return;
+    this.tickFlushTimer = setTimeout(() => {
+      this.tickFlushTimer = null;
+      if (this.pendingTickSymbols.size) {
+        const batch = [...this.pendingTickSymbols];
+        this.pendingTickSymbols.clear();
+        notifyQuoteTicksUpdated(batch);
+      }
+    }, FYERS_MARKET_STREAM_DEFAULTS.TICK_COALESCE_MS);
+    this.tickFlushTimer?.unref?.();
+  }
+
+  private cancelPendingTicks(): void {
+    if (this.tickFlushTimer !== null) {
+      clearTimeout(this.tickFlushTimer);
+      this.tickFlushTimer = null;
+    }
+    this.pendingTickSymbols.clear();
+  }
+
+  private startPeriodicReconcile(): void {
+    this.stopPeriodicReconcile();
+    const schedule = () => {
+      const base = FYERS_MARKET_STREAM_DEFAULTS.RECONCILE_BASE_MS;
+      const jitter = FYERS_MARKET_STREAM_DEFAULTS.RECONCILE_JITTER_MS;
+      const delay = base + Math.round(Math.random() * jitter * 2 - jitter);
+      this.reconcileTimer = setTimeout(() => {
+        if (this.socket && this.connected) {
+          this.log.debug(
+            { active: this.activeSymbols.size },
+            'Periodic WS symbol reconciliation',
+          );
+          this.reconcileSubscriptions(false);
+        }
+        schedule();
+      }, delay);
+      this.reconcileTimer?.unref?.();
+    };
+    schedule();
+  }
+
+  private stopPeriodicReconcile(): void {
+    if (this.reconcileTimer !== null) {
+      clearTimeout(this.reconcileTimer);
+      this.reconcileTimer = null;
+    }
+  }
+
   private attachSocketHandlers(socket: DataSocketLike): void {
     const onConnect = () => {
       if (this.socket !== socket) return;
@@ -238,6 +297,7 @@ export class FyersMarketStreamManager {
         socket.mode(socket.LiteMode);
       }
       this.reconcileSubscriptions(true);
+      this.startPeriodicReconcile();
     };
 
     const onMessage = (message: unknown) => {
@@ -252,7 +312,7 @@ export class FyersMarketStreamManager {
         }
       }
       if (updatedSymbols.length) {
-        notifyQuoteTicksUpdated(updatedSymbols);
+        this.scheduleTickFlush(updatedSymbols);
       }
     };
 
@@ -267,6 +327,7 @@ export class FyersMarketStreamManager {
       if (this.socket !== socket) return;
       this.connected = false;
       this.activeSymbols.clear();
+      this.stopPeriodicReconcile();
       this.log.info('Fyers market data WebSocket closed');
     };
 

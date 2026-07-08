@@ -61,6 +61,11 @@ describe('FyersOrderStreamManager', () => {
   beforeEach(() => {
     clearOpenPositionsCache();
     jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('bootstraps on connect and applies position WS updates', async () => {
@@ -158,5 +163,50 @@ describe('FyersOrderStreamManager', () => {
     expect(first.listenerCount('close')).toBe(0);
     expect(manager.isConnected()).toBe(true);
     expect(isOpenPositionsWsLive()).toBe(true);
+  });
+
+  it('runs periodic reconciliation bootstrap after connect and clears on disconnect', async () => {
+    const socket = createMockSocket();
+    const bootstrap = jest.fn().mockResolvedValue(undefined);
+
+    const manager = new FyersOrderStreamManager(
+      log,
+      undefined,
+      bootstrap,
+      () => socket,
+    );
+
+    await manager.connect('token-abc', 'app-id');
+    socket.trigger('connect');
+
+    // Flush the bootstrap promise chain (then/catch/finally = multiple microtask ticks)
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // bootstrap called once on connect
+    expect(bootstrap).toHaveBeenCalledTimes(1);
+
+    // Advance well past REST_RECONCILE_MS (300s max + 60s jitter) to trigger periodic reconcile
+    jest.advanceTimersByTime(400_000);
+    // Flush promise chain for periodic bootstrap
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // bootstrap should be called again by the periodic timer
+    expect(bootstrap.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+    await manager.disconnect();
+
+    const callsAfterDisconnect = bootstrap.mock.calls.length;
+    jest.advanceTimersByTime(600_000);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // No additional calls after disconnect
+    expect(bootstrap.mock.calls.length).toBe(callsAfterDisconnect);
   });
 });
