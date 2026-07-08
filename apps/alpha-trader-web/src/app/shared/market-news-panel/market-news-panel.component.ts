@@ -307,7 +307,8 @@ import { MarketNewsPayload } from '../../core/models/deck.models';
 })
 export class MarketNewsPanelComponent implements OnInit, OnDestroy {
   private readonly api = inject(DeckApiService);
-  private sub: Subscription | null = null;
+  private pollSub: Subscription | null = null;
+  private requestSub: Subscription | null = null;
   private symbolValue = 'NSE:NIFTY50-INDEX';
 
   @Input() set symbol(value: string | null | undefined) {
@@ -320,8 +321,7 @@ export class MarketNewsPanelComponent implements OnInit, OnDestroy {
     if (active) {
       this.startPolling();
     } else {
-      this.sub?.unsubscribe();
-      this.sub = null;
+      this.stopPolling();
     }
   }
 
@@ -345,7 +345,7 @@ export class MarketNewsPanelComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.sub?.unsubscribe();
+    this.stopPolling();
   }
 
   reload(): void {
@@ -388,15 +388,24 @@ export class MarketNewsPanelComponent implements OnInit, OnDestroy {
   }
 
   private startPolling(): void {
-    this.sub?.unsubscribe();
+    this.stopPolling();
     this.fetch(false);
-    this.sub = interval(120_000).subscribe(() => this.fetch(false));
+    this.pollSub = interval(120_000).subscribe(() => this.fetch(false));
+  }
+
+  private stopPolling(): void {
+    this.pollSub?.unsubscribe();
+    this.pollSub = null;
+    this.requestSub?.unsubscribe();
+    this.requestSub = null;
+    this.loading.set(false);
   }
 
   private fetch(refresh: boolean): void {
     this.loading.set(true);
     this.error.set(null);
-    this.api.getNews(this.symbolValue, refresh).subscribe({
+    this.requestSub?.unsubscribe();
+    this.requestSub = this.api.getNews(this.symbolValue, refresh).subscribe({
       next: (res) => {
         this.loading.set(false);
         this.payload.set(res);
