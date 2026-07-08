@@ -36,23 +36,42 @@ export function runDetached(
   });
 }
 
+let processAsyncGuardsLog: Pick<FastifyBaseLogger, 'warn' | 'error'> | undefined;
+let processAsyncGuardsInstalled = false;
+
+const reportProcessAsyncGuardError = (kind: string, err: unknown) => {
+  const payload = { err, kind };
+  if (processAsyncGuardsLog) {
+    processAsyncGuardsLog.warn(payload, kind);
+    return;
+  }
+  console.error(kind, err);
+};
+
+const onUnhandledRejection = (reason: unknown) => {
+  reportProcessAsyncGuardError('Unhandled promise rejection', reason);
+};
+
+const onUncaughtException = (err: unknown) => {
+  reportProcessAsyncGuardError('Uncaught exception', err);
+};
+
 export function installProcessAsyncGuards(
   log?: Pick<FastifyBaseLogger, 'warn' | 'error'>,
-): void {
-  const report = (kind: string, err: unknown) => {
-    const payload = { err, kind };
-    if (log) {
-      log.warn(payload, kind);
-      return;
-    }
-    console.error(kind, err);
-  };
+): () => void {
+  processAsyncGuardsLog = log;
+  if (!processAsyncGuardsInstalled) {
+    process.on('unhandledRejection', onUnhandledRejection);
+    process.on('uncaughtException', onUncaughtException);
+    processAsyncGuardsInstalled = true;
+  }
+  return uninstallProcessAsyncGuards;
+}
 
-  process.on('unhandledRejection', (reason) => {
-    report('Unhandled promise rejection', reason);
-  });
-
-  process.on('uncaughtException', (err) => {
-    report('Uncaught exception', err);
-  });
+export function uninstallProcessAsyncGuards(): void {
+  if (!processAsyncGuardsInstalled) return;
+  process.off('unhandledRejection', onUnhandledRejection);
+  process.off('uncaughtException', onUncaughtException);
+  processAsyncGuardsInstalled = false;
+  processAsyncGuardsLog = undefined;
 }

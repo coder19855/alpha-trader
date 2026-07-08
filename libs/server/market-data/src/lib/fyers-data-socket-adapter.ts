@@ -1,6 +1,7 @@
 import { fyersDataSocket } from 'fyers-api-v3';
+import { ListenerCleanupCapable } from './socket-listener-cleanup.js';
 
-export interface DataSocketLike {
+export interface DataSocketLike extends ListenerCleanupCapable {
   on(event: string, cb: (...args: unknown[]) => void): void;
   connect(): void;
   subscribe(symbols: string[], depth?: boolean): void;
