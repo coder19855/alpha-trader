@@ -1,6 +1,7 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import tokenStatusRoutes, {
   _resetTokenCacheForTesting,
+  _waitForRefreshForTesting,
 } from './token-status';
 
 type FyersMock = { isTokenValid: () => Promise<boolean> };
@@ -53,8 +54,8 @@ describe('GET /api/token-status', () => {
       // First request – triggers background refresh
       await server.inject({ method: 'GET', url: '/api/token-status' });
 
-      // Wait for the background refresh to settle
-      await new Promise((res) => setTimeout(res, 50));
+      // Wait for the background refresh to settle reliably
+      await _waitForRefreshForTesting();
 
       // Second request – should hit cache
       const response = await server.inject({

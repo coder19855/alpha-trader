@@ -9,20 +9,32 @@ interface TokenCache {
   checkedAt: number;
 }
 
+/**
+ * Module-level cache is intentional: this server runs as a single Node.js
+ * process, so one shared cache per process is exactly what we want.
+ * Use `_resetTokenCacheForTesting` to reset between unit tests.
+ */
 let tokenCache: TokenCache | null = null;
 let refreshInFlight = false;
+let refreshPromise: Promise<void> | null = null;
 
 /** Exposed only for unit tests — do not call in production code. */
 export function _resetTokenCacheForTesting(): void {
   tokenCache = null;
   refreshInFlight = false;
+  refreshPromise = null;
+}
+
+/** Exposed only for unit tests — awaits any in-flight background refresh. */
+export function _waitForRefreshForTesting(): Promise<void> {
+  return refreshPromise ?? Promise.resolve();
 }
 
 function triggerBackgroundRefresh(fastify: FastifyInstance): void {
   if (refreshInFlight) return;
   refreshInFlight = true;
 
-  void (async () => {
+  refreshPromise = (async () => {
     try {
       const isTokenValid = await withTimeout(
         fastify.fyers.isTokenValid(),
@@ -30,7 +42,8 @@ function triggerBackgroundRefresh(fastify: FastifyInstance): void {
         'token-status validation',
       );
       tokenCache = { isTokenValid, checkedAt: Date.now() };
-    } catch {
+    } catch (err) {
+      fastify.log.warn({ err }, 'token-status background refresh failed');
       if (!tokenCache) {
         tokenCache = { isTokenValid: false, checkedAt: Date.now() };
       }
@@ -49,6 +62,10 @@ export default async function tokenStatusRoutes(fastify: FastifyInstance) {
     }
 
     const optimistic = tokenCache?.isTokenValid ?? false;
+    // Deliberately return the last-known (possibly stale) value while the
+    // background refresh runs. This keeps the response fast even when the
+    // broker is slow or briefly unavailable. The freshest value will be
+    // in the cache on the next request once the refresh settles.
     triggerBackgroundRefresh(fastify);
 
     return reply.send({ isTokenValid: optimistic, cached: false, pendingRefresh: true });

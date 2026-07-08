@@ -11,10 +11,11 @@ export interface LoginStatus {
 export class AuthService {
   private readonly http = inject(HttpClient);
   readonly fyersValid = signal(false);
-  /** True while the first login check is in flight; false once resolved or errored. */
-  readonly authChecking = signal(true);
+  /** True while a login check is actively in flight; false otherwise. */
+  readonly authChecking = signal(false);
 
   checkLogin(): Observable<LoginStatus> {
+    this.authChecking.set(true);
     return this.http.get<LoginStatus>('/api/login').pipe(
       tap((res) => this.fyersValid.set(Boolean(res.hasActiveToken))),
       finalize(() => this.authChecking.set(false)),
