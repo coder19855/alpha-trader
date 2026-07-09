@@ -65,6 +65,6 @@ describe('DeckStreamHub', () => {
         tradingStyle: 'INTRADAY',
       }),
     ).toBe(0);
-    expect((hub as any).channels.size).toBe(0);
+    expect(hub.getChannelCount()).toBe(0);
   });
 });

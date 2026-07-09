@@ -126,6 +126,10 @@ export class DeckStreamHub {
     return this.channels.get(key)?.subscribers.size ?? 0;
   }
 
+  getChannelCount(): number {
+    return this.channels.size;
+  }
+
   seedChartCandles(
     params: DeckStreamChannelParams,
     candles: {
