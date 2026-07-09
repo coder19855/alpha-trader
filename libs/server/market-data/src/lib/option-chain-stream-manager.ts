@@ -64,6 +64,10 @@ function normalizeTradingStyle(raw?: string): TradingStyle {
   return TradingStyle.Intraday;
 }
 
+function optionChainChannelKey(params: OptionChainStreamParams): string {
+  return `${params.symbol.trim()}:${normalizeTradingStyle(params.tradingStyle)}`;
+}
+
 function medianStep(strikes: number[]): number {
   const sorted = [...new Set(strikes)].sort((a, b) => a - b);
   const diffs: number[] = [];
@@ -494,7 +498,10 @@ export class OptionChainStreamHub {
     const normalizedStyle = normalizeTradingStyle(
       typeof tradingStyle === 'string' ? tradingStyle : tradingStyle,
     );
-    const key = `${symbol.trim()}:${normalizedStyle}`;
+    const key = optionChainChannelKey({
+      symbol,
+      tradingStyle: normalizedStyle,
+    });
     const channel = this.channels.get(key);
     if (!channel) return;
 
@@ -513,7 +520,7 @@ export class OptionChainStreamHub {
       tradingStyle: normalizeTradingStyle(params.tradingStyle),
       paAction: params.paAction?.trim() || undefined,
     };
-    const key = `${normalized.symbol}:${normalized.tradingStyle}`;
+    const key = optionChainChannelKey(normalized);
     let channel = this.channels.get(key);
     if (!channel) {
       channel = {
@@ -1010,7 +1017,6 @@ export class OptionChainStreamHub {
     this.stopHeartbeat(channel);
     this.stopRefresh(channel);
     this.syncOptionSymbols(channel, []);
-    const key = `${channel.params.symbol.trim()}:${normalizeTradingStyle(channel.params.tradingStyle)}`;
-    this.channels.delete(key);
+    this.channels.delete(optionChainChannelKey(channel.params));
   }
 }
