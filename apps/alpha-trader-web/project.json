@@ -39,7 +39,12 @@
             }
           ],
           "outputHashing": "all",
-          "serviceWorker": "apps/alpha-trader-web/ngsw-config.json"
+          "serviceWorker": "apps/alpha-trader-web/ngsw-config.json",
+          "optimization": {
+            "fonts": {
+              "inline": false
+            }
+          }
         },
         "development": {
           "optimization": false,
