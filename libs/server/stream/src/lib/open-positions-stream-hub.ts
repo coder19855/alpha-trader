@@ -114,10 +114,7 @@ export class OpenPositionsStreamHub {
 
     return () => {
       channel?.subscribers.delete(subscriber.id);
-      if (channel && channel.subscribers.size === 0) {
-        this.stopChannelTimers(channel);
-        this.channels.delete(key);
-      }
+      if (channel) this.cleanupChannelIfIdle(channel);
     };
   }
 
@@ -162,6 +159,7 @@ export class OpenPositionsStreamHub {
         }
         subscriber.writeHeartbeat();
       }
+      this.cleanupChannelIfIdle(channel);
     }, 15_000);
     channel.heartbeatTimer.unref?.();
   }
@@ -233,6 +231,15 @@ export class OpenPositionsStreamHub {
         channel.subscribers.delete(id);
       }
     }
+    this.cleanupChannelIfIdle(channel);
+  }
+
+  private cleanupChannelIfIdle(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): void {
+    if (channel.subscribers.size > 0) return;
+    this.stopChannelTimers(channel);
+    this.channels.delete(openPositionsStreamChannelKey(channel.params));
   }
 
   private async buildTick(

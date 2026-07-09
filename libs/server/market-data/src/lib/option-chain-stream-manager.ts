@@ -544,12 +544,7 @@ export class OptionChainStreamHub {
 
     return () => {
       channel?.subscribers.delete(subscriber.id);
-      if (channel && channel.subscribers.size === 0) {
-        this.stopHeartbeat(channel);
-        this.stopRefresh(channel);
-        this.syncOptionSymbols(channel, []);
-        this.channels.delete(key);
-      }
+      if (channel) this.cleanupChannelIfIdle(channel);
     };
   }
 
@@ -588,6 +583,7 @@ export class OptionChainStreamHub {
         }
         subscriber.writeHeartbeat();
       }
+      this.cleanupChannelIfIdle(channel);
     }, 15_000);
     channel.heartbeatTimer.unref?.();
   }
@@ -1004,5 +1000,17 @@ export class OptionChainStreamHub {
         channel.subscribers.delete(id);
       }
     }
+    this.cleanupChannelIfIdle(channel);
+  }
+
+  private cleanupChannelIfIdle(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): void {
+    if (channel.subscribers.size > 0) return;
+    this.stopHeartbeat(channel);
+    this.stopRefresh(channel);
+    this.syncOptionSymbols(channel, []);
+    const key = `${channel.params.symbol.trim()}:${normalizeTradingStyle(channel.params.tradingStyle)}`;
+    this.channels.delete(key);
   }
 }

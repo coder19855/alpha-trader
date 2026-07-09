@@ -109,11 +109,7 @@ export class DeckStreamHub {
 
     return () => {
       channel?.subscribers.delete(subscriber.id);
-      if (channel && channel.subscribers.size === 0) {
-        this.stopHeartbeat(channel);
-        this.stopSignalRefresh(channel);
-        this.channels.delete(key);
-      }
+      if (channel) this.cleanupChannelIfIdle(channel);
     };
   }
 
@@ -196,6 +192,7 @@ export class DeckStreamHub {
         }
         subscriber.writeHeartbeat();
       }
+      this.cleanupChannelIfIdle(channel);
     }, 15_000);
     channel.heartbeatTimer.unref?.();
   }
@@ -243,6 +240,7 @@ export class DeckStreamHub {
         channel.subscribers.delete(id);
       }
     }
+    this.cleanupChannelIfIdle(channel);
   }
 
   private async bootstrapChannel(
@@ -366,6 +364,15 @@ export class DeckStreamHub {
 
   private runDetached(task: Promise<unknown>, label: string): void {
     runDetached(task, this.log, label);
+  }
+
+  private cleanupChannelIfIdle(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): void {
+    if (channel.subscribers.size > 0) return;
+    this.stopHeartbeat(channel);
+    this.stopSignalRefresh(channel);
+    this.channels.delete(deckStreamChannelKey(channel.params));
   }
 
   private async sendPositionsUpdate(
