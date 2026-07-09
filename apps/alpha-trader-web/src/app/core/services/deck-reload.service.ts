@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 
-/** Cross-component hook: shell refresh button → full live deck reload. */
+/** Cross-component hook: shell refresh button → LiveDeck hard reload (HTTP refresh + stream reconnect, not REST-only). */
 @Injectable({ providedIn: 'root' })
 export class DeckReloadService {
   private readonly requested$ = new Subject<void>();

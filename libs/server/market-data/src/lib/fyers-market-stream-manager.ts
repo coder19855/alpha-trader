@@ -54,6 +54,8 @@ export class FyersMarketStreamManager {
   private reconcileTimer: ReturnType<typeof setTimeout> | null = null;
   private tickFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingTickSymbols = new Set<string>();
+  private connectStartedAt: number | null = null;
+  private firstLiveDataLogged = false;
 
   constructor(
     private readonly log: FastifyBaseLogger,
@@ -121,6 +123,8 @@ export class FyersMarketStreamManager {
     await this.disconnect();
 
     this.accessTokenKey = tokenKey;
+    this.connectStartedAt = Date.now();
+    this.firstLiveDataLogged = false;
     const auth = `${appId}:${accessToken}`;
     const socket = this.createSocket(auth, '', false);
     this.socket = socket;
@@ -138,6 +142,8 @@ export class FyersMarketStreamManager {
     this.connected = false;
     this.activeSymbols.clear();
     this.accessTokenKey = '';
+    this.connectStartedAt = null;
+    this.firstLiveDataLogged = false;
     this.stopPeriodicReconcile();
     this.cancelPendingTicks();
     if (!socket) return;
@@ -292,7 +298,14 @@ export class FyersMarketStreamManager {
       if (this.socket !== socket) return;
       this.connected = true;
       this.lastError = null;
-      this.log.info('Fyers market data WebSocket connected');
+      this.log.info(
+        {
+          connectLatencyMs: this.connectStartedAt
+            ? Date.now() - this.connectStartedAt
+            : undefined,
+        },
+        'Fyers market data WebSocket connected',
+      );
       if (resolveFyersWsLiteMode() && socket.LiteMode != null) {
         socket.mode(socket.LiteMode);
       }
@@ -311,6 +324,18 @@ export class FyersMarketStreamManager {
           updatedSymbols.push(tick.symbol);
         }
       }
+      if (updatedSymbols.length > 0 && !this.firstLiveDataLogged) {
+        this.firstLiveDataLogged = true;
+        this.log.info(
+          {
+            firstLiveDataLatencyMs: this.connectStartedAt
+              ? Date.now() - this.connectStartedAt
+              : undefined,
+            symbols: updatedSymbols.length,
+          },
+          'Fyers market data first live payload received',
+        );
+      }
       if (updatedSymbols.length) {
         this.scheduleTickFlush(updatedSymbols);
       }
@@ -327,6 +352,7 @@ export class FyersMarketStreamManager {
       if (this.socket !== socket) return;
       this.connected = false;
       this.activeSymbols.clear();
+      this.firstLiveDataLogged = false;
       this.stopPeriodicReconcile();
       this.log.info('Fyers market data WebSocket closed');
     };

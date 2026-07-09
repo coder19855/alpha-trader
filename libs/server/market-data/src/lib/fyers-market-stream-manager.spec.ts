@@ -146,6 +146,26 @@ describe('FyersMarketStreamManager', () => {
     await manager.disconnect();
   });
 
+  it('logs first live payload latency only once per connection', async () => {
+    const socket = createMockSocket();
+    const manager = new FyersMarketStreamManager(log, () => socket);
+    await manager.connect('token-abc', 'app-id');
+
+    socket.trigger('connect');
+    socket.trigger('message', { 'NSE:NIFTY50-INDEX': { ltp: 25000, ch: 0, chp: 0 } });
+    socket.trigger('message', { 'NSE:NIFTY50-INDEX': { ltp: 25001, ch: 0, chp: 0 } });
+
+    const infoCalls = (log.info as jest.Mock).mock.calls.filter(
+      ([, message]) => message === 'Fyers market data first live payload received',
+    );
+    expect(infoCalls).toHaveLength(1);
+    expect(infoCalls[0]?.[0]).toEqual(
+      expect.objectContaining({ firstLiveDataLatencyMs: expect.any(Number) }),
+    );
+
+    await manager.disconnect();
+  });
+
   it('evicts quote cache entries for unsubscribed symbols', async () => {
     const socket = createMockSocket();
     const manager = new FyersMarketStreamManager(log, () => socket);
