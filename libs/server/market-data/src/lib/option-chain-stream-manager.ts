@@ -64,6 +64,10 @@ function normalizeTradingStyle(raw?: string): TradingStyle {
   return TradingStyle.Intraday;
 }
 
+function optionChainChannelKey(params: OptionChainStreamParams): string {
+  return `${params.symbol.trim()}:${normalizeTradingStyle(params.tradingStyle)}`;
+}
+
 function medianStep(strikes: number[]): number {
   const sorted = [...new Set(strikes)].sort((a, b) => a - b);
   const diffs: number[] = [];
@@ -494,7 +498,10 @@ export class OptionChainStreamHub {
     const normalizedStyle = normalizeTradingStyle(
       typeof tradingStyle === 'string' ? tradingStyle : tradingStyle,
     );
-    const key = `${symbol.trim()}:${normalizedStyle}`;
+    const key = optionChainChannelKey({
+      symbol,
+      tradingStyle: normalizedStyle,
+    });
     const channel = this.channels.get(key);
     if (!channel) return;
 
@@ -513,7 +520,7 @@ export class OptionChainStreamHub {
       tradingStyle: normalizeTradingStyle(params.tradingStyle),
       paAction: params.paAction?.trim() || undefined,
     };
-    const key = `${normalized.symbol}:${normalized.tradingStyle}`;
+    const key = optionChainChannelKey(normalized);
     let channel = this.channels.get(key);
     if (!channel) {
       channel = {
@@ -544,12 +551,7 @@ export class OptionChainStreamHub {
 
     return () => {
       channel?.subscribers.delete(subscriber.id);
-      if (channel && channel.subscribers.size === 0) {
-        this.stopHeartbeat(channel);
-        this.stopRefresh(channel);
-        this.syncOptionSymbols(channel, []);
-        this.channels.delete(key);
-      }
+      if (channel) this.cleanupChannelIfIdle(channel);
     };
   }
 
@@ -588,6 +590,7 @@ export class OptionChainStreamHub {
         }
         subscriber.writeHeartbeat();
       }
+      this.cleanupChannelIfIdle(channel);
     }, 15_000);
     channel.heartbeatTimer.unref?.();
   }
@@ -1004,5 +1007,16 @@ export class OptionChainStreamHub {
         channel.subscribers.delete(id);
       }
     }
+    this.cleanupChannelIfIdle(channel);
+  }
+
+  private cleanupChannelIfIdle(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): void {
+    if (channel.subscribers.size > 0) return;
+    this.stopHeartbeat(channel);
+    this.stopRefresh(channel);
+    this.syncOptionSymbols(channel, []);
+    this.channels.delete(optionChainChannelKey(channel.params));
   }
 }
