@@ -320,11 +320,11 @@ export class PaSignalInsightsComponent {
         label: 'Strength',
         value: strength.value,
         tone:
-          strength.value === 'HIGH'
+          strength.value === 'CRITICAL' || strength.value === 'HIGH'
             ? 'positive'
-            : strength.value === 'LOW'
-              ? 'warn'
-              : 'neutral',
+            : strength.value === 'MEDIUM'
+              ? 'neutral'
+              : 'warn',
       });
     }
 

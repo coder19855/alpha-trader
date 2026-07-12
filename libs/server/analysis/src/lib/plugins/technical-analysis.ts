@@ -30,7 +30,7 @@ import {
   VolatilityRegime,
 } from '@alpha-trader/server-shared';
 import { normalizeStopLoss } from '../technical-analysis/stop-utils.js';
-import { BiasSignal, PriceActionTradeRecommendation, Swing } from '@alpha-trader/server-shared';
+import { BiasSignal, PriceActionTradeRecommendation, SignalStrength, Swing } from '@alpha-trader/server-shared';
 import { TradingStyle } from '@alpha-trader/server-shared';
 import { StructureType } from '@alpha-trader/server-shared';
 
@@ -1343,8 +1343,9 @@ export default fp(
       });
 
       // Strength classification
-      let strength: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
-      if (finalConfidence >= 72 && aligned >= 2) strength = 'HIGH';
+      let strength: SignalStrength = 'LOW';
+      if (finalConfidence >= 85 && aligned >= 2) strength = 'CRITICAL';
+      else if (finalConfidence >= 72 && aligned >= 2) strength = 'HIGH';
       else if (finalConfidence >= 48) strength = 'MEDIUM';
 
       // For NO-TRADE, give a weak strength only if close

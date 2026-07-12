@@ -117,7 +117,7 @@ export interface CandlestickPatternResult {
   scoreBoost: number;
 }
 
-export type SignalStrength = 'HIGH' | 'MEDIUM' | 'LOW';
+export type SignalStrength = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 export type StructureDirection = 'bullish' | 'bearish' | 'neutral';
 
