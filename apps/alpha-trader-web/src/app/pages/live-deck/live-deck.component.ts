@@ -127,12 +127,1048 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
             [optionLive]="!!optionPoll.data()"
             [flowMode]="data.flowMode ?? 'pa-only'"
           />
-...TRUNCATED...
+          <nav class="signal-subtabs" aria-label="Signal views">
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="signalSubTab() === 'priceAction'"
+              (click)="signalSubTab.set('priceAction')"
+            >
+              Price action
+            </button>
+            <button
+              type="button"
+              class="signal-subtab"
+              [class.active]="signalSubTab() === 'optionChain'"
+              (click)="signalSubTab.set('optionChain')"
+            >
+              Option chain
+            </button>
+          </nav>
+
+          @if (signalSubTab() === 'priceAction') {
+            <app-signal-readout-help />
+            @if (data.chartVetoed) {
+              <p class="veto-score-notice" role="status">
+                Chart veto active — {{ data.vetoReason || 'structure block' }}
+              </p>
+            }
+
+            <section class="action-card" [class.conflict]="data.chartVetoed">
+              <div class="action-main">
+                <span class="action-label">{{ data.action }}</span>
+                <div class="entry-conviction">
+                  <span class="entry-conviction-label">Entry</span>
+                  <span class="entry-conviction-value">
+                    <span
+                      class="conviction"
+                      [class.at-threshold]="
+                        data.conviction >= data.entryThreshold
+                      "
+                      [class.below-threshold]="
+                        data.conviction < data.entryThreshold
+                      "
+                    >
+                      {{ data.conviction }}%
+                    </span>
+                    <span class="conviction-threshold"
+                      >/ {{ data.entryThreshold }}%</span
+                    >
+                  </span>
+                </div>
+              </div>
+              <p class="status-line">{{ data.bias || '—' }}</p>
+              <p class="signal-calc-stamp" role="status">
+                Signal calculated:
+                <time [attr.datetime]="data.signalCalculatedAt ?? data.asOf">
+                  {{
+                    formatSignalCalculatedAt(
+                      data.signalCalculatedAt ?? data.asOf
+                    )
+                  }}
+                </time>
+              </p>
+              <app-market-regime [regime]="data.marketRegime" />
+            </section>
+
+            <nav
+              class="signal-subtabs pa-signal-subtabs"
+              aria-label="Price action views"
+            >
+              <button
+                type="button"
+                class="signal-subtab"
+                [class.active]="paSubTab() === 'overview'"
+                (click)="paSubTab.set('overview')"
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                class="signal-subtab"
+                [class.active]="paSubTab() === 'timeframes'"
+                (click)="paSubTab.set('timeframes')"
+              >
+                Timeframes
+              </button>
+              <button
+                type="button"
+                class="signal-subtab"
+                [class.active]="paSubTab() === 'context'"
+                (click)="paSubTab.set('context')"
+              >
+                Context
+              </button>
+              <button
+                type="button"
+                class="signal-subtab"
+                [class.active]="paSubTab() === 'brief'"
+                (click)="paSubTab.set('brief')"
+              >
+                Brief
+              </button>
+            </nav>
+
+            @if (paSubTab() === 'overview') {
+              <div class="pa-signal-subpanel">
+                <app-pa-gauge
+                  [reading]="data.gauges.priceAction"
+                  [paPercent]="
+                    data.gauges.priceAction.percent ||
+                    data.lanes.priceActionPercent
+                  "
+                  [combinedPercent]="data.lanes.combinedPercent"
+                  [hideCombinedLane]="data.flowMode === 'pa-only'"
+                  [weightedBaseConviction]="
+                    data.weightedBaseConviction ?? data.lanes.combinedPercent
+                  "
+                  [entryConviction]="data.conviction"
+                  [convictionBonuses]="data.convictionBonuses ?? []"
+                  [paConvictionBonuses]="data.paConvictionBonuses ?? []"
+                  [paBaseConviction]="data.paBaseConviction"
+                />
+                <app-pa-signal-insights
+                  view="overview"
+                  [action]="data.action"
+                  [structuralAction]="data.structuralAction"
+                  [vetoReason]="data.vetoReason"
+                  [chartVetoed]="!!data.chartVetoed"
+                  [conviction]="data.conviction"
+                  [entryThreshold]="data.entryThreshold"
+                  [tfAligned]="data.tfAligned"
+                  [tfAlignedTotal]="data.tfAlignedTotal"
+                  [paDrilldown]="data.paDrilldown"
+                  [patternInsights]="data.patternInsights"
+                  [convictionSeries]="data.convictionSeries"
+                  [reading]="data.gauges.priceAction"
+                  [marketRegime]="data.marketRegime"
+                />
+                <app-pa-trade-setup [setup]="data.tradeSetup" />
+              </div>
+            } @else if (paSubTab() === 'timeframes') {
+              <div class="pa-signal-subpanel">
+                <app-pa-signal-insights
+                  view="timeframes"
+                  [action]="data.action"
+                  [structuralAction]="data.structuralAction"
+                  [vetoReason]="data.vetoReason"
+                  [chartVetoed]="!!data.chartVetoed"
+                  [conviction]="data.conviction"
+                  [entryThreshold]="data.entryThreshold"
+                  [tfAligned]="data.tfAligned"
+                  [tfAlignedTotal]="data.tfAlignedTotal"
+                  [paDrilldown]="data.paDrilldown"
+                  [patternInsights]="data.patternInsights"
+                  [convictionSeries]="data.convictionSeries"
+                  [reading]="data.gauges.priceAction"
+                  [marketRegime]="data.marketRegime"
+                />
+                <app-pa-component-signals
+                  [componentSignals]="data.componentSignals"
+                  [primaryTimeframe]="
+                    data.primaryTimeframe ??
+                    data.paDrilldown?.primaryTimeframe ??
+                    '15m'
+                  "
+                />
+              </div>
+            } @else if (paSubTab() === 'context') {
+              <div class="pa-signal-subpanel">
+                <app-pa-signal-insights
+                  view="context"
+                  [action]="data.action"
+                  [structuralAction]="data.structuralAction"
+                  [vetoReason]="data.vetoReason"
+                  [chartVetoed]="!!data.chartVetoed"
+                  [conviction]="data.conviction"
+                  [entryThreshold]="data.entryThreshold"
+                  [tfAligned]="data.tfAligned"
+                  [tfAlignedTotal]="data.tfAlignedTotal"
+                  [paDrilldown]="data.paDrilldown"
+                  [patternInsights]="data.patternInsights"
+                  [convictionSeries]="data.convictionSeries"
+                  [reading]="data.gauges.priceAction"
+                  [marketRegime]="data.marketRegime"
+                />
+              </div>
+            } @else {
+              <div class="pa-signal-subpanel">
+                <app-pa-signal-brief
+                  [sessionKey]="data.symbol ?? ctx.symbol()"
+                  [signalAt]="data.signalCalculatedAt ?? data.asOf"
+                  [action]="data.action"
+                  [structuralAction]="data.structuralAction"
+                  [conviction]="data.conviction"
+                  [entryThreshold]="data.entryThreshold"
+                  [bias]="data.bias"
+                  [chartVetoed]="!!data.chartVetoed"
+                  [vetoReason]="data.vetoReason"
+                  [tfAligned]="data.tfAligned"
+                  [tfAlignedTotal]="data.tfAlignedTotal"
+                  [lastPrice]="data.lastPrice"
+                  [paDrilldown]="data.paDrilldown"
+                  [tradeSetup]="data.tradeSetup"
+                  [marketRegime]="data.marketRegime"
+                  [patternInsights]="data.patternInsights"
+                  [reading]="data.gauges.priceAction"
+                  [primaryTimeframe]="
+                    data.primaryTimeframe ??
+                    data.paDrilldown?.primaryTimeframe ??
+                    '15m'
+                  "
+                />
+              </div>
+            }
+          } @else {
+            <app-option-chain-signal-panel />
+          }
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'components'"
+        >
+          <section class="component-panel">
+            <app-components-help />
+            <nav class="signal-subtabs" aria-label="Component views">
+              <button
+                type="button"
+                class="signal-subtab"
+                [class.active]="componentsSubTab() === 'priceAction'"
+                (click)="componentsSubTab.set('priceAction')"
+              >
+                Price action
+              </button>
+              <button
+                type="button"
+                class="signal-subtab"
+                [class.active]="componentsSubTab() === 'optionChain'"
+                (click)="componentsSubTab.set('optionChain')"
+              >
+                Option chain
+              </button>
+            </nav>
+            @if (componentsSubTab() === 'priceAction') {
+              <div class="panel-head">
+                <span>Price action components</span>
+                <button
+                  type="button"
+                  class="drilldown-toggle"
+                  [attr.aria-expanded]="drilldownOpen()"
+                  (click)="drilldownOpen.set(!drilldownOpen())"
+                >
+                  Breakdown
+                </button>
+              </div>
+              <p class="component-scale-hint">
+                Bipolar scale: <strong>−1</strong> bearish ·
+                <strong>0</strong> flat · <strong>+1</strong> bullish.
+              </p>
+              <div class="component-list">
+                <app-bipolar-list
+                  [components]="data.priceActionComponents ?? []"
+                  variant="priceAction"
+                />
+              </div>
+              @if (drilldownOpen()) {
+                <div class="pa-drilldown">
+                  <app-pa-drilldown [drilldown]="data.paDrilldown" />
+                </div>
+              }
+            } @else {
+              <div class="panel-head">
+                <span>Option chain components</span>
+                <button
+                  type="button"
+                  class="signal-refresh-btn panel-refresh-btn"
+                  [disabled]="optionPoll.loading()"
+                  [attr.aria-label]="
+                    optionPoll.loading()
+                      ? 'Reconnecting option stream'
+                      : 'Reconnect option stream'
+                  "
+                  [title]="
+                    optionPoll.loading() ? 'Reconnecting…' : 'Reconnect stream'
+                  "
+                  (click)="optionPoll.refresh(true)"
+                >
+                  <mat-icon [class.spinning]="optionPoll.loading()"
+                    >refresh</mat-icon
+                  >
+                </button>
+              </div>
+              @if (optionPoll.data(); as oc) {
+                <p class="signal-calc-stamp" role="status">
+                  Last updated:
+                  <time [attr.datetime]="oc.fetchedAt">
+                    {{ formatSignalCalculatedAt(oc.fetchedAt) }}
+                  </time>
+                </p>
+              }
+              <p class="component-scale-hint">
+                Bipolar scale: <strong>−1</strong> bearish ·
+                <strong>0</strong> flat · <strong>+1</strong> bullish.
+              </p>
+              <div class="component-list">
+                <app-bipolar-list
+                  [components]="optionComponents()"
+                  variant="option"
+                />
+              </div>
+            }
+          </section>
+        </section>
+
+        <section class="tab-panel" [class.active]="ctx.activeTab() === 'veto'">
+          <section
+            class="veto-tab-panel"
+            [class.has-block]="hasVetoBlock(data)"
+          >
+            @if (data.vetoTimeline?.length) {
+              <app-veto-strip [timeline]="data.vetoTimeline || []" />
+            }
+            <p class="settings-hint">
+              Veto mode lives in <strong>Settings</strong> — this view shows the
+              live breakup.
+            </p>
+            <section class="veto-breakup-block">
+              <div class="panel-head">
+                <span>Veto breakup</span>
+                <span class="panel-note">{{ vetoSummary(data) }}</span>
+              </div>
+              @if (data.vetoReason) {
+                <p class="veto-breakup-note" role="status">
+                  {{ data.vetoReason }}
+                </p>
+              }
+              <div class="veto-breakup-list">
+                <app-veto-breakup [items]="data.vetoBreakup" />
+              </div>
+            </section>
+          </section>
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'strategy'"
+        >
+          <app-strategy-panel [strategy]="data.strategyRecommendation" />
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'sizing'"
+        >
+          <app-position-sizing
+            [symbol]="data.symbol"
+            [lotSize]="data.lotSize"
+            [paAction]="data.action"
+            [tradingStyle]="ctx.style()"
+          />
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'charts'"
+        >
+          <app-deck-charts
+            [tabActive]="ctx.activeTab() === 'charts'"
+            [spotCandles]="data.spotCandles ?? []"
+            [spotCandles5m]="data.spotCandles5m ?? []"
+            [spotCandles15m]="data.spotCandles15m ?? []"
+            [spotCandles1h]="data.spotCandles1h ?? []"
+            [spotSeries]="data.spotSeries"
+            [patternInsights]="data.patternInsights"
+            [chartPatternNeckline]="data.chartPatternNeckline"
+            [chartOverlays]="chartOverlays(data)"
+          />
+        </section>
+
+        <section class="tab-panel" [class.active]="ctx.activeTab() === 'news'">
+          <app-market-news-panel
+            [symbol]="ctx.symbol()"
+            [tabActive]="ctx.activeTab() === 'news'"
+          />
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'events'"
+        >
+          <app-event-list [events]="(data.events ?? []).slice(-20).reverse()" />
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'journal'"
+        >
+          <app-trade-journal-list
+            [symbol]="ctx.symbol()"
+            [tabActive]="ctx.activeTab() === 'journal'"
+          />
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'positions'"
+        >
+          <app-auto-entry-panel
+            [guardStatus]="data.managementContext?.autoEntry?.status"
+            [guardMessage]="data.managementContext?.autoEntry?.message"
+            [confirmationCount]="
+              data.managementContext?.autoEntry?.confirmationCount
+            "
+            [confirmationsRequired]="
+              data.managementContext?.autoEntry?.confirmationsRequired
+            "
+            [pendingAction]="data.managementContext?.autoEntry?.pendingAction"
+            [pendingReason]="data.managementContext?.autoEntry?.pendingReason"
+            [lastEvaluatedAt]="
+              data.managementContext?.autoEntry?.lastEvaluatedAt
+            "
+            [recentEvents]="
+              data.managementContext?.autoEntry?.recentEvents ?? []
+            "
+          />
+          <app-auto-exit-panel
+            [guardDetail]="data.managementContext?.autoExit"
+          />
+          <app-positions-list
+            [entries]="data.openPositions?.entries ?? []"
+            [note]="data.openPositions?.note"
+            [advice]="data.managementContext?.advice?.headline"
+            [rrTracker]="data.managementContext?.advice?.rrTracker"
+            [trailStopPrice]="data.managementContext?.autoExit?.trailStopPrice"
+            [trailStopLabel]="data.managementContext?.autoExit?.trailStopLabel"
+          />
+        </section>
+
+        <section
+          class="tab-panel"
+          [class.active]="ctx.activeTab() === 'settings'"
+        >
+          <section class="settings-panel">
+            <div class="settings-groups">
+              <div class="settings-group">
+                <div class="settings-group-head">
+                  <p class="settings-group-title">Symbol</p>
+                </div>
+                <div class="settings-control">
+                  <select
+                    class="settings-select"
+                    [ngModel]="ctx.symbol()"
+                    (ngModelChange)="onSymbolChange($event)"
+                  >
+                    @for (s of ctx.symbols; track s) {
+                      <option [value]="s">{{ ctx.shortLabel(s) }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
+              <div class="settings-group">
+                <div class="settings-group-head">
+                  <p class="settings-group-title">Style</p>
+                </div>
+                <div class="settings-control">
+                  <select
+                    class="settings-select"
+                    [ngModel]="ctx.style()"
+                    (ngModelChange)="onStyleChange($event)"
+                  >
+                    <option value="INTRADAY">Intraday</option>
+                    <option value="SCALPER">Scalper</option>
+                    <option value="POSITIONAL">Positional</option>
+                  </select>
+                </div>
+              </div>
+              @if (settings(); as s) {
+                @for (group of s.groups; track group.id) {
+                  <div class="settings-group">
+                    <div class="settings-group-head">
+                      <p class="settings-group-title">{{ group.title }}</p>
+                      @if (group.options?.[0]?.hint) {
+                        <p class="settings-group-desc">
+                          {{ group.options![0].hint }}
+                        </p>
+                      }
+                    </div>
+                    @if (group.options) {
+                      <div class="settings-control">
+                        @for (opt of group.options; track opt.value) {
+                          <button
+                            type="button"
+                            class="settings-segment"
+                            [class.active]="
+                              settingValue(s, group.field) === opt.value
+                            "
+                            (click)="patchSetting(group.field, opt.value)"
+                          >
+                            {{ opt.label }}
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              }
+            </div>
+          </section>
+        </section>
+      }
+    </section>
+  `,
+  styles: [
+    `
+      :host ::ng-deep .mat-mdc-progress-spinner {
+        --mdc-circular-progress-active-indicator-color: var(--option);
+      }
+      .deck-error {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 32px 20px;
+        text-align: center;
+        color: var(--muted);
+      }
+      .deck-retry-btn {
+        border: 1px solid rgba(34, 211, 238, 0.35);
+        background: rgba(34, 211, 238, 0.1);
+        color: var(--option);
+        border-radius: 999px;
+        padding: 8px 16px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .signal-subtabs {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .signal-subtab-spacer {
+        flex: 1;
+      }
+      .oc-poll-hint {
+        font-size: 0.68rem;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .signal-refresh-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: 1px solid rgba(167, 139, 250, 0.4);
+        background: rgba(167, 139, 250, 0.12);
+        color: #c4b5fd;
+        border-radius: 8px;
+        cursor: pointer;
+        padding: 0;
+        flex-shrink: 0;
+      }
+      .signal-refresh-btn mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+      }
+      .signal-refresh-btn:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .signal-refresh-btn mat-icon.spinning {
+        animation: signal-refresh-spin 0.8s linear infinite;
+      }
+      @keyframes signal-refresh-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .panel-refresh-btn {
+        text-transform: none;
+        letter-spacing: 0;
+      }
+      .signal-subtab {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .signal-subtab.active {
+        color: var(--option);
+        border-color: rgba(34, 211, 238, 0.4);
+        background: rgba(34, 211, 238, 0.1);
+      }
+      .pa-signal-subtabs {
+        margin-top: 2px;
+        margin-bottom: 10px;
+      }
+      .pa-signal-subtabs .signal-subtab.active {
+        color: #c4b5fd;
+        border-color: rgba(167, 139, 250, 0.45);
+        background: rgba(167, 139, 250, 0.12);
+      }
+      .pa-signal-subpanel {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+    `,
+  ],
+})
+export class LiveDeckComponent implements OnInit, OnDestroy {
+  readonly ctx = inject(DeckContextService);
+  readonly optionPoll = inject(OptionChainPollService);
+  private readonly deckReload = inject(DeckReloadService);
+  private readonly deckApi = inject(DeckApiService);
+  private readonly stream = inject(DeckStreamService);
+  private readonly notify = inject(NotificationService);
+  private readonly deckAlerts = inject(DeckAlertService);
+  private settingsRequestSub: Subscription | null = null;
+  private httpSub: Subscription | null = null;
+  private streamSub: Subscription | null = null;
+  private reloadSub: Subscription | null = null;
+  private pendingChartPatch: Partial<DeckLiveTick> | null = null;
+
+  readonly tick = signal<DeckLiveTick | null>(null);
+  readonly settings = signal<SettingsSnapshot | null>(null);
+  readonly error = signal<string | null>(null);
+  readonly drilldownOpen = signal(true);
+  readonly signalSubTab = signal<SignalSubTab>('priceAction');
+  readonly paSubTab = signal<PaSignalSubTab>('overview');
+  readonly componentsSubTab = signal<ComponentsSubTab>('priceAction');
+  protected readonly formatSignalCalculatedAt = formatSignalCalculatedAt;
+
+  readonly optionComponents = computed(() => {
+    const rows = this.optionPoll.data()?.componentRows ?? [];
+    return toOptionComponentGauges(rows);
+  });
+
+  constructor() {
+    effect(() => {
+      const symbol = this.ctx.symbol();
+      const style = this.ctx.style();
+      this.reload(symbol, style);
+    });
+
+    this.reloadSub = this.deckReload.requested.subscribe(() =>
+      this.forceReload(),
+    );
+
+    effect(() => {
+      const symbol = this.ctx.symbol();
+      const style = this.ctx.style();
+      const paAction = this.tick()?.action;
+      this.optionPoll.configure({
+        symbol,
+        style,
+        paAction,
+        enabled: true,
+      });
+    });
+  }
+
+  ngOnInit(): void {
+    this.settingsRequestSub?.unsubscribe();
+    this.settingsRequestSub = this.deckApi.getSettings().subscribe({
+      next: (s) => this.settings.set(s),
+      error: (err) =>
+        this.notify.error(err?.message || 'Failed to load settings'),
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.settingsRequestSub?.unsubscribe();
+    this.settingsRequestSub = null;
+    this.stopLiveSubscriptions();
+    this.reloadSub?.unsubscribe();
+    this.reloadSub = null;
+    this.optionPoll.stop();
+  }
+
+  retry(): void {
+    this.error.set(null);
+    this.reload(this.ctx.symbol(), this.ctx.style());
+  }
+
+  /** Shell refresh — full HTTP snapshot + new SSE even when status still says live. */
   private forceReload(): void {
     // Hard reset option-chain stream first to avoid duplicate listeners/timers.
     this.optionPoll.hardReconnect(true);
     // Then hard reload live deck HTTP + SSE stream.
     this.reload(this.ctx.symbol(), this.ctx.style());
   }
-...TRUNCATED...
+
+  onSymbolChange(symbol: string): void {
+    this.ctx.setSymbol(symbol);
+  }
+
+  onStyleChange(style: TradingStyle): void {
+    this.ctx.setStyle(style);
+    this.settingsRequestSub?.unsubscribe();
+    this.settingsRequestSub = this.deckApi
+      .patchSettings({ tradingStyle: style })
+      .subscribe({
+        next: (s) => {
+          this.settings.set(s);
+          this.syncStyleFromSettings(s);
+        },
+        error: (err) =>
+          this.notify.error(err?.error?.error || err.message || 'Update failed'),
+      });
+  }
+
+  patchSetting(field: string, value: string): void {
+    this.settingsRequestSub?.unsubscribe();
+    this.settingsRequestSub = this.deckApi.patchSettings({ [field]: value }).subscribe({
+      next: (s) => {
+        this.settings.set(s);
+        this.syncStyleFromSettings(s);
+        this.notify.success('Settings updated');
+      },
+      error: (err) =>
+        this.notify.error(err?.error?.error || err.message || 'Update failed'),
+    });
+  }
+
+  settingValue(s: SettingsSnapshot, field: string): string {
+    if (field === 'tradingStyle') return s.tradingStyle;
+    if (field === 'vetoMode') return s.vetoMode;
+    if (field === 'flowMode') return s.flowMode;
+    return '';
+  }
+
+  hasVetoBlock(data: DeckLiveTick): boolean {
+    return (data.vetoBreakup ?? []).some((item) => item.state === 'block');
+  }
+
+  vetoSummary(data: DeckLiveTick): string {
+    const items = data.vetoBreakup ?? [];
+    const blocks = items.filter((i) => i.state === 'block').length;
+    const warns = items.filter((i) => i.state === 'warn').length;
+    if (blocks) return `${blocks} block${blocks > 1 ? 's' : ''}`;
+    if (warns) return `${warns} warn${warns > 1 ? 's' : ''}`;
+    return 'All clear';
+  }
+
+  chartOverlays(data: DeckLiveTick): ChartOverlayLine[] {
+    const section = data.paDrilldown?.sections?.find((s) => s.id === 'levels');
+    const pattern = data.patternInsights?.find(
+      (p) => p.label === 'Chart Pattern',
+    );
+    const patternColor = this.resolvePatternColor(
+      pattern?.pattern,
+      pattern?.tone,
+    );
+    const overlays: ChartOverlayLine[] = [];
+    if (section) {
+      for (const row of section.rows) {
+        const value = Number.parseFloat(
+          String(row.value).replace(/[^\d.-]/g, ''),
+        );
+        if (!Number.isFinite(value)) continue;
+        if (row.label.toLowerCase().includes('support')) {
+          overlays.push({
+            id: 'support',
+            label: 'Support',
+            price: value,
+            color: '#22d3ee',
+            kind: 'hline',
+          });
+        }
+        if (row.label.toLowerCase().includes('resistance')) {
+          overlays.push({
+            id: 'resistance',
+            label: 'Resistance',
+            price: value,
+            color: '#f472b6',
+            kind: 'hline',
+          });
+        }
+      }
+    }
+    if (Number.isFinite(data.chartPatternNeckline)) {
+      overlays.push({
+        id: 'chartPattern',
+        label: pattern?.pattern
+          ? `${this.displayPatternName(pattern.pattern)} neckline`
+          : 'Neckline',
+        price: data.chartPatternNeckline || 0,
+        color: patternColor,
+        kind: 'hline',
+      });
+    }
+
+    const rrTracker = data.managementContext?.advice?.rrTracker;
+    if (rrTracker?.levels?.length) {
+      for (const level of rrTracker.levels) {
+        overlays.push({
+          id: `pos-${level.id}`,
+          label: level.label,
+          price: level.price,
+          color:
+            level.kind === 'stop'
+              ? '#ef4444'
+              : level.kind === 'entry'
+                ? '#22d3ee'
+                : level.kind === 'be'
+                  ? '#fbbf24'
+                  : '#4ade80',
+          kind: 'hline',
+        });
+      }
+    }
+
+    return overlays;
+  }
+
+  private displayPatternName(pattern: string): string {
+    return pattern.replace(/_/g, ' ');
+  }
+
+  private resolvePatternColor(pattern?: string, tone?: string): string {
+    const normalized = (pattern ?? '').toLowerCase();
+    if (
+      normalized.includes('double top') ||
+      normalized.includes('head and shoulders') ||
+      normalized.includes('rising wedge') ||
+      normalized.includes('bear flag') ||
+      normalized.includes('descending triangle') ||
+      normalized.includes('trendline break bear')
+    ) {
+      return '#ef4444';
+    }
+    if (
+      normalized.includes('double bottom') ||
+      normalized.includes('inverse head and shoulders') ||
+      normalized.includes('falling wedge') ||
+      normalized.includes('bull flag') ||
+      normalized.includes('ascending triangle') ||
+      normalized.includes('trendline break bull')
+    ) {
+      return '#22c55e';
+    }
+    if ((tone ?? '').toLowerCase() === 'bear') return '#fb923c';
+    if ((tone ?? '').toLowerCase() === 'bull') return '#4ade80';
+    return '#a78bfa';
+  }
+
+  private syncStyleFromSettings(s: SettingsSnapshot): void {
+    if (!s.tradingStyle) return;
+    this.ctx.setStyle(s.tradingStyle as TradingStyle);
+  }
+
+  private stopLiveSubscriptions(): void {
+    this.httpSub?.unsubscribe();
+    this.httpSub = null;
+    this.streamSub?.unsubscribe();
+    this.streamSub = null;
+    this.clearChartPatchWork();
+  }
+
+  private clearChartPatchWork(): void {
+    this.pendingChartPatch = null;
+  }
+
+  private reload(symbol: string, style: string): void {
+    this.stopLiveSubscriptions();
+    this.error.set(null);
+    this.tick.set(null);
+    this.deckAlerts.reset();
+
+    const tradingStyle = style as TradingStyle;
+    this.httpSub = new Subscription();
+
+    this.httpSub.add(
+      this.deckApi.getLive(symbol, tradingStyle, 'fast').subscribe({
+        next: (fast) => this.applyTick(fast),
+        error: (err) => {
+          const message =
+            err?.error?.error || err.message || 'Live deck failed';
+          this.error.set(message);
+          this.notify.error(message);
+        },
+      }),
+    );
+
+    this.httpSub.add(
+      this.deckApi.getLive(symbol, tradingStyle, 'enrichment').subscribe({
+        next: (enrichment) => this.mergeChartPatch(enrichment),
+        error: () => {
+          /* chart data is optional — fast tick + stream still drive the deck */
+        },
+      }),
+    );
+
+    this.connectStream(symbol, style);
+  }
+
+  private connectStream(symbol: string, style: string): void {
+    this.streamSub?.unsubscribe();
+    this.ctx.updateTracker({ streamStatus: 'connecting' });
+    this.streamSub = this.stream.connect(symbol, style).subscribe({
+      next: (event) => {
+        if ('type' in event && event.type === 'status') {
+          this.ctx.updateTracker({
+            streamStatus: this.streamStatusFromPhase(event.phase),
+          });
+          if (
+            event.phase === 'live' ||
+            event.phase === 'disconnected' ||
+            event.phase === 'stale'
+          ) {
+            this.deckReload.markFinished();
+          }
+          return;
+        }
+        if ('type' in event && event.type === 'error') {
+          const message = event.message || 'Live stream tick failed';
+          if (!this.tick()) {
+            this.error.set(message);
+            this.notify.error(message);
+          }
+          return;
+        }
+        if (
+          'type' in event &&
+          (event.type === 'enrichment' ||
+            event.type === 'positions' ||
+            event.type === 'ltp')
+        ) {
+          const patch = event as unknown as Partial<DeckLiveTick> & {
+            type: string;
+          };
+          const { type: _type, ...rest } = patch;
+          this.mergeChartPatch(rest);
+          return;
+        }
+        if (
+          ('type' in event && event.type === 'tick') ||
+          ('action' in event && !('type' in event))
+        ) {
+          this.applyTick({
+            ...(this.tick() ?? {}),
+            ...event,
+          } as DeckLiveTick);
+        }
+      },
+      error: (err: Error) => {
+        this.deckReload.markFinished();
+        this.ctx.updateTracker({ streamStatus: 'disconnected' });
+        this.clearChartPatchWork();
+        if (!this.tick()) {
+          const message = err.message || 'Stream failed';
+          this.error.set(message);
+          this.notify.error(message);
+        }
+      },
+    });
+  }
+
+  /** Enrichment lacks gauges/action — never use it as the initial tick. */
+  private mergeChartPatch(patch: Partial<DeckLiveTick>): void {
+    this.pendingChartPatch = this.withLiveChartCandles({
+      ...(this.pendingChartPatch ?? {}),
+      ...patch,
+    });
+    const hasTick = !!this.tick();
+    this.tick.update((prev) => {
+      if (!prev) return prev;
+      const next = this.withLiveChartCandles({
+        ...prev,
+        ...patch,
+      }) as DeckLiveTick;
+      this.deckAlerts.evaluate(prev, next);
+      return next;
+    });
+    if (hasTick) {
+      this.clearChartPatchWork();
+    }
+    if (patch.lastPrice != null && Number.isFinite(patch.lastPrice)) {
+      this.ctx.updateTracker({
+        price: patch.lastPrice,
+        asOf: patch.asOf,
+        ...(patch.dayChange !== undefined
+          ? { dayChange: patch.dayChange }
+          : {}),
+        ...(patch.dayChangePct !== undefined
+          ? { dayChangePct: patch.dayChangePct }
+          : {}),
+      });
+    }
+  }
+
+  private applyTick(data: DeckLiveTick): void {
+    const prev = this.tick();
+    const pendingChartPatch = this.pendingChartPatch;
+    this.clearChartPatchWork();
+    const next = this.withLiveChartCandles({
+      ...(prev ?? {}),
+      ...(pendingChartPatch ?? {}),
+      ...data,
+      signalCalculatedAt:
+        data.signalCalculatedAt ??
+        (('type' in data && data.type === 'tick') || 'action' in data
+          ? data.asOf
+          : undefined) ??
+        prev?.signalCalculatedAt,
+    }) as DeckLiveTick;
+    this.tick.set(next);
+    if (prev) {
+      this.deckAlerts.evaluate(prev, next);
+    } else {
+      this.deckAlerts.setBaseline(next);
+    }
+    this.ctx.updateTracker({
+      symbol: next.symbol,
+      symbolLabel: next.symbolLabel,
+      price: next.lastPrice,
+      dayChange: next.dayChange ?? null,
+      dayChangePct: next.dayChangePct ?? null,
+      style: next.tradingStyle ?? this.ctx.style(),
+      asOf: next.asOf,
+    });
+  }
+
+  private streamStatusFromPhase(phase: DeckStreamPhase): DeckStreamStatus {
+    if (phase === 'live') return 'live';
+    if (phase === 'connecting') return 'connecting';
+    if (phase === 'stale') return 'stale';
+    return 'disconnected';
+  }
+
+  private withLiveChartCandles<T extends Partial<DeckLiveTick>>(tick: T): T {
+    if (!Number.isFinite(tick.lastPrice) || (tick.lastPrice ?? 0) <= 0) {
+      return tick;
+    }
+    const candlePatch = patchMultiTfSpotCandles(tick, tick.lastPrice || 0);
+    if (!Object.keys(candlePatch).length) return tick;
+    return { ...tick, ...candlePatch };
+  }
 }

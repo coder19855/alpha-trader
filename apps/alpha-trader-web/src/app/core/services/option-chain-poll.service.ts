@@ -145,6 +145,24 @@ export class OptionChainPollService {
    this.connectSource();
   }
 
+  /** Hard reconnect: clears cached data and restarts the stream from scratch. */
+  hardReconnect(clearData = true): void {
+   if (clearData) {
+     this.data.set(null);
+   }
+   this.sub?.unsubscribe();
+   this.sub = null;
+   this.sourceActive = false;
+   this.awaitingReconnect = false;
+   this.clearReconnectTimer();
+   this.detachReconnectListeners();
+   if (this.ctx) {
+     this.loading.set(true);
+     this.error.set(null);
+     this.connectSource();
+   }
+  }
+
   stop(): void {
    this.ctx = null;
    this.closed = true;
