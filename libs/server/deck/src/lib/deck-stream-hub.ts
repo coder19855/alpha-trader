@@ -47,6 +47,8 @@ function parseTradingStyle(raw?: string): TradingStyle {
 }
 
 export class DeckStreamHub {
+  private static readonly QUOTE_TICK_RECOMPUTE_MS = 250;
+
   private readonly channels = new Map<
     string,
     {
@@ -66,6 +68,8 @@ export class DeckStreamHub {
       pendingTickRefresh: boolean;
       pendingForceRefresh: boolean;
       signalRefreshTimer: NodeJS.Timeout | null;
+      quoteRefreshTimer: NodeJS.Timeout | null;
+      quoteRefreshScheduled: boolean;
     }
   >();
 
@@ -97,6 +101,8 @@ export class DeckStreamHub {
         pendingTickRefresh: false,
         pendingForceRefresh: false,
         signalRefreshTimer: null,
+        quoteRefreshTimer: null,
+        quoteRefreshScheduled: false,
       };
       this.channels.set(key, channel);
       this.startHeartbeat(channel);
@@ -117,6 +123,7 @@ export class DeckStreamHub {
     for (const channel of this.channels.values()) {
       this.stopHeartbeat(channel);
       this.stopSignalRefresh(channel);
+      this.stopQuoteRefresh(channel);
     }
     this.channels.clear();
   }
@@ -166,9 +173,9 @@ export class DeckStreamHub {
       );
       if (!relevant) continue;
 
-      // LTP first (fast), then full PA recompute on every relevant quote tick.
+      // LTP first (fast), then coalesced PA recompute to avoid quote-burst churn.
       this.runDetached(this.sendLtpPatch(channel), 'Deck LTP patch');
-      this.runDetached(this.sendTick(channel), 'Deck stream tick');
+      this.scheduleQuoteTickRefresh(channel);
     }
   }
 
@@ -226,6 +233,27 @@ export class DeckStreamHub {
   ): void {
     if (channel.signalRefreshTimer) clearInterval(channel.signalRefreshTimer);
     channel.signalRefreshTimer = null;
+  }
+
+  private stopQuoteRefresh(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): void {
+    if (channel.quoteRefreshTimer) clearTimeout(channel.quoteRefreshTimer);
+    channel.quoteRefreshTimer = null;
+    channel.quoteRefreshScheduled = false;
+  }
+
+  private scheduleQuoteTickRefresh(
+    channel: NonNullable<ReturnType<typeof this.channels.get>>,
+  ): void {
+    if (channel.quoteRefreshScheduled) return;
+    channel.quoteRefreshScheduled = true;
+    channel.quoteRefreshTimer = setTimeout(() => {
+      channel.quoteRefreshScheduled = false;
+      channel.quoteRefreshTimer = null;
+      this.runDetached(this.sendTick(channel), 'Deck stream tick');
+    }, DeckStreamHub.QUOTE_TICK_RECOMPUTE_MS);
+    channel.quoteRefreshTimer.unref?.();
   }
 
   private broadcast(
@@ -376,6 +404,7 @@ export class DeckStreamHub {
     if (channel.subscribers.size > 0) return;
     this.stopHeartbeat(channel);
     this.stopSignalRefresh(channel);
+    this.stopQuoteRefresh(channel);
     this.channels.delete(deckStreamChannelKey(channel.params));
   }
 

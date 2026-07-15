@@ -9,6 +9,7 @@ import {
   createDeckStreamSubscriber,
   fetchMarketNews,
 } from '@alpha-trader/server-deck';
+import { getQuoteCache, seedIndexQuotesFromRest } from '@alpha-trader/server-market-data';
 import { buildSignalPresetGroupsResponse } from '@alpha-trader/server-benchmark';
 import {
   buildAutoExitPolicyOptions,
@@ -61,6 +62,40 @@ function handleDeckStream(
       message: 'Market closed — live ticks paused',
       phase: 'closed',
     });
+  }
+
+  async function buildDeckLiveBootstrapPayload(
+    fastify: FastifyInstance,
+    symbol: string,
+  ): Promise<{
+    symbol: string;
+    symbolLabel: string;
+    lastPrice: number | null;
+    dayChange: number | null;
+    dayChangePct: number | null;
+    asOf: string;
+  }> {
+    const trimmed = symbol.trim();
+    let quote =
+      fastify.fyersMarketStream?.getQuote?.(trimmed) ?? getQuoteCache().get(trimmed) ?? null;
+    if (!quote?.ltp || !Number.isFinite(quote.ltp) || quote.ltp <= 0) {
+      await seedIndexQuotesFromRest(fastify, [trimmed]);
+      quote =
+        fastify.fyersMarketStream?.getQuote?.(trimmed) ?? getQuoteCache().get(trimmed) ?? null;
+    }
+    const nowIso = new Date().toISOString();
+    return {
+      symbol: trimmed,
+      symbolLabel: trimmed.split(':')[1]?.replace('-INDEX', '') ?? trimmed,
+      lastPrice:
+        quote?.ltp != null && Number.isFinite(quote.ltp) && quote.ltp > 0
+          ? Number(quote.ltp)
+          : null,
+      dayChange: quote?.ch != null && Number.isFinite(quote.ch) ? Number(quote.ch) : null,
+      dayChangePct:
+        quote?.chp != null && Number.isFinite(quote.chp) ? Number(quote.chp) : null,
+      asOf: quote?.updatedAt ? new Date(quote.updatedAt).toISOString() : nowIso,
+    };
   }
 
   const subscriber = createDeckStreamSubscriber(reply, () => closed);
@@ -135,6 +170,9 @@ export default async function deckRoutes(fastify: FastifyInstance) {
           symbol: trimmedSymbol,
           tradingStyle: style,
         });
+      }
+      if (scope === 'bootstrap') {
+        return await buildDeckLiveBootstrapPayload(fastify, trimmedSymbol);
       }
       return await buildDeckLivePayload(fastify, {
         symbol: trimmedSymbol,
