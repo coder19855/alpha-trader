@@ -13,6 +13,15 @@ import {
   WebSession,
 } from '../models/deck.models';
 
+export interface DeckLiveBootstrapPayload {
+  symbol: string;
+  symbolLabel: string;
+  lastPrice: number | null;
+  dayChange: number | null;
+  dayChangePct: number | null;
+  asOf: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class DeckApiService {
   private readonly http = inject(HttpClient);
@@ -26,6 +35,11 @@ export class DeckApiService {
     const params = new URLSearchParams({ symbol, style });
     if (scope) params.set('scope', scope);
     return this.http.get<DeckLiveTick>(`/api/deck/live?${params}`);
+  }
+
+  getLiveBootstrap(symbol: string, style: TradingStyle) {
+    const params = new URLSearchParams({ symbol, style, scope: 'bootstrap' });
+    return this.http.get<DeckLiveBootstrapPayload>(`/api/deck/live?${params}`);
   }
 
   getReplay(symbol: string, style: TradingStyle, date?: string) {

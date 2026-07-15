@@ -344,230 +344,225 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
           }
         </section>
 
-        <section
-          class="tab-panel"
-          [class.active]="ctx.activeTab() === 'components'"
-        >
-          <section class="component-panel">
-            <app-components-help />
-            <nav class="signal-subtabs" aria-label="Component views">
-              <button
-                type="button"
-                class="signal-subtab"
-                [class.active]="componentsSubTab() === 'priceAction'"
-                (click)="componentsSubTab.set('priceAction')"
-              >
-                Price action
-              </button>
-              <button
-                type="button"
-                class="signal-subtab"
-                [class.active]="componentsSubTab() === 'optionChain'"
-                (click)="componentsSubTab.set('optionChain')"
-              >
-                Option chain
-              </button>
-            </nav>
-            @if (componentsSubTab() === 'priceAction') {
-              <div class="panel-head">
-                <span>Price action components</span>
+        @if (ctx.activeTab() === 'components') {
+          <section class="tab-panel active">
+            <section class="component-panel">
+              <app-components-help />
+              <nav class="signal-subtabs" aria-label="Component views">
                 <button
                   type="button"
-                  class="drilldown-toggle"
-                  [attr.aria-expanded]="drilldownOpen()"
-                  (click)="drilldownOpen.set(!drilldownOpen())"
+                  class="signal-subtab"
+                  [class.active]="componentsSubTab() === 'priceAction'"
+                  (click)="componentsSubTab.set('priceAction')"
                 >
-                  Breakdown
+                  Price action
                 </button>
-              </div>
-              <p class="component-scale-hint">
-                Bipolar scale: <strong>−1</strong> bearish ·
-                <strong>0</strong> flat · <strong>+1</strong> bullish.
-              </p>
-              <div class="component-list">
-                <app-bipolar-list
-                  [components]="data.priceActionComponents ?? []"
-                  variant="priceAction"
-                />
-              </div>
-              @if (drilldownOpen()) {
-                <div class="pa-drilldown">
-                  <app-pa-drilldown [drilldown]="data.paDrilldown" />
+                <button
+                  type="button"
+                  class="signal-subtab"
+                  [class.active]="componentsSubTab() === 'optionChain'"
+                  (click)="componentsSubTab.set('optionChain')"
+                >
+                  Option chain
+                </button>
+              </nav>
+              @if (componentsSubTab() === 'priceAction') {
+                <div class="panel-head">
+                  <span>Price action components</span>
+                  <button
+                    type="button"
+                    class="drilldown-toggle"
+                    [attr.aria-expanded]="drilldownOpen()"
+                    (click)="drilldownOpen.set(!drilldownOpen())"
+                  >
+                    Breakdown
+                  </button>
+                </div>
+                <p class="component-scale-hint">
+                  Bipolar scale: <strong>−1</strong> bearish ·
+                  <strong>0</strong> flat · <strong>+1</strong> bullish.
+                </p>
+                <div class="component-list">
+                  <app-bipolar-list
+                    [components]="data.priceActionComponents ?? []"
+                    variant="priceAction"
+                  />
+                </div>
+                @if (drilldownOpen()) {
+                  <div class="pa-drilldown">
+                    <app-pa-drilldown [drilldown]="data.paDrilldown" />
+                  </div>
+                }
+              } @else {
+                <div class="panel-head">
+                  <span>Option chain components</span>
+                  <button
+                    type="button"
+                    class="signal-refresh-btn panel-refresh-btn"
+                    [disabled]="optionPoll.loading()"
+                    [attr.aria-label]="
+                      optionPoll.loading()
+                        ? 'Reconnecting option stream'
+                        : 'Reconnect option stream'
+                    "
+                    [title]="
+                      optionPoll.loading() ? 'Reconnecting…' : 'Reconnect stream'
+                    "
+                    (click)="optionPoll.refresh(true)"
+                  >
+                    <mat-icon [class.spinning]="optionPoll.loading()"
+                      >refresh</mat-icon
+                    >
+                  </button>
+                </div>
+                @if (optionPoll.data(); as oc) {
+                  <p class="signal-calc-stamp" role="status">
+                    Last updated:
+                    <time [attr.datetime]="oc.fetchedAt">
+                      {{ formatSignalCalculatedAt(oc.fetchedAt) }}
+                    </time>
+                  </p>
+                }
+                <p class="component-scale-hint">
+                  Bipolar scale: <strong>−1</strong> bearish ·
+                  <strong>0</strong> flat · <strong>+1</strong> bullish.
+                </p>
+                <div class="component-list">
+                  <app-bipolar-list
+                    [components]="optionComponents()"
+                    variant="option"
+                  />
                 </div>
               }
-            } @else {
-              <div class="panel-head">
-                <span>Option chain components</span>
-                <button
-                  type="button"
-                  class="signal-refresh-btn panel-refresh-btn"
-                  [disabled]="optionPoll.loading()"
-                  [attr.aria-label]="
-                    optionPoll.loading()
-                      ? 'Reconnecting option stream'
-                      : 'Reconnect option stream'
-                  "
-                  [title]="
-                    optionPoll.loading() ? 'Reconnecting…' : 'Reconnect stream'
-                  "
-                  (click)="optionPoll.refresh(true)"
-                >
-                  <mat-icon [class.spinning]="optionPoll.loading()"
-                    >refresh</mat-icon
-                  >
-                </button>
-              </div>
-              @if (optionPoll.data(); as oc) {
-                <p class="signal-calc-stamp" role="status">
-                  Last updated:
-                  <time [attr.datetime]="oc.fetchedAt">
-                    {{ formatSignalCalculatedAt(oc.fetchedAt) }}
-                  </time>
-                </p>
-              }
-              <p class="component-scale-hint">
-                Bipolar scale: <strong>−1</strong> bearish ·
-                <strong>0</strong> flat · <strong>+1</strong> bullish.
-              </p>
-              <div class="component-list">
-                <app-bipolar-list
-                  [components]="optionComponents()"
-                  variant="option"
-                />
-              </div>
-            }
-          </section>
-        </section>
-
-        <section class="tab-panel" [class.active]="ctx.activeTab() === 'veto'">
-          <section
-            class="veto-tab-panel"
-            [class.has-block]="hasVetoBlock(data)"
-          >
-            @if (data.vetoTimeline?.length) {
-              <app-veto-strip [timeline]="data.vetoTimeline || []" />
-            }
-            <p class="settings-hint">
-              Veto mode lives in <strong>Settings</strong> — this view shows the
-              live breakup.
-            </p>
-            <section class="veto-breakup-block">
-              <div class="panel-head">
-                <span>Veto breakup</span>
-                <span class="panel-note">{{ vetoSummary(data) }}</span>
-              </div>
-              @if (data.vetoReason) {
-                <p class="veto-breakup-note" role="status">
-                  {{ data.vetoReason }}
-                </p>
-              }
-              <div class="veto-breakup-list">
-                <app-veto-breakup [items]="data.vetoBreakup" />
-              </div>
             </section>
           </section>
-        </section>
+        }
 
-        <section
-          class="tab-panel"
-          [class.active]="ctx.activeTab() === 'strategy'"
-        >
-          <app-strategy-panel [strategy]="data.strategyRecommendation" />
-        </section>
+        @if (ctx.activeTab() === 'veto') {
+          <section class="tab-panel active">
+            <section
+              class="veto-tab-panel"
+              [class.has-block]="hasVetoBlock(data)"
+            >
+              @if (data.vetoTimeline?.length) {
+                <app-veto-strip [timeline]="data.vetoTimeline || []" />
+              }
+              <p class="settings-hint">
+                Veto mode lives in <strong>Settings</strong> — this view shows the
+                live breakup.
+              </p>
+              <section class="veto-breakup-block">
+                <div class="panel-head">
+                  <span>Veto breakup</span>
+                  <span class="panel-note">{{ vetoSummary(data) }}</span>
+                </div>
+                @if (data.vetoReason) {
+                  <p class="veto-breakup-note" role="status">
+                    {{ data.vetoReason }}
+                  </p>
+                }
+                <div class="veto-breakup-list">
+                  <app-veto-breakup [items]="data.vetoBreakup" />
+                </div>
+              </section>
+            </section>
+          </section>
+        }
 
-        <section
-          class="tab-panel"
-          [class.active]="ctx.activeTab() === 'sizing'"
-        >
-          <app-position-sizing
-            [symbol]="data.symbol"
-            [lotSize]="data.lotSize"
-            [paAction]="data.action"
-            [tradingStyle]="ctx.style()"
-          />
-        </section>
+        @if (ctx.activeTab() === 'strategy') {
+          <section class="tab-panel active">
+            <app-strategy-panel [strategy]="data.strategyRecommendation" />
+          </section>
+        }
 
-        <section
-          class="tab-panel"
-          [class.active]="ctx.activeTab() === 'charts'"
-        >
-          <app-deck-charts
-            [tabActive]="ctx.activeTab() === 'charts'"
-            [spotCandles]="data.spotCandles ?? []"
-            [spotCandles5m]="data.spotCandles5m ?? []"
-            [spotCandles15m]="data.spotCandles15m ?? []"
-            [spotCandles1h]="data.spotCandles1h ?? []"
-            [spotSeries]="data.spotSeries"
-            [patternInsights]="data.patternInsights"
-            [chartPatternNeckline]="data.chartPatternNeckline"
-            [chartOverlays]="chartOverlays(data)"
-          />
-        </section>
+        @if (ctx.activeTab() === 'sizing') {
+          <section class="tab-panel active">
+            <app-position-sizing
+              [symbol]="data.symbol"
+              [lotSize]="data.lotSize"
+              [paAction]="data.action"
+              [tradingStyle]="ctx.style()"
+            />
+          </section>
+        }
 
-        <section class="tab-panel" [class.active]="ctx.activeTab() === 'news'">
-          <app-market-news-panel
-            [symbol]="ctx.symbol()"
-            [tabActive]="ctx.activeTab() === 'news'"
-          />
-        </section>
+        @if (ctx.activeTab() === 'charts') {
+          <section class="tab-panel active">
+            <app-deck-charts
+              [tabActive]="ctx.activeTab() === 'charts'"
+              [spotCandles]="data.spotCandles ?? []"
+              [spotCandles5m]="data.spotCandles5m ?? []"
+              [spotCandles15m]="data.spotCandles15m ?? []"
+              [spotCandles1h]="data.spotCandles1h ?? []"
+              [spotSeries]="data.spotSeries"
+              [patternInsights]="data.patternInsights"
+              [chartPatternNeckline]="data.chartPatternNeckline"
+              [chartOverlays]="chartOverlays(data)"
+            />
+          </section>
+        }
 
-        <section
-          class="tab-panel"
-          [class.active]="ctx.activeTab() === 'events'"
-        >
-          <app-event-list [events]="(data.events ?? []).slice(-20).reverse()" />
-        </section>
+        @if (ctx.activeTab() === 'news') {
+          <section class="tab-panel active">
+            <app-market-news-panel
+              [symbol]="ctx.symbol()"
+              [tabActive]="ctx.activeTab() === 'news'"
+            />
+          </section>
+        }
 
-        <section
-          class="tab-panel"
-          [class.active]="ctx.activeTab() === 'journal'"
-        >
-          <app-trade-journal-list
-            [symbol]="ctx.symbol()"
-            [tabActive]="ctx.activeTab() === 'journal'"
-          />
-        </section>
+        @if (ctx.activeTab() === 'events') {
+          <section class="tab-panel active">
+            <app-event-list [events]="(data.events ?? []).slice(-20).reverse()" />
+          </section>
+        }
 
-        <section
-          class="tab-panel"
-          [class.active]="ctx.activeTab() === 'positions'"
-        >
-          <app-auto-entry-panel
-            [guardStatus]="data.managementContext?.autoEntry?.status"
-            [guardMessage]="data.managementContext?.autoEntry?.message"
-            [confirmationCount]="
-              data.managementContext?.autoEntry?.confirmationCount
-            "
-            [confirmationsRequired]="
-              data.managementContext?.autoEntry?.confirmationsRequired
-            "
-            [pendingAction]="data.managementContext?.autoEntry?.pendingAction"
-            [pendingReason]="data.managementContext?.autoEntry?.pendingReason"
-            [lastEvaluatedAt]="
-              data.managementContext?.autoEntry?.lastEvaluatedAt
-            "
-            [recentEvents]="
-              data.managementContext?.autoEntry?.recentEvents ?? []
-            "
-          />
-          <app-auto-exit-panel
-            [guardDetail]="data.managementContext?.autoExit"
-          />
-          <app-positions-list
-            [entries]="data.openPositions?.entries ?? []"
-            [note]="data.openPositions?.note"
-            [advice]="data.managementContext?.advice?.headline"
-            [rrTracker]="data.managementContext?.advice?.rrTracker"
-            [trailStopPrice]="data.managementContext?.autoExit?.trailStopPrice"
-            [trailStopLabel]="data.managementContext?.autoExit?.trailStopLabel"
-          />
-        </section>
+        @if (ctx.activeTab() === 'journal') {
+          <section class="tab-panel active">
+            <app-trade-journal-list
+              [symbol]="ctx.symbol()"
+              [tabActive]="ctx.activeTab() === 'journal'"
+            />
+          </section>
+        }
 
-        <section
-          class="tab-panel"
-          [class.active]="ctx.activeTab() === 'settings'"
-        >
-          <section class="settings-panel">
+        @if (ctx.activeTab() === 'positions') {
+          <section class="tab-panel active">
+            <app-auto-entry-panel
+              [guardStatus]="data.managementContext?.autoEntry?.status"
+              [guardMessage]="data.managementContext?.autoEntry?.message"
+              [confirmationCount]="
+                data.managementContext?.autoEntry?.confirmationCount
+              "
+              [confirmationsRequired]="
+                data.managementContext?.autoEntry?.confirmationsRequired
+              "
+              [pendingAction]="data.managementContext?.autoEntry?.pendingAction"
+              [pendingReason]="data.managementContext?.autoEntry?.pendingReason"
+              [lastEvaluatedAt]="
+                data.managementContext?.autoEntry?.lastEvaluatedAt
+              "
+              [recentEvents]="
+                data.managementContext?.autoEntry?.recentEvents ?? []
+              "
+            />
+            <app-auto-exit-panel
+              [guardDetail]="data.managementContext?.autoExit"
+            />
+            <app-positions-list
+              [entries]="data.openPositions?.entries ?? []"
+              [note]="data.openPositions?.note"
+              [advice]="data.managementContext?.advice?.headline"
+              [rrTracker]="data.managementContext?.advice?.rrTracker"
+              [trailStopPrice]="data.managementContext?.autoExit?.trailStopPrice"
+              [trailStopLabel]="data.managementContext?.autoExit?.trailStopLabel"
+            />
+          </section>
+        }
+
+        @if (ctx.activeTab() === 'settings') {
+          <section class="tab-panel active">
+            <section class="settings-panel">
             <div class="settings-groups">
               <div class="settings-group">
                 <div class="settings-group-head">
@@ -632,8 +627,9 @@ type ComponentsSubTab = 'priceAction' | 'optionChain';
                 }
               }
             </div>
+            </section>
           </section>
-        </section>
+        }
       }
     </section>
   `,
@@ -755,6 +751,9 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   private streamSub: Subscription | null = null;
   private reloadSub: Subscription | null = null;
   private pendingChartPatch: Partial<DeckLiveTick> | null = null;
+  private startupStartedAt: number | null = null;
+  private firstSseLtpSeen = false;
+  private firstSseTickSeen = false;
 
   readonly tick = signal<DeckLiveTick | null>(null);
   readonly settings = signal<SettingsSnapshot | null>(null);
@@ -768,6 +767,24 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   readonly optionComponents = computed(() => {
     const rows = this.optionPoll.data()?.componentRows ?? [];
     return toOptionComponentGauges(rows);
+  });
+  readonly shouldActivateOptionChainStream = computed(() => {
+    if (this.ctx.appView() !== 'live') return false;
+    const activeTab = this.ctx.activeTab();
+    if (activeTab === 'signal') return this.signalSubTab() === 'optionChain';
+    if (activeTab === 'components') return this.componentsSubTab() === 'optionChain';
+    return false;
+  });
+  readonly startupLatency = signal<{
+    bootstrapMs: number | null;
+    fastMs: number | null;
+    sseFirstLtpMs: number | null;
+    sseFirstTickMs: number | null;
+  }>({
+    bootstrapMs: null,
+    fastMs: null,
+    sseFirstLtpMs: null,
+    sseFirstTickMs: null,
   });
 
   constructor() {
@@ -789,7 +806,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
         symbol,
         style,
         paAction,
-        enabled: true,
+        enabled: this.shouldActivateOptionChainStream(),
       });
     });
   }
@@ -820,7 +837,9 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   /** Shell refresh — full HTTP snapshot + new SSE even when status still says live. */
   private forceReload(): void {
     // Hard reset option-chain stream first to avoid duplicate listeners/timers.
-    this.optionPoll.hardReconnect(true);
+    if (this.shouldActivateOptionChainStream()) {
+      this.optionPoll.hardReconnect(true);
+    }
     // Then hard reload live deck HTTP + SSE stream.
     this.reload(this.ctx.symbol(), this.ctx.style());
   }
@@ -997,6 +1016,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   }
 
   private reload(symbol: string, style: string): void {
+    this.beginStartupTiming();
     this.stopLiveSubscriptions();
     this.error.set(null);
     this.tick.set(null);
@@ -1006,8 +1026,31 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     this.httpSub = new Subscription();
 
     this.httpSub.add(
+      this.deckApi.getLiveBootstrap(symbol, tradingStyle).subscribe({
+        next: (bootstrap) => {
+          this.ctx.updateTracker({
+            symbol: bootstrap.symbol,
+            symbolLabel: bootstrap.symbolLabel,
+            price: bootstrap.lastPrice,
+            dayChange: bootstrap.dayChange,
+            dayChangePct: bootstrap.dayChangePct,
+            style: tradingStyle,
+            asOf: bootstrap.asOf,
+          });
+          this.markStartupTiming('bootstrapMs');
+        },
+        error: () => {
+          // Bootstrap is opportunistic; fast/sse paths still drive the full deck.
+        },
+      }),
+    );
+
+    this.httpSub.add(
       this.deckApi.getLive(symbol, tradingStyle, 'fast').subscribe({
-        next: (fast) => this.applyTick(fast),
+        next: (fast) => {
+          this.applyTick(fast);
+          this.markStartupTiming('fastMs');
+        },
         error: (err) => {
           const message =
             err?.error?.error || err.message || 'Live deck failed';
@@ -1061,6 +1104,10 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
             event.type === 'positions' ||
             event.type === 'ltp')
         ) {
+          if (event.type === 'ltp' && !this.firstSseLtpSeen) {
+            this.firstSseLtpSeen = true;
+            this.markStartupTiming('sseFirstLtpMs');
+          }
           const patch = event as unknown as Partial<DeckLiveTick> & {
             type: string;
           };
@@ -1072,6 +1119,10 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
           ('type' in event && event.type === 'tick') ||
           ('action' in event && !('type' in event))
         ) {
+          if (!this.firstSseTickSeen) {
+            this.firstSseTickSeen = true;
+            this.markStartupTiming('sseFirstTickMs');
+          }
           this.applyTick({
             ...(this.tick() ?? {}),
             ...event,
@@ -1170,5 +1221,32 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     const candlePatch = patchMultiTfSpotCandles(tick, tick.lastPrice || 0);
     if (!Object.keys(candlePatch).length) return tick;
     return { ...tick, ...candlePatch };
+  }
+
+  private beginStartupTiming(): void {
+    if (typeof globalThis.performance === 'undefined') return;
+    this.startupStartedAt = performance.now();
+    this.firstSseLtpSeen = false;
+    this.firstSseTickSeen = false;
+    this.startupLatency.set({
+      bootstrapMs: null,
+      fastMs: null,
+      sseFirstLtpMs: null,
+      sseFirstTickMs: null,
+    });
+  }
+
+  private markStartupTiming(
+    key: 'bootstrapMs' | 'fastMs' | 'sseFirstLtpMs' | 'sseFirstTickMs',
+  ): void {
+    if (
+      typeof globalThis.performance === 'undefined' ||
+      this.startupStartedAt === null
+    ) {
+      return;
+    }
+    const startedAt = this.startupStartedAt;
+    const elapsed = Math.round(performance.now() - startedAt);
+    this.startupLatency.update((prev) => ({ ...prev, [key]: elapsed }));
   }
 }
