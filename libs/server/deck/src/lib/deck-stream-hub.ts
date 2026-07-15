@@ -248,12 +248,13 @@ export class DeckStreamHub {
   ): void {
     if (channel.quoteRefreshScheduled) return;
     channel.quoteRefreshScheduled = true;
-    channel.quoteRefreshTimer = setTimeout(() => {
-      channel.quoteRefreshScheduled = false;
+    const timer = setTimeout(() => {
       channel.quoteRefreshTimer = null;
+      channel.quoteRefreshScheduled = false;
       this.runDetached(this.sendTick(channel), 'Deck stream tick');
     }, DeckStreamHub.QUOTE_TICK_RECOMPUTE_MS);
-    channel.quoteRefreshTimer.unref?.();
+    timer.unref();
+    channel.quoteRefreshTimer = timer;
   }
 
   private broadcast(

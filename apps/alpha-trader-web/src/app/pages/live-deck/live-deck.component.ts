@@ -751,7 +751,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   private streamSub: Subscription | null = null;
   private reloadSub: Subscription | null = null;
   private pendingChartPatch: Partial<DeckLiveTick> | null = null;
-  private startupStartedAt = 0;
+  private startupStartedAt: number | null = null;
   private firstSseLtpSeen = false;
   private firstSseTickSeen = false;
 
@@ -768,7 +768,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
     const rows = this.optionPoll.data()?.componentRows ?? [];
     return toOptionComponentGauges(rows);
   });
-  readonly optionChainActive = computed(() => {
+  readonly shouldActivateOptionChainStream = computed(() => {
     if (this.ctx.appView() !== 'live') return false;
     const activeTab = this.ctx.activeTab();
     if (activeTab === 'signal') return this.signalSubTab() === 'optionChain';
@@ -806,7 +806,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
         symbol,
         style,
         paAction,
-        enabled: this.optionChainActive(),
+        enabled: this.shouldActivateOptionChainStream(),
       });
     });
   }
@@ -837,7 +837,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   /** Shell refresh — full HTTP snapshot + new SSE even when status still says live. */
   private forceReload(): void {
     // Hard reset option-chain stream first to avoid duplicate listeners/timers.
-    if (this.optionChainActive()) {
+    if (this.shouldActivateOptionChainStream()) {
       this.optionPoll.hardReconnect(true);
     }
     // Then hard reload live deck HTTP + SSE stream.
@@ -1224,7 +1224,7 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   }
 
   private beginStartupTiming(): void {
-    if (typeof performance === 'undefined') return;
+    if (typeof globalThis.performance === 'undefined') return;
     this.startupStartedAt = performance.now();
     this.firstSseLtpSeen = false;
     this.firstSseTickSeen = false;
@@ -1239,8 +1239,14 @@ export class LiveDeckComponent implements OnInit, OnDestroy {
   private markStartupTiming(
     key: 'bootstrapMs' | 'fastMs' | 'sseFirstLtpMs' | 'sseFirstTickMs',
   ): void {
-    if (typeof performance === 'undefined' || !this.startupStartedAt) return;
-    const elapsed = Math.round(performance.now() - this.startupStartedAt);
+    if (
+      typeof globalThis.performance === 'undefined' ||
+      this.startupStartedAt === null
+    ) {
+      return;
+    }
+    const startedAt = this.startupStartedAt;
+    const elapsed = Math.round(performance.now() - startedAt);
     this.startupLatency.update((prev) => ({ ...prev, [key]: elapsed }));
   }
 }
